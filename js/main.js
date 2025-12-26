@@ -15,18 +15,34 @@ svg.addEventListener("click", (e) => {
   let node = e.target;
   while (node && node !== svg) {
     if (node.classList && node.classList.contains("cell")) {
-      setActiveCell(node);
-      // Navigate to dedicated state page for deep-linking / clean full-map view
-      const stateId = node.dataset.state;
-      if (stateId) {
-        const target = `state.html?state=${encodeURIComponent(String(stateId))}`;
-        window.location.href = target;
-      }
+        setActiveCell(node);
+        // Show bounding rect overlay for clicked state (start of animation sequence)
+        const stateId = node.dataset.state;
+        if (stateId) {
+          prefetchStateResources(stateId);
+          showBoundingRect(stateId);
+        }
       return;
     }
     node = node.parentNode;
   }
 });
+
+// Prefetch the state page and geojson so the destination is ready post-animation.
+function prefetchStateResources(stateId) {
+  // prefetch state.html
+  const link = document.createElement('link');
+  link.rel = 'prefetch';
+  link.href = `state.html?state=${encodeURIComponent(String(stateId))}`;
+  document.head.appendChild(link);
+
+  // prefetch geojson
+  const geo = document.createElement('link');
+  geo.rel = 'preload';
+  geo.as = 'fetch';
+  geo.href = dataUrl || 'Mia%20Cells%202025-12-23.geojson';
+  document.head.appendChild(geo);
+}
 
 const bounds = {
   minX: Infinity,
@@ -252,3 +268,246 @@ const init = async () => {
 };
 
 init();
+
+// Animate a clicked state element from its current screen position into the
+// left-half target area, then navigate to the provided URL when animation finishes.
+function animateStateToLeftAndNavigate(stateId, targetUrl) {
+  // find a visible element for the state - prefer the active cell if present
+  const srcEl = activeCell && String(activeCell.dataset.state) === String(stateId) ? activeCell : document.querySelector(`.cell[data-state="${stateId}"]`);
+  if (!srcEl) { window.location.href = targetUrl; return; }
+
+  const srcRect = srcEl.getBoundingClientRect();
+  
+  const svgNS = "http://www.w3.org/2000/svg";
+
+  // create overlay container
+  const overlay = document.createElement('div');
+  Object.assign(overlay.style, {
+    position: 'fixed', left: 0, top: 0, width: '100vw', height: '100vh',
+    pointerEvents: 'none', zIndex: 9999, overflow: 'visible'
+  });
+  document.body.appendChild(overlay);
+  console.log('Overlay created');
+  // create a small svg positioned at the element's screen location
+  const clipSvg = document.createElementNS(svgNS, 'svg');
+  clipSvg.setAttribute('width', Math.max(1, srcRect.width));
+  clipSvg.setAttribute('height', Math.max(1, srcRect.height));
+  clipSvg.style.position = 'absolute';
+  clipSvg.style.color = 'red';
+  clipSvg.style.left = `${srcRect.left}px`;
+  clipSvg.style.top = `${srcRect.top}px`;
+  clipSvg.style.transformOrigin = '0 0';
+  
+  overlay.appendChild(clipSvg);
+
+  // clone the clicked node into the small svg
+  const cloned = srcEl.cloneNode(true);
+  
+  const g = document.createElementNS(svgNS, 'g');
+  g.appendChild(cloned);
+  clipSvg.appendChild(g);
+
+  // compute target: center inside left half
+  const leftPane = { left: 0, top: 0, width: window.innerWidth * 0.5, height: window.innerHeight };
+  const targetCenterX = leftPane.left + leftPane.width / 2;
+  const targetCenterY = leftPane.top + leftPane.height / 2;
+
+  const srcCenterX = srcRect.left + srcRect.width / 2;
+  const srcCenterY = srcRect.top + srcRect.height / 2;
+
+  const desiredFraction = 0.6;
+  const scale = ((leftPane.width * desiredFraction) / Math.max(8, srcRect.width));
+
+  const deltaX = targetCenterX - srcCenterX;
+  const deltaY = targetCenterY - srcCenterY;
+
+  // Ensure cloned shapes carry inline fill values so animations target concrete colors
+  const applyInlineFills = (original, copy) => {
+    const originals = [original, ...Array.from(original.querySelectorAll('*'))];
+    const copies = [copy, ...Array.from(copy.querySelectorAll('*'))];
+    for (let i = 0; i < originals.length && i < copies.length; i++) {
+      try {
+        const comp = window.getComputedStyle(originals[i]);
+        const f = comp && comp.fill && comp.fill !== 'none' ? comp.fill : originals[i].getAttribute('fill');
+        if (f) copies[i].setAttribute('fill', f);
+      } catch (err) {
+        const f = originals[i].getAttribute && originals[i].getAttribute('fill');
+        if (f) copies[i].setAttribute('fill', f);
+      }
+    }
+  };
+
+  applyInlineFills(srcEl, cloned);
+
+  const initial = { transform: 'translate(0px, 0px) scale(1)' };
+  const final = { transform: `translate(${deltaX}px, ${deltaY}px) scale(${scale})` };
+  const timing = { duration: 700, easing: 'cubic-bezier(.2,0,.0,1)', fill: 'forwards' };
+  const anim = g.animate([initial, final], timing);
+
+  // subtle fade of the page to make transition feel smoother
+  const fade = document.documentElement.animate([{ opacity: 1 }, { opacity: 0.6 }], { duration: timing.duration, fill: 'forwards' });
+
+  // Color animation: cycle fills randomly during the transform
+  const randomHsl = () => {
+    const h = Math.floor(Math.random() * 360);
+    const s = 45 + Math.floor(Math.random() * 30);
+    const l = 40 + Math.floor(Math.random() * 25);
+    return `hsl(${h} ${s}% ${l}%)`;
+  };
+
+  const shapeSelector = 'path, rect, circle, ellipse, polygon, polyline';
+  const fillElements = Array.from(g.querySelectorAll(shapeSelector));
+  // include cloned itself if it's a shape element
+  if (cloned && shapeSelector.includes(cloned.tagName)) {
+    if (!fillElements.includes(cloned)) fillElements.unshift(cloned);
+  }
+
+  const fillAnims = [];
+  for (const el of fillElements) {
+    const start = el.getAttribute('fill') || window.getComputedStyle(el).fill || 'currentColor';
+    const keyframes = [ { fill: start } ];
+    const midCount = 3;
+    for (let i = 0; i < midCount; i++) keyframes.push({ fill: randomHsl() });
+    keyframes.push({ fill: start });
+    const delay = Math.random() * 120; // small stagger
+    const fa = el.animate(keyframes, { duration: timing.duration, easing: 'linear', fill: 'forwards', delay });
+    fillAnims.push(fa);
+  }
+
+  anim.onfinish = () => {
+    // make sure animations finish then navigate
+    // overlay.remove();
+    // // fade.cancel();
+    // window.location.href = targetUrl;
+  };
+}
+
+// Show a temporary overlay rectangle matching the clicked element's boundingClientRect.
+// This is a debugging/UX step before implementing the full animation.
+function showBoundingRect(stateId) {
+  const nodes = Array.from(document.querySelectorAll(`.cell[data-state="${stateId}"]`));
+  if (!nodes.length) return;
+
+  // compute union of client rects
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  nodes.forEach((n) => {
+    const r = n.getBoundingClientRect();
+    if (r.left < minX) minX = r.left;
+    if (r.top < minY) minY = r.top;
+    if (r.right > maxX) maxX = r.right;
+    if (r.bottom > maxY) maxY = r.bottom;
+  });
+  const rect = { left: minX, top: minY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
+
+  // compute union bbox in SVG user coordinates using getBBox()
+  let minUX = Infinity, minUY = Infinity, maxUX = -Infinity, maxUY = -Infinity;
+  nodes.forEach((n) => {
+    try {
+      const b = n.getBBox();
+      if (b.x < minUX) minUX = b.x;
+      if (b.y < minUY) minUY = b.y;
+      if (b.x + b.width > maxUX) maxUX = b.x + b.width;
+      if (b.y + b.height > maxUY) maxUY = b.y + b.height;
+    } catch (err) {
+      // ignore elements without bbox
+    }
+  });
+  if (!Number.isFinite(minUX)) {
+    // fallback: show simple div overlay
+    const fallback = document.createElement('div');
+    Object.assign(fallback.style, { position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`, background: 'rgba(255,0,0,0.08)', pointerEvents: 'none', zIndex: 9999 });
+    document.body.appendChild(fallback);
+    setTimeout(() => fallback.remove(), 800);
+    return;
+  }
+
+  const userWidth = maxUX - minUX;
+  const userHeight = maxUY - minUY;
+
+  // create overlay SVG positioned at the union client rect, with viewBox in user coords
+  const overlaySvg = document.createElementNS(svgNS, 'svg');
+  overlaySvg.setAttribute('viewBox', `${minUX} ${minUY} ${userWidth} ${userHeight}`);
+  overlaySvg.setAttribute('width', `${Math.max(1, rect.width)}`);
+  overlaySvg.setAttribute('height', `${Math.max(1, rect.height)}`);
+  overlaySvg.style.position = 'fixed';
+  overlaySvg.style.left = `${rect.left}px`;
+  overlaySvg.style.top = `${rect.top}px`;
+  overlaySvg.style.overflow = 'visible';
+  overlaySvg.style.zIndex = 9999;
+  overlaySvg.style.pointerEvents = 'none';
+  overlaySvg.style.transition = 'opacity 200ms linear';
+  document.body.appendChild(overlaySvg);
+
+  // add label
+  const label = document.createElement('div');
+  label.textContent = `state: ${stateId}`;
+  Object.assign(label.style, {
+    position: 'fixed', left: `${rect.left}px`, top: `${Math.max(0, rect.top - 28)}px`,
+    padding: '4px 8px', background: 'rgba(17,24,39,0.9)', color: 'white',
+    fontSize: '12px', borderRadius: '4px', zIndex: 10000, pointerEvents: 'none'
+  });
+  document.body.appendChild(label);
+
+  // clone all the state nodes into the overlay. We'll inline fills so animation targets concrete colors.
+  const group = document.createElementNS(svgNS, 'g');
+  nodes.forEach((n) => {
+    const copy = n.cloneNode(true);
+    // inline computed fill and stroke
+    try {
+      const cs = window.getComputedStyle(n);
+      if (cs.fill && cs.fill !== 'none') copy.setAttribute('fill', cs.fill);
+      if (cs.stroke && cs.stroke !== 'none') copy.setAttribute('stroke', cs.stroke);
+    } catch (err) {
+      const f = n.getAttribute && n.getAttribute('fill');
+      if (f) copy.setAttribute('fill', f);
+    }
+    group.appendChild(copy);
+  });
+  overlaySvg.appendChild(group);
+
+  // animate the overlay SVG element's pixel rect to the destination (left half)
+  requestAnimationFrame(() => { overlaySvg.style.opacity = '1'; });
+  const leftPane = { left: 0, top: 0, width: window.innerWidth * 0.5, height: window.innerHeight };
+  const desiredFraction = 0.6;
+  const targetWidth = Math.max(8, leftPane.width * desiredFraction);
+  const targetHeight = (userHeight / userWidth) * targetWidth;
+  const targetLeft = leftPane.left + (leftPane.width - targetWidth) / 2;
+  const targetTop = leftPane.top + (leftPane.height - targetHeight) / 2;
+
+  const duration = 300;
+  const anim = overlaySvg.animate([
+    { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`, opacity: 1 },
+    { left: `${targetLeft}px`, top: `${targetTop}px`, width: `${targetWidth}px`, height: `${targetHeight}px`, opacity: 1 }
+  ], { duration, easing: 'cubic-bezier(.2,0,.0,1)', fill: 'forwards' });
+
+  const labelAnim = label.animate([
+    { left: `${rect.left}px`, top: `${Math.max(0, rect.top - 28)}px`, opacity: 1 },
+    { left: `${targetLeft}px`, top: `${Math.max(0, targetTop - 28)}px`, opacity: 1 }
+  ], { duration, easing: 'cubic-bezier(.2,0,.0,1)', fill: 'forwards' });
+
+  anim.onfinish = () => {
+    setTimeout(() => {
+      const fadeOut = overlaySvg.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: 'forwards' });
+      const labelFade = label.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, fill: 'forwards' });
+      labelFade.onfinish = () => {
+        try {
+          const payload = {
+            svg: overlaySvg.outerHTML,
+            meta: {
+              startRect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
+              targetRect: { left: targetLeft, top: targetTop, width: targetWidth, height: targetHeight },
+              viewBox: overlaySvg.getAttribute('viewBox'),
+              stateId: String(stateId)
+            }
+          };
+          sessionStorage.setItem('sharedOverlay', payload.svg);
+          sessionStorage.setItem('sharedOverlayMeta', JSON.stringify(payload.meta));
+        } catch (err) {
+          console.warn('Could not persist overlay for transition', err);
+        }
+        // navigate to state view now that animation finished
+        window.location.href = `state.html?state=${encodeURIComponent(String(stateId))}`;
+      };
+    }, 220);
+  };
+}

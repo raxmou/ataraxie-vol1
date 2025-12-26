@@ -72,38 +72,74 @@ const render = (geojson, stateId) => {
     return;
   }
 
-  // Clear svg
-  while (svg.firstChild) svg.removeChild(svg.firstChild);
+  // If a rehydrated overlay exists and was created for this state, adopt its geometry
+  // into the page SVG to produce a seamless handoff.
+  const sharedSvgHtml = sessionStorage.getItem('sharedOverlay');
+  const sharedMetaStr = sessionStorage.getItem('sharedOverlayMeta');
+  let usedOverlay = false;
+  let sharedMeta = null;
+  if (sharedSvgHtml && sharedMetaStr) {
+    try { sharedMeta = JSON.parse(sharedMetaStr); } catch (e) { sharedMeta = null; }
+  }
 
-  const fragment = document.createDocumentFragment();
-  const selBounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
-  const updateSelBounds = (x, y) => {
-    if (x < selBounds.minX) selBounds.minX = x;
-    if (y < selBounds.minY) selBounds.minY = y;
-    if (x > selBounds.maxX) selBounds.maxX = x;
-    if (y > selBounds.maxY) selBounds.maxY = y;
-  };
+  if (sharedSvgHtml && sharedMeta && String(sharedMeta.stateId) === String(stateId)) {
+    // Clear svg
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    // set viewBox to the shared one so coordinates match
+    if (sharedMeta.viewBox) svg.setAttribute('viewBox', sharedMeta.viewBox);
+    try {
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = sharedSvgHtml;
+      const over = wrapper.firstElementChild;
+      if (over) {
+        // move children of overlay's root group into the page svg
+        const grp = over.querySelector('g');
+        if (grp) {
+          while (grp.firstChild) {
+            const node = grp.firstChild;
+            svg.appendChild(node);
+          }
+          usedOverlay = true;
+          // clear session storage so it doesn't persist
+          sessionStorage.removeItem('sharedOverlay');
+          sessionStorage.removeItem('sharedOverlayMeta');
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to adopt shared overlay into svg', err);
+    }
+  }
 
-  features.forEach((feature) => {
-    const geometry = feature.geometry;
-    forEachCoordinate(geometry, updateSelBounds);
-    const pathData = geometryToPath(geometry);
-    const path = document.createElementNS(svgNS, "path");
-    path.setAttribute("d", pathData);
-    path.setAttribute("fill", colorForState(stateId));
-    path.classList.add("cell");
-    path.dataset.state = String(stateId);
-    fragment.appendChild(path);
-  });
-
-  svg.appendChild(fragment);
-
-  if (Number.isFinite(selBounds.minX)) {
-    const width = selBounds.maxX - selBounds.minX || 1;
-    const height = selBounds.maxY - selBounds.minY || 1;
-    const padX = width * 0.08;
-    const padY = height * 0.08;
-    svg.setAttribute("viewBox", `${selBounds.minX - padX} ${selBounds.minY - padY} ${width + padX * 2} ${height + padY * 2}`);
+  if (!usedOverlay) {
+    // Clear svg and build from geojson as fallback
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    const fragment = document.createDocumentFragment();
+    const selBounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    const updateSelBounds = (x, y) => {
+      if (x < selBounds.minX) selBounds.minX = x;
+      if (y < selBounds.minY) selBounds.minY = y;
+      if (x > selBounds.maxX) selBounds.maxX = x;
+      if (y > selBounds.maxY) selBounds.maxY = y;
+    };
+    features.forEach((feature) => {
+      const geometry = feature.geometry;
+      forEachCoordinate(geometry, updateSelBounds);
+      const pathData = geometryToPath(geometry);
+      const path = document.createElementNS(svgNS, "path");
+      path.setAttribute("d", pathData);
+      path.setAttribute("fill", colorForState(stateId));
+      path.classList.add("cell");
+      path.dataset.state = String(stateId);
+      fragment.appendChild(path);
+    });
+    svg.appendChild(fragment);
+    if (Number.isFinite(selBounds.minX)) {
+      const width = selBounds.maxX - selBounds.minX || 1;
+      const height = selBounds.maxY - selBounds.minY || 1;
+      const padX = width * 0.08;
+      const padY = height * 0.08;
+      svg.setAttribute("viewBox", `${selBounds.minX - padX} ${selBounds.minY - padY} ${width + padX * 2} ${height + padY * 2}`);
+    }
   }
 
   content.innerHTML = `<h2 class="info-title">State ${stateId}</h2><div class="info-body">Placeholder information about state ${stateId}.</div>`;
@@ -112,10 +148,29 @@ const render = (geojson, stateId) => {
 
 const init = async () => {
   try {
+    // Try to rehydrate a shared overlay created during the transition
+    const sharedSvg = sessionStorage.getItem('sharedOverlay');
+    const sharedMeta = sessionStorage.getItem('sharedOverlayMeta');
+    let rehydratedOverlay = null;
+    let sharedMetaObj = null;
+    if (sharedSvg && sharedMeta) {
+      try {
+        sharedMetaObj = JSON.parse(sharedMeta);
+      } catch (err) {
+        console.warn('Invalid sharedOverlayMeta', err);
+      }
+      // Do not append the shared overlay here. The `render` function will adopt
+      // the shared overlay directly into the page SVG when possible, avoiding
+      // duplicate elements and preventing a fade-out that breaks the handoff.
+    }
     const res = await fetch(geojsonPath);
     if (!res.ok) throw new Error('failed to load geojson');
     const geojson = await res.json();
     render(geojson, stateId);
+
+    // Note: when a shared overlay is present for this state, `render` adopts it
+    // into the page SVG and clears sessionStorage. No additional fading is needed
+    // here so the component appears continuous between pages.
   } catch (err) {
     console.error(err);
     content.innerHTML = `<h2 class="info-title">Error</h2><div class="info-body">Could not load data.</div>`;

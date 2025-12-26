@@ -198,6 +198,7 @@ const buildMap = (geojson) => {
     while (node && node !== svg) {
       if (node.classList && node.classList.contains("cell")) {
           const state = node.dataset.state;
+          if (state === "0") return; // ignore ocean hover
           if (state && stateBorderMap.has(state)) {
             stateBorderMap.get(state).forEach((p) => p.classList.add("is-hover"));
           }
@@ -212,6 +213,7 @@ const buildMap = (geojson) => {
     while (node && node !== svg) {
       if (node.classList && node.classList.contains("cell")) {
         const state = node.dataset.state;
+        if (state === "0") return; // ignore ocean hover out
         if (state && stateBorderMap.has(state)) {
           stateBorderMap.get(state).forEach((p) => p.classList.remove("is-hover"));
         }

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>State View</title>
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <main id="state-app">
+      <div class="map-pane">
+        <svg
+          id="state-svg"
+          xmlns="http://www.w3.org/2000/svg"
+          preserveAspectRatio="xMidYMid meet"
+          role="img"
+          aria-label="State map"
+        ></svg>
+      </div>
+      <aside class="info-pane" id="state-info" aria-hidden="true">
+        <a href="index.html" class="back-link">← Back to full map</a>
+        <div id="state-content"></div>
+      </aside>
+    </main>
+
+    <script src="js/state.js" type="module"></script>
+  </body>
+</html>

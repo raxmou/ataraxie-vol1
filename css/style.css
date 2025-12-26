@@ -21,16 +21,83 @@ body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  display: block;
+  display: block; /* full-map page keeps the svg full width */
   background: transparent;
 }
 
+.map-pane {
+  width: 50%;
+  height: 100%;
+  min-width: 320px;
+  background: transparent;
+  display: block;
+}
+
+/* default svg styling for the full map page */
 #map-svg {
   width: 100%;
-  height: 100%;
+  height: 100vh;
   display: block;
   background: transparent;
   touch-action: none;
+}
+
+/* state view svg (inside .map-pane) should fill its parent */
+.map-pane > svg,
+#state-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.info-pane {
+  width: 50%;
+  height: 100%;
+  padding: 24px;
+  overflow: auto;
+  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(250,250,250,0.95));
+  border-left: 1px solid rgba(17,24,39,0.06);
+  color: #0f172a;
+}
+
+.info-pane.hidden {
+  display: none;
+}
+
+.info-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.info-body {
+  font-size: 0.98rem;
+  line-height: 1.5;
+  color: #334155;
+}
+
+/* State view layout: split 50/50 on wide screens */
+#state-app {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+}
+
+@media (max-width: 900px) {
+  /* stack vertically on smaller screens */
+  #state-app {
+    display: block;
+  }
+  .info-pane {
+    width: 100%;
+    height: 40vh;
+    border-left: none;
+    border-top: 1px solid rgba(17,24,39,0.06);
+  }
+  .map-pane {
+    width: 100%;
+    height: 60vh;
+  }
 }
 
 .cell {

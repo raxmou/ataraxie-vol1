@@ -8,14 +8,20 @@ const oceanColor = "#d7dee8";
 const goldenAngle = 137.508;
 
 let activeCell = null;
+let geojsonData = null; // store loaded geojson for single-state rendering
 
 // Delegated click handler so clicks on `.cell` are always caught and logged.
 svg.addEventListener("click", (e) => {
   let node = e.target;
   while (node && node !== svg) {
     if (node.classList && node.classList.contains("cell")) {
-      
       setActiveCell(node);
+      // Navigate to dedicated state page for deep-linking / clean full-map view
+      const stateId = node.dataset.state;
+      if (stateId) {
+        const target = `state.html?state=${encodeURIComponent(String(stateId))}`;
+        window.location.href = target;
+      }
       return;
     }
     node = node.parentNode;
@@ -93,6 +99,8 @@ const setActiveCell = (cell) => {
   if (activeCell) activeCell.classList.add("is-active");
   console.log(activeCell ? `Active state: ${activeCell.dataset.state}` : "No active state");
 };
+
+// Note: single-state rendering now happens on a separate page (state.html).
 
 const buildMap = (geojson) => {
   const fragment = document.createDocumentFragment();
@@ -194,7 +202,7 @@ const buildMap = (geojson) => {
   // Hover handling: highlight state borders when hovering any cell of that state.
   svg.addEventListener("pointerover", (e) => {
     let node = e.target;
-    console.log(node);
+    
     while (node && node !== svg) {
       if (node.classList && node.classList.contains("cell")) {
           const state = node.dataset.state;
@@ -236,6 +244,7 @@ const init = async () => {
     const response = await fetch(dataUrl);
     if (!response.ok) throw new Error("Failed to load geojson");
     const geojson = await response.json();
+    geojsonData = geojson;
     buildMap(geojson);
   } catch (error) {
     console.error(error);

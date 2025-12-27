@@ -4,6 +4,28 @@
   box-sizing: border-box;
 }
 
+@font-face {
+  font-family: "Sinistre Regular";
+  src:
+    url("../assets/fonts/Sinistre-Regular.woff2") format("woff2"),
+    url("../assets/fonts/Sinistre-Regular.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --app-bg: radial-gradient(circle at top, #10140a 0%, #0b0e07 55%, #060804 100%);
+  --panel-bg: linear-gradient(180deg, rgba(14, 18, 10, 0.92), rgba(8, 10, 6, 0.96));
+  --panel-border: rgba(189, 255, 0, 0.5);
+  --text-color: #e8ffb2;
+  --muted-text: #b8d982;
+  --panel-width: 42%;
+  --transition-fast: 220ms ease;
+  --state-border: #263014;
+  --state-border-hover: #bdff00;
+}
+
 html,
 body {
   width: 100%;
@@ -13,55 +35,229 @@ body {
 
 body {
   font-family: "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
-  background: radial-gradient(circle at top, #f7f1e3 0%, #f2ede4 45%, #e8e4da 100%);
-  color: #111827;
+  background: var(--app-bg);
+  color: var(--text-color);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at center, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.45) 100%),
+    repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.03),
+      rgba(255, 255, 255, 0.03) 1px,
+      rgba(0, 0, 0, 0.02) 2px
+    );
+  mix-blend-mode: soft-light;
+  opacity: 0.5;
+  z-index: 0;
+}
+
+#app,
+.loading-screen {
+  position: relative;
+  z-index: 1;
+}
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, rgba(16, 20, 10, 0.95), rgba(6, 8, 4, 0.98));
+  z-index: 10;
+  transition: opacity var(--transition-fast);
+}
+
+.loading-screen.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-card {
+  padding: 28px 32px;
+  border-radius: 18px;
+  background: rgba(8, 12, 6, 0.95);
+  box-shadow: 0 18px 40px rgba(189, 255, 0, 0.18);
+  text-align: center;
+  min-width: 260px;
+}
+
+.loading-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: #e8ffb2;
+}
+
+.loading-subtitle {
+  font-size: 0.95rem;
+  color: #b8d982;
 }
 
 #app {
   width: 100vw;
   height: 100vh;
+  display: flex;
   overflow: hidden;
-  display: block; /* full-map page keeps the svg full width */
   background: transparent;
 }
 
 .map-pane {
-  width: 50%;
+  width: 100%;
   height: 100%;
-  min-width: 320px;
+  flex: 1 1 auto;
   background: transparent;
-  display: block;
+  transition: width var(--transition-fast);
+  position: relative;
 }
 
-/* default svg styling for the full map page */
+
+.arc-title {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+#app.is-split .arc-title {
+  opacity: 0;
+}
+
+.arc-title text {
+  font-family: "Sinistre Regular", "Goudy Old Style", "Palatino Linotype", "Book Antiqua", serif;
+  font-size: clamp(1.2rem, 2vw, 2.2rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  fill: #bdff00;
+  text-shadow: 0 0 12px rgba(189, 255, 0, 0.25);
+}
+
+.arc-title textPath {
+  text-anchor: middle;
+}
+
 #map-svg {
   width: 100%;
-  height: 100vh;
+  height: 100%;
   display: block;
   background: transparent;
   touch-action: none;
+  position: relative;
+  z-index: 1;
+  --audio-stroke: 0.6px;
+  --audio-opacity: 0.85;
+  --audio-glow: 0px;
 }
 
-/* state view svg (inside .map-pane) should fill its parent */
-.map-pane > svg,
-#state-svg {
+#state-3d-canvas {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  display: block;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+#map-texture {
+  opacity: 0.45;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+#app.is-split #map-texture {
+  opacity: 0;
+}
+
+.map-pane.is-3d #state-3d-canvas {
+  opacity: 1;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.map-pane.is-3d #map-svg {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .info-pane {
-  width: 50%;
+  width: 0;
   height: 100%;
-  padding: 24px;
-  overflow: auto;
-  background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(250,250,250,0.95));
-  border-left: 1px solid rgba(17,24,39,0.06);
-  color: #0f172a;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  background: var(--panel-bg);
+  border-left: 1px solid var(--panel-border);
+  transform: translateX(16px);
+  transition: width var(--transition-fast), opacity var(--transition-fast), transform var(--transition-fast);
 }
 
-.info-pane.hidden {
-  display: none;
+#app.is-split .map-pane {
+  width: calc(100% - var(--panel-width));
+  flex: 0 0 calc(100% - var(--panel-width));
+}
+
+#app.is-split .info-pane {
+  width: var(--panel-width);
+  padding: 24px;
+  overflow: auto;
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.panel-title {
+  font-size: 0.9rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0;
+  color: #bdff00;
+}
+
+.loading-title,
+.panel-title,
+.info-title,
+.track-label,
+.track-title {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+}
+
+.back-button {
+  border: 1px solid rgba(189, 255, 0, 0.7);
+  background: rgba(8, 10, 6, 0.92);
+  color: #e8ffb2;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.back-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(189, 255, 0, 0.3);
+}
+
+.back-button:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
 }
 
 .info-title {
@@ -73,73 +269,198 @@ body {
 .info-body {
   font-size: 0.98rem;
   line-height: 1.5;
-  color: #334155;
+  color: var(--muted-text);
 }
 
-/* State view layout: split 50/50 on wide screens */
-#state-app {
-  display: flex;
-  width: 100vw;
-  height: 100vh;
+.track-card {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(189, 255, 0, 0.35);
+  background: rgba(8, 12, 6, 0.75);
+  color: var(--text-color);
+}
+
+.track-card.is-empty {
+  color: var(--muted-text);
+  border-color: rgba(184, 217, 130, 0.2);
+}
+
+.track-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #bdff00;
+  margin-bottom: 6px;
+}
+
+.track-title {
+  font-size: 1rem;
+  margin-bottom: 10px;
+}
+
+.track-player {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(189, 255, 0, 0.35);
+  background: rgba(6, 8, 4, 0.82);
+  box-shadow: inset 0 0 12px rgba(189, 255, 0, 0.18);
+}
+
+.track-glyph {
+  border: 1px solid rgba(189, 255, 0, 0.35);
+  background: transparent;
+  color: #e8ffb2;
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: inset 0 0 8px rgba(189, 255, 0, 0.2);
+}
+
+.track-glyph:hover {
+  box-shadow: 0 0 10px rgba(189, 255, 0, 0.3);
+}
+
+.track-glyph:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.8);
+  outline-offset: 2px;
+}
+
+.track-scrub {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(189, 255, 0, 0.14);
+  outline: none;
+}
+
+.track-scrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #bdff00;
+  box-shadow: 0 0 10px rgba(189, 255, 0, 0.45);
+}
+
+.track-scrub::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: none;
+  background: #bdff00;
+  box-shadow: 0 0 10px rgba(189, 255, 0, 0.45);
+}
+
+.track-time {
+  min-width: 3.2ch;
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #e8ffb2;
+  text-align: right;
+}
+
+.track-audio {
+  display: none;
 }
 
 @media (max-width: 900px) {
-  /* stack vertically on smaller screens */
-  #state-app {
-    display: block;
+  #app {
+    flex-direction: column;
   }
-  .info-pane {
-    width: 100%;
-    height: 40vh;
-    border-left: none;
-    border-top: 1px solid rgba(17,24,39,0.06);
-  }
+
   .map-pane {
+    height: 100vh;
+  }
+
+  #app.is-split .map-pane {
     width: 100%;
     height: 60vh;
+    flex: 0 0 auto;
+  }
+
+  .info-pane {
+    width: 100%;
+    height: 0;
+    border-left: none;
+    border-top: 1px solid var(--panel-border);
+    transform: translateY(16px);
+  }
+
+  #app.is-split .info-pane {
+    width: 100%;
+    height: 40vh;
+    padding: 20px;
+    transform: translateY(0);
   }
 }
 
 .cell {
-  /* Remove individual cell strokes so internal seams are invisible */
   stroke: none;
   cursor: pointer;
-  transition: filter 160ms ease, opacity 160ms ease;
+  transition: filter 160ms ease, stroke-width 120ms ease, stroke-opacity 120ms ease;
 }
 
-/* Show a subtle border on hover and a stronger border when active */
 .cell.is-active {
-  /* keep active styling from before, but don't show stroke on hover */
-  filter: drop-shadow(0 4px 10px rgba(15, 23, 42, 0.35));
+  /* shadow removed for performance */
 }
 
+.cell {
+  stroke: currentColor;
+  stroke-width: var(--audio-stroke);
+  stroke-opacity: var(--audio-opacity);
+  stroke-linejoin: round;
+}
 
+#map-svg.is-animating .cell {
+  stroke: currentColor;
+  stroke-width: var(--audio-stroke);
+  stroke-opacity: var(--audio-opacity);
+  stroke-linejoin: round;
+}
+
+#map-svg.is-collapsed #map-base {
+  display: none;
+}
+
+#map-snapshot {
+  pointer-events: none;
+}
+
+#app.is-split #map-svg {
+  filter: drop-shadow(0 0 var(--audio-glow) rgba(189, 255, 0, 0.35));
+}
 
 .cell.is-ocean {
   cursor: default;
   opacity: 0.95;
-  fill: #3a9bff;
+  fill: #1b2212;
   fill-opacity: 0.95;
 }
 
-.cell.is-active {
-  filter: drop-shadow(0 4px 10px rgba(15, 23, 42, 0.35));
-}
-
-/* State borders drawn on top of cells */
 .state-border {
   fill: none;
-  stroke: rgba(17, 24, 39, 0.65);
+  stroke: transparent;
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  pointer-events: none; /* don't interfere with clicks */
+  pointer-events: none;
 }
 
-/* Highlight state border when a cell of that state is hovered */
 .state-border.is-hover {
-  stroke: red;
+  stroke: var(--state-border-hover);
   stroke-width: 2.4;
 }
-

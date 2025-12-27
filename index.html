@@ -8,16 +8,49 @@
   </head>
   <body>
     <!-- Set the data file here (URL-encode spaces when necessary) -->
-    <main id="app" data-geojson="Mia%20Cells%202025-12-23.geojson">
-      <svg
-        id="map-svg"
-        xmlns="http://www.w3.org/2000/svg"
-        preserveAspectRatio="xMidYMid meet"
-        role="img"
-        aria-label="Map"
-      ></svg>
+    <main
+      id="app"
+      class="app"
+      data-geojson="Mia%20Cells%202025-12-23.geojson"
+      data-tracks="data/tracks.json"
+    >
+      <section class="map-pane" aria-label="Map view">
+        <svg class="arc-title" viewBox="0 0 600 600" aria-hidden="true">
+          <defs>
+            <path id="arc-title-path" d="M 20 115 A 620 520 0 0 1 580 115" />
+          </defs>
+          <text>
+            <textPath href="#arc-title-path" startOffset="50%">
+              Ataraxie Compilation Vol. 1
+            </textPath>
+          </text>
+        </svg>
+        <canvas id="state-3d-canvas" aria-hidden="true"></canvas>
+        <svg
+          id="map-svg"
+          xmlns="http://www.w3.org/2000/svg"
+          preserveAspectRatio="xMidYMid meet"
+          role="img"
+          aria-label="Map"
+        ></svg>
+      </section>
+      <aside class="info-pane" id="info-pane" aria-hidden="true">
+        <header class="info-header">
+          <h1 class="panel-title">State details</h1>
+          <button class="back-button" id="state-back" type="button" hidden>
+            Back to full map
+          </button>
+        </header>
+        <div id="state-content"></div>
+      </aside>
     </main>
+    <div class="loading-screen" id="loading-screen" aria-hidden="false">
+      <div class="loading-card">
+        <div class="loading-title">Preparing the map</div>
+        <div class="loading-subtitle" id="loading-progress">Loading...</div>
+      </div>
+    </div>
 
-    <script src="js/main.js" type="module"></script>
+    <script src="js/app.js" type="module"></script>
   </body>
 </html>

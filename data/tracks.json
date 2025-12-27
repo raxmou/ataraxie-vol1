@@ -1,0 +1,72 @@
+{
+  "tracks": [
+    {
+      "id": "anta-doma-shapes-premaster",
+      "title": "Anta Doma - Shapes (Premaster)",
+      "file": "assets/music/Anta Doma - Shapes (Premaster).wav"
+    },
+    {
+      "id": "aquacrypt-unknown",
+      "title": "Aquacrypt - UNKNOWN",
+      "file": "assets/music/Aquacrypt - UNKNOWN.wav"
+    },
+    {
+      "id": "damna-3cso",
+      "title": "Damna - 3CsO",
+      "file": "assets/music/Damna - 3CsO.wav"
+    },
+    {
+      "id": "drawbridge-khey-mysterio-psylmodie",
+      "title": "Drawbridge & Khey Mysterio - Psylmodie",
+      "file": "assets/music/Drawbridge & Khey Mysterio - Psylmodie.wav"
+    },
+    {
+      "id": "gustave-retour-le-pi-ge",
+      "title": "Gustave Retour - Le pi\u00e8ge",
+      "file": "assets/music/Gustave Retour - Le pi\u00e8ge.wav"
+    },
+    {
+      "id": "naeja-may-the-world-ends-with-you",
+      "title": "Naeja - May The World Ends (With You)",
+      "file": "assets/music/Naeja - May The World Ends (With You).wav"
+    },
+    {
+      "id": "nostromodamus-another-presence-master-reference-v2",
+      "title": "Nostromodamus - Another Presence (MASTER REFERENCE V2)",
+      "file": "assets/music/Nostromodamus - Another Presence (MASTER REFERENCE V2).wav"
+    },
+    {
+      "id": "smogo-obliteration-premaster-24bit-44-1khz",
+      "title": "Smogo - Obliteration (Premaster - 24bit 44.1khz)",
+      "file": "assets/music/Smogo - Obliteration (Premaster - 24bit 44.1khz).wav"
+    },
+    {
+      "id": "zero-crossing-point-half-past-six-mix-24b-v2",
+      "title": "Zero Crossing Point - Half Past Six (Mix 24b V2)",
+      "file": "assets/music/Zero Crossing Point - Half Past Six (Mix 24b V2).wav"
+    },
+    {
+      "id": "acideplastique-vectorial-soil",
+      "title": "acideplastique - Vectorial Soil",
+      "file": "assets/music/acideplastique - Vectorial Soil.wav"
+    },
+    {
+      "id": "le-frit-streetview-belly-slide-mixdown",
+      "title": "le frit - streetview belly slide (mixdown)",
+      "file": "assets/music/le frit - streetview belly slide (mixdown).wav"
+    }
+  ],
+  "states": {
+    "1": "anta-doma-shapes-premaster",
+    "2": "aquacrypt-unknown",
+    "3": "damna-3cso",
+    "4": "drawbridge-khey-mysterio-psylmodie",
+    "5": "gustave-retour-le-pi-ge",
+    "6": "naeja-may-the-world-ends-with-you",
+    "7": "nostromodamus-another-presence-master-reference-v2",
+    "8": "smogo-obliteration-premaster-24bit-44-1khz",
+    "9": "zero-crossing-point-half-past-six-mix-24b-v2",
+    "10": "acideplastique-vectorial-soil",
+    "11": "le-frit-streetview-belly-slide-mixdown"
+  }
+}

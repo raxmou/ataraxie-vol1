@@ -65,6 +65,10 @@ let isSigilDragging = false;
 let sigilPointerId = null;
 let sigilLastPointerX = 0;
 let sigilLastPointerY = 0;
+let stateInertiaX = 0;
+let stateInertiaY = 0;
+let sigilInertiaX = 0;
+let sigilInertiaY = 0;
 
 const formatTime = (value) => {
   if (!Number.isFinite(value)) return "--:--";
@@ -427,6 +431,21 @@ const disposeThreeObject = (object) => {
   });
 };
 
+const applyInertiaRotation = (mesh, inertiaX, inertiaY, clampX, damping = 0.92) => {
+  if (!mesh) return { x: inertiaX, y: inertiaY };
+  if (Math.abs(inertiaX) < 0.0001 && Math.abs(inertiaY) < 0.0001) {
+    return { x: 0, y: 0 };
+  }
+  const nextX = mesh.rotation.x + inertiaX;
+  mesh.rotation.x = Math.max(clampX.min, Math.min(clampX.max, nextX));
+  mesh.rotation.y += inertiaY;
+  let nextInertiaX = inertiaX * damping;
+  let nextInertiaY = inertiaY * damping;
+  if (Math.abs(nextInertiaX) < 0.0001) nextInertiaX = 0;
+  if (Math.abs(nextInertiaY) < 0.0001) nextInertiaY = 0;
+  return { x: nextInertiaX, y: nextInertiaY };
+};
+
 const resizeRenderer = (api, canvas) => {
   if (!api || !canvas) return;
   const rect = canvas.getBoundingClientRect();
@@ -533,9 +552,16 @@ const buildSigilGeometry = async (sigilHref, THREE) => {
   const loader = new SVGLoader();
   const data = loader.parse(svgText);
   const shapes = [];
+  const outlineCandidates = [];
   data.paths.forEach((path) => {
     const pathShapes = SVGLoader.createShapes(path);
     shapes.push(...pathShapes);
+    const subPaths =
+      Array.isArray(path.subPaths) && path.subPaths.length ? path.subPaths : [path];
+    subPaths.forEach((subPath) => {
+      const points = subPath.getPoints(240);
+      if (points && points.length > 8) outlineCandidates.push(points);
+    });
   });
   if (!shapes.length) return null;
   const geometry = new THREE.ExtrudeGeometry(shapes, {
@@ -548,36 +574,138 @@ const buildSigilGeometry = async (sigilHref, THREE) => {
   geometry.scale(1, -1, 1);
   geometry.computeBoundingBox();
   const box = geometry.boundingBox;
+  let centerX = 0;
+  let centerY = 0;
+  let scale = 1;
   if (box) {
     const sizeX = box.max.x - box.min.x;
     const sizeY = box.max.y - box.min.y;
     const sizeZ = box.max.z - box.min.z;
-    const centerX = (box.max.x + box.min.x) / 2;
-    const centerY = (box.max.y + box.min.y) / 2;
+    centerX = (box.max.x + box.min.x) / 2;
+    centerY = (box.max.y + box.min.y) / 2;
     const centerZ = (box.max.z + box.min.z) / 2;
     geometry.translate(-centerX, -centerY, -centerZ);
     const maxSize = Math.max(sizeX, sizeY, sizeZ || 0.1);
-    const scale = maxSize > 0 ? 2.2 / maxSize : 1;
+    scale = maxSize > 0 ? 1.7 / maxSize : 1;
     geometry.scale(scale, scale, scale);
   }
+  geometry.computeBoundingBox();
+  const finalBox = geometry.boundingBox;
+  const frontZ = finalBox ? finalBox.max.z : 0;
+  let outlinePoints = null;
+  let outlineLength = 0;
+  if (outlineCandidates.length) {
+    outlineCandidates.forEach((candidate) => {
+      if (!candidate || candidate.length < 8) return;
+      const mapped = candidate.map(
+        (point) =>
+          new THREE.Vector3(
+            (point.x - centerX) * scale,
+            (-point.y - centerY) * scale,
+            frontZ + 0.006
+          )
+      );
+      let length = 0;
+      for (let i = 1; i < mapped.length; i += 1) {
+        length += mapped[i].distanceTo(mapped[i - 1]);
+      }
+      if (length > outlineLength) {
+        outlineLength = length;
+        outlinePoints = mapped;
+      }
+    });
+  }
   geometry.computeVertexNormals();
-  sigilGeometryCache.set(sigilHref, geometry);
-  return geometry;
+  const geometryData = { geometry, outlinePoints };
+  sigilGeometryCache.set(sigilHref, geometryData);
+  return geometryData;
+};
+
+const createSigilComet = (points, THREE) => {
+  if (!points || points.length < 8) return null;
+  const curve = new THREE.CatmullRomCurve3(points, true);
+  const tailCount = 28;
+  const tailPositions = new Float32Array(tailCount * 3);
+  const tailColors = new Float32Array(tailCount * 3);
+  const baseColor = new THREE.Color(0xbdff00);
+  const dimColor = new THREE.Color(0x2b3b07);
+  const start = curve.getPointAt(0);
+  for (let i = 0; i < tailCount; i += 1) {
+    const idx = i * 3;
+    tailPositions[idx] = start.x;
+    tailPositions[idx + 1] = start.y;
+    tailPositions[idx + 2] = start.z;
+    const fade = 1 - i / Math.max(1, tailCount - 1);
+    const color = baseColor.clone().lerp(dimColor, 1 - fade);
+    tailColors[idx] = color.r;
+    tailColors[idx + 1] = color.g;
+    tailColors[idx + 2] = color.b;
+  }
+  const tailGeometry = new THREE.BufferGeometry();
+  tailGeometry.setAttribute("position", new THREE.BufferAttribute(tailPositions, 3));
+  tailGeometry.setAttribute("color", new THREE.BufferAttribute(tailColors, 3));
+  const tailMaterial = new THREE.LineBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.85,
+  });
+  const tailLine = new THREE.Line(tailGeometry, tailMaterial);
+  tailLine.frustumCulled = false;
+  tailLine.renderOrder = 3;
+  const headGeometry = new THREE.SphereGeometry(0.022, 10, 10);
+  const headMaterial = new THREE.MeshBasicMaterial({ color: 0xbdff00 });
+  const head = new THREE.Mesh(headGeometry, headMaterial);
+  head.position.copy(start);
+  head.renderOrder = 4;
+  return {
+    curve,
+    tailLine,
+    tailGeometry,
+    tailPositions,
+    head,
+    tailCount,
+    t: Math.random(),
+    speed: 0.0012,
+    phase: Math.random() * Math.PI * 2,
+  };
+};
+
+const updateSigilComet = (comet) => {
+  if (!comet) return;
+  comet.t = (comet.t + comet.speed) % 1;
+  const headPos = comet.curve.getPointAt(comet.t);
+  const positions = comet.tailPositions;
+  for (let i = comet.tailCount - 1; i > 0; i -= 1) {
+    const idx = i * 3;
+    const prev = (i - 1) * 3;
+    positions[idx] = positions[prev];
+    positions[idx + 1] = positions[prev + 1];
+    positions[idx + 2] = positions[prev + 2];
+  }
+  positions[0] = headPos.x;
+  positions[1] = headPos.y;
+  positions[2] = headPos.z;
+  comet.tailGeometry.attributes.position.needsUpdate = true;
+  comet.head.position.copy(headPos);
+  const pulse = 0.85 + 0.15 * Math.sin(performance.now() * 0.004 + comet.phase);
+  comet.head.scale.setScalar(pulse);
 };
 
 const buildSigilMesh = async (stateId, sigilHref, THREE, depthRatio) => {
-  const baseGeometry = await buildSigilGeometry(sigilHref, THREE);
-  if (!baseGeometry) return null;
-  const geometry = baseGeometry.clone();
+  const geometryData = await buildSigilGeometry(sigilHref, THREE);
+  if (!geometryData?.geometry) return null;
+  const geometry = geometryData.geometry.clone();
   geometry.computeBoundingBox();
   const box = geometry.boundingBox;
+  let zScale = 1;
   if (box) {
     const sizeX = box.max.x - box.min.x;
     const sizeY = box.max.y - box.min.y;
     const sizeZ = box.max.z - box.min.z || 1;
     const ratio = Number.isFinite(depthRatio) ? Math.max(depthRatio, 0.08) : 0.08;
     const targetDepth = Math.max(sizeZ, Math.max(sizeX, sizeY) * ratio);
-    geometry.scale(1, 1, targetDepth / sizeZ);
+    zScale = targetDepth / sizeZ;
+    geometry.scale(1, 1, zScale);
   }
   geometry.computeVertexNormals();
   const baseColorValue = colorForState ? colorForState(stateId, false) : "#bdff00";
@@ -609,9 +737,20 @@ const buildSigilMesh = async (stateId, sigilHref, THREE, depthRatio) => {
   const edgeLines = new THREE.LineSegments(edgeGeometry, edgeMaterial);
   edgeLines.renderOrder = 2;
   mesh.add(edgeLines);
+  let comet = null;
+  if (geometryData.outlinePoints && geometryData.outlinePoints.length > 8) {
+    const cometPoints = geometryData.outlinePoints.map(
+      (point) => new THREE.Vector3(point.x, point.y, point.z * zScale)
+    );
+    comet = createSigilComet(cometPoints, THREE);
+    if (comet) {
+      mesh.add(comet.tailLine);
+      mesh.add(comet.head);
+    }
+  }
   mesh.rotation.x = -0.75;
   mesh.rotation.y = 0.45;
-  mesh.userData = { faceMaterial, sideMaterial, edgeMaterial };
+  mesh.userData = { faceMaterial, sideMaterial, edgeMaterial, comet };
   return mesh;
 };
 
@@ -967,6 +1106,14 @@ const startThreeRender = () => {
     if (!threeApi) return;
     if (threeApi.mesh && !isThreeDragging) {
       threeApi.mesh.rotation.z += 0.002;
+      const inertia = applyInertiaRotation(
+        threeApi.mesh,
+        stateInertiaX,
+        stateInertiaY,
+        { min: -1.6, max: -0.2 }
+      );
+      stateInertiaX = inertia.x;
+      stateInertiaY = inertia.y;
     }
     threeApi.renderer.render(threeApi.scene, threeApi.camera);
     threeApi.frameId = requestAnimationFrame(renderLoop);
@@ -985,8 +1132,18 @@ const startSigilRender = () => {
   if (!sigilThreeApi) return;
   const renderLoop = () => {
     if (!sigilThreeApi) return;
+    const comet = sigilThreeApi.mesh?.userData?.comet;
+    if (comet) updateSigilComet(comet);
     if (sigilThreeApi.mesh && !isSigilDragging) {
       sigilThreeApi.mesh.rotation.z += 0.002;
+      const inertia = applyInertiaRotation(
+        sigilThreeApi.mesh,
+        sigilInertiaX,
+        sigilInertiaY,
+        { min: -1.6, max: -0.2 }
+      );
+      sigilInertiaX = inertia.x;
+      sigilInertiaY = inertia.y;
     }
     sigilThreeApi.renderer.render(sigilThreeApi.scene, sigilThreeApi.camera);
     sigilThreeApi.frameId = requestAnimationFrame(renderLoop);
@@ -1027,6 +1184,8 @@ const hideState3D = () => {
   threeStack?.setAttribute("aria-hidden", "true");
   stateCanvas?.setAttribute("aria-hidden", "true");
   isThreeDragging = false;
+  stateInertiaX = 0;
+  stateInertiaY = 0;
   hideSigil3D();
   if (!threeApi) return;
   if (threeApi.mesh) {
@@ -1075,6 +1234,8 @@ const hideSigil3D = () => {
   sigilLoadToken += 1;
   sigilCanvas?.setAttribute("aria-hidden", "true");
   isSigilDragging = false;
+  sigilInertiaX = 0;
+  sigilInertiaY = 0;
   if (!sigilThreeApi) return;
   if (sigilThreeApi.mesh) {
     sigilThreeApi.scene.remove(sigilThreeApi.mesh);
@@ -1091,6 +1252,8 @@ const handleThreePointerDown = (event) => {
   lastPointerX = event.clientX;
   lastPointerY = event.clientY;
   isThreeDragging = true;
+  stateInertiaX = 0;
+  stateInertiaY = 0;
   stateCanvas.setPointerCapture?.(event.pointerId);
 };
 
@@ -1106,6 +1269,8 @@ const handleThreePointerMove = (event) => {
   const nextY = threeApi.mesh.rotation.y + deltaX * speed;
   threeApi.mesh.rotation.x = Math.max(-1.6, Math.min(-0.2, nextX));
   threeApi.mesh.rotation.y = nextY;
+  stateInertiaX = deltaY * speed;
+  stateInertiaY = deltaX * speed;
 };
 
 const handleThreePointerUp = (event) => {
@@ -1122,6 +1287,8 @@ const handleSigilPointerDown = (event) => {
   sigilLastPointerX = event.clientX;
   sigilLastPointerY = event.clientY;
   isSigilDragging = true;
+  sigilInertiaX = 0;
+  sigilInertiaY = 0;
   sigilCanvas.setPointerCapture?.(event.pointerId);
 };
 
@@ -1137,6 +1304,8 @@ const handleSigilPointerMove = (event) => {
   const nextY = sigilThreeApi.mesh.rotation.y + deltaX * speed;
   sigilThreeApi.mesh.rotation.x = Math.max(-1.6, Math.min(-0.2, nextX));
   sigilThreeApi.mesh.rotation.y = nextY;
+  sigilInertiaX = deltaY * speed;
+  sigilInertiaY = deltaX * speed;
 };
 
 const handleSigilPointerUp = (event) => {

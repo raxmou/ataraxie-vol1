@@ -1,6 +1,9 @@
-import { loadGeoJSON, loadTracks } from "./data.js";
+import { loadGeoJSON, loadSigils, loadTracks } from "./data.js";
 import { createMap, createStateColor } from "./map.js";
 import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
+
+const svgNS = "http://www.w3.org/2000/svg";
+const sigilLayerId = "map-sigils";
 
 const app = document.getElementById("app");
 const svg = document.getElementById("map-svg");
@@ -12,6 +15,8 @@ const loadingScreen = document.getElementById("loading-screen");
 const loadingProgress = document.getElementById("loading-progress");
 const stateCanvas = document.getElementById("state-3d-canvas");
 const dataUrl = app?.dataset.geojson;
+const riversUrl = app?.dataset.rivers;
+const sigilsUrl = app?.dataset.sigils;
 const tracksUrl = app?.dataset.tracks;
 const shouldPreloadSnapshots = app?.dataset.preloadSnapshots === "true";
 
@@ -31,6 +36,9 @@ let activeAudio = null;
 let threeApi = null;
 let threeInitPromise = null;
 let colorForState = null;
+let sigilsByState = new Map();
+let sigilLayer = null;
+let focusSigilLayer = null;
 let audioContext = null;
 let audioAnalyser = null;
 let audioData = null;
@@ -48,6 +56,113 @@ const formatTime = (value) => {
   const minutes = Math.floor(value / 60);
   const seconds = Math.floor(value % 60);
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+};
+
+const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+const getSigilBaseSize = () => {
+  const baseBox = mapApi?.fullViewBox;
+  return baseBox ? clamp(Math.min(baseBox.width, baseBox.height) * 0.04, 12, 28) : 18;
+};
+
+const resolveSigilMap = (payload) => {
+  if (!payload || typeof payload !== "object") return new Map();
+  const entries =
+    payload.states && typeof payload.states === "object" ? payload.states : payload;
+  return new Map(
+    Object.entries(entries || {}).map(([stateId, href]) => [String(stateId), href])
+  );
+};
+
+const clearSigilLayer = () => {
+  if (!sigilLayer) return;
+  sigilLayer.remove();
+  sigilLayer = null;
+};
+
+const clearFocusSigilLayer = () => {
+  if (!focusSigilLayer) return;
+  focusSigilLayer.remove();
+  focusSigilLayer = null;
+};
+
+const renderSigilLayer = () => {
+  clearSigilLayer();
+  if (!svg || !mapApi || !sigilsByState.size) return;
+  const baseSize = getSigilBaseSize();
+  const layer = document.createElementNS(svgNS, "g");
+  layer.setAttribute("id", sigilLayerId);
+  layer.classList.add("sigil-layer", "sigil-layer--map");
+  layer.setAttribute("aria-hidden", "true");
+
+  sigilsByState.forEach((href, stateId) => {
+    if (!href || stateId === "0") return;
+    const bounds = mapApi.getStateBounds(stateId);
+    if (!bounds) return;
+    const width = bounds.maxX - bounds.minX;
+    const height = bounds.maxY - bounds.minY;
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+    const size = baseSize;
+    const centerX = bounds.minX + width / 2;
+    const centerY = bounds.minY + height / 2;
+    const image = document.createElementNS(svgNS, "image");
+    const resolvedHref = encodeURI(href);
+    image.setAttribute("href", resolvedHref);
+    image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", resolvedHref);
+    image.setAttribute("x", (centerX - size / 2).toFixed(3));
+    image.setAttribute("y", (centerY - size / 2).toFixed(3));
+    image.setAttribute("width", size.toFixed(3));
+    image.setAttribute("height", size.toFixed(3));
+    image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    image.classList.add("sigil");
+    image.dataset.state = stateId;
+    layer.appendChild(image);
+  });
+
+  const focusLayer = mapApi.getFocusLayer?.();
+  if (focusLayer?.parentNode === svg) {
+    svg.insertBefore(layer, focusLayer);
+  } else {
+    svg.appendChild(layer);
+  }
+  sigilLayer = layer;
+};
+
+const renderFocusSigil = (stateId) => {
+  clearFocusSigilLayer();
+  if (!svg || !mapApi || !sigilsByState.size || !stateId) return;
+  const href = sigilsByState.get(String(stateId));
+  if (!href) return;
+  const bounds = mapApi.getStateBounds(stateId);
+  if (!bounds) return;
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+  const size = getSigilBaseSize();
+  const centerX = bounds.minX + width / 2;
+  const centerY = bounds.minY + height / 2;
+  const layer = document.createElementNS(svgNS, "g");
+  layer.classList.add("sigil-layer", "sigil-layer--focus");
+  layer.setAttribute("aria-hidden", "true");
+  const image = document.createElementNS(svgNS, "image");
+  const resolvedHref = encodeURI(href);
+  image.setAttribute("href", resolvedHref);
+  image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", resolvedHref);
+  image.setAttribute("x", (centerX - size / 2).toFixed(3));
+  image.setAttribute("y", (centerY - size / 2).toFixed(3));
+  image.setAttribute("width", size.toFixed(3));
+  image.setAttribute("height", size.toFixed(3));
+  image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  image.classList.add("sigil");
+  image.dataset.state = String(stateId);
+  layer.appendChild(image);
+  const focusLayer = mapApi.getFocusLayer?.();
+  if (focusLayer) {
+    focusLayer.appendChild(layer);
+  } else {
+    svg.appendChild(layer);
+  }
+  focusSigilLayer = layer;
 };
 
 const resetAudioVisuals = () => {
@@ -873,12 +988,16 @@ const renderInfo = (stateId) => {
     return;
   }
   const count = stateCounts.get(String(stateId)) ?? 0;
+  const sigilHref = sigilsByState.get(String(stateId));
   const trackId = trackByState.get(String(stateId));
   const track = trackId ? trackById.get(trackId) : null;
+  const sigilMarkup = sigilHref
+    ? `<div class="sigil-card"><img class="sigil-image" src="${encodeURI(sigilHref)}" alt="State ${stateId} sigil" /></div>`
+    : "";
   const trackMarkup = track
     ? `<div class="track-card"><div class="track-label">Now playing</div><div class="track-title">${track.title}</div><div class="track-player" data-track-player><button class="track-glyph" type="button" data-action="play">Play</button><input class="track-scrub" type="range" min="0" max="0" step="0.1" value="0" data-action="scrub" aria-label="Seek" /><div class="track-time" data-role="current">--:--</div><div class="track-time" data-role="total">--:--</div><button class="track-glyph" type="button" data-action="mute">Sound</button></div><audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio></div>`
     : '<div class="track-card is-empty">No track assigned.</div>';
-  infoContent.innerHTML = `<h2 class="info-title">State ${stateId}</h2><div class="info-body">${count} mapped cell${count === 1 ? "" : "s"}.</div>${trackMarkup}`;
+  infoContent.innerHTML = `<h2 class="info-title">State ${stateId}</h2><div class="info-body">${count} mapped cell${count === 1 ? "" : "s"}.</div>${sigilMarkup}${trackMarkup}`;
   const audio = infoContent.querySelector(".track-audio");
   if (audio instanceof HTMLAudioElement) {
     if (activeAudio && activeAudio !== audio) {
@@ -945,6 +1064,7 @@ const selectState = (stateId, options = {}) => {
   if (normalized === "0" || normalized === activeStateId) return;
   mapApi?.setActiveState(normalized);
   mapApi?.focusState(normalized);
+  renderFocusSigil(normalized);
   setCollapsed(true);
   activeStateId = normalized;
   renderInfo(normalized);
@@ -974,6 +1094,7 @@ const clearSelection = (options = {}) => {
   mapApi?.resetFocus();
   mapApi?.setActiveState(null);
   mapApi?.clearHover();
+  clearFocusSigilLayer();
   stopAudioReactive();
   hideState3D();
   activeStateId = null;
@@ -1010,9 +1131,11 @@ const init = async () => {
   if (!dataUrl || !svg) return;
   try {
     setLoading(true, "Loading map data...");
-    const [geojson, tracks] = await Promise.all([
+    const [geojson, tracks, rivers, sigils] = await Promise.all([
       loadGeoJSON(dataUrl),
       tracksUrl ? loadTracks(tracksUrl) : Promise.resolve(null),
+      riversUrl ? loadGeoJSON(riversUrl) : Promise.resolve(null),
+      sigilsUrl ? loadSigils(sigilsUrl) : Promise.resolve(null),
     ]);
     geojsonData = geojson;
     stateCounts = new Map();
@@ -1024,13 +1147,17 @@ const init = async () => {
       trackByState = new Map(Object.entries(tracks.states || {}));
       trackById = new Map((tracks.tracks || []).map((item) => [item.id, item]));
     }
+    if (sigils) {
+      sigilsByState = resolveSigilMap(sigils);
+    }
     colorForState = createStateColor({ oceanColor: "#1b2212" });
-    mapApi = createMap({ svg, geojson, colorForState });
+    mapApi = createMap({ svg, geojson, colorForState, riversGeojson: rivers });
     transformAnimator = createTransformAnimator(mapApi.getSnapshotLayer(), {
       prefersReducedMotion,
     });
     fullViewBox = mapApi.fullViewBox;
     if (fullViewBox) viewbox.set(fullViewBox);
+    renderSigilLayer();
     renderInfo(null);
 
     if (mapApi.preloadSnapshots && shouldPreloadSnapshots) {

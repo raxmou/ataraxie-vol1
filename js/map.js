@@ -1,4 +1,4 @@
-import { forEachCoordinate, geometryToPath } from "./geometry.js";
+import { forEachCoordinate, geometryToLinePath, geometryToPath } from "./geometry.js";
 
 const svgNS = "http://www.w3.org/2000/svg";
 const goldenAngle = 137.508;
@@ -28,7 +28,7 @@ export const createStateColor = (options = {}) => {
   };
 };
 
-export const createMap = ({ svg, geojson, colorForState }) => {
+export const createMap = ({ svg, geojson, colorForState, riversGeojson = null }) => {
   if (!svg || !geojson) {
     return {
       fullViewBox: null,
@@ -45,6 +45,8 @@ export const createMap = ({ svg, geojson, colorForState }) => {
   baseGroup.setAttribute("id", "map-base");
   const cellGroup = document.createElementNS(svgNS, "g");
   cellGroup.setAttribute("id", "map-cells");
+  const riverGroup = document.createElementNS(svgNS, "g");
+  riverGroup.setAttribute("id", "map-rivers");
   const borderGroup = document.createElementNS(svgNS, "g");
   borderGroup.setAttribute("id", "map-borders");
   const focusGroup = document.createElementNS(svgNS, "g");
@@ -53,6 +55,7 @@ export const createMap = ({ svg, geojson, colorForState }) => {
   snapshotGroup.setAttribute("id", "map-snapshot");
   snapshotGroup.setAttribute("visibility", "hidden");
   baseGroup.appendChild(cellGroup);
+  baseGroup.appendChild(riverGroup);
   baseGroup.appendChild(borderGroup);
   svg.appendChild(baseGroup);
   svg.appendChild(focusGroup);
@@ -90,6 +93,30 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     if (y < state.minY) state.minY = y;
     if (x > state.maxX) state.maxX = x;
     if (y > state.maxY) state.maxY = y;
+  };
+
+  const getLineBounds = (geojson) => {
+    const lineBounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    if (!geojson || !Array.isArray(geojson.features)) return lineBounds;
+    geojson.features.forEach((feature) => {
+      const geometry = feature.geometry;
+      if (!geometry) return;
+      const update = (x, y) => {
+        if (x < lineBounds.minX) lineBounds.minX = x;
+        if (y < lineBounds.minY) lineBounds.minY = y;
+        if (x > lineBounds.maxX) lineBounds.maxX = x;
+        if (y > lineBounds.maxY) lineBounds.maxY = y;
+      };
+      if (geometry.type === "LineString") {
+        geometry.coordinates.forEach(([x, y]) => update(x, y));
+      }
+      if (geometry.type === "MultiLineString") {
+        geometry.coordinates.forEach((line) => {
+          line.forEach(([x, y]) => update(x, y));
+        });
+      }
+    });
+    return lineBounds;
   };
 
   const edgeMap = new Map();
@@ -158,6 +185,42 @@ export const createMap = ({ svg, geojson, colorForState }) => {
   });
 
   cellGroup.appendChild(fragment);
+
+  if (riversGeojson && Array.isArray(riversGeojson.features)) {
+    const riversBounds = getLineBounds(riversGeojson);
+    const mapWidth = bounds.maxX - bounds.minX || 1;
+    const mapHeight = bounds.maxY - bounds.minY || 1;
+    const riversWidth = riversBounds.maxX - riversBounds.minX || 1;
+    const riversHeight = riversBounds.maxY - riversBounds.minY || 1;
+    const riversOverlap =
+      riversBounds.minX <= bounds.maxX &&
+      riversBounds.maxX >= bounds.minX &&
+      riversBounds.minY <= bounds.maxY &&
+      riversBounds.maxY >= bounds.minY;
+    let riverTransform = null;
+    if (!riversOverlap) {
+      const scale = Math.min(mapWidth / riversWidth, mapHeight / riversHeight);
+      const mapCenterX = bounds.minX + mapWidth / 2;
+      const mapCenterY = bounds.minY + mapHeight / 2;
+      const riversCenterX = riversBounds.minX + riversWidth / 2;
+      const riversCenterY = riversBounds.minY + riversHeight / 2;
+      const offsetX = mapCenterX - riversCenterX * scale;
+      const offsetY = mapCenterY - riversCenterY * scale;
+      riverTransform = (x, y) => [x * scale + offsetX, y * scale + offsetY];
+    }
+    const riverFragment = document.createDocumentFragment();
+    riversGeojson.features.forEach((feature) => {
+      const geometry = feature.geometry;
+      const pathData = geometryToLinePath(geometry, riverTransform);
+      if (!pathData) return;
+      const path = document.createElementNS(svgNS, "path");
+      path.setAttribute("d", pathData);
+      path.classList.add("river-line");
+      path.dataset.name = (feature.properties || {}).name || "";
+      riverFragment.appendChild(path);
+    });
+    riverGroup.appendChild(riverFragment);
+  }
 
   const stateBorderMap = new Map();
   const borderFragment = document.createDocumentFragment();

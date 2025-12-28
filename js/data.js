@@ -9,3 +9,5 @@ const loadJson = async (url, label) => {
 export const loadGeoJSON = (url) => loadJson(url, "geojson");
 
 export const loadTracks = (url) => loadJson(url, "tracks");
+
+export const loadSigils = (url) => loadJson(url, "sigils");

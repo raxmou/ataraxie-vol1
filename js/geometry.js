@@ -38,3 +38,25 @@ export const geometryToPath = (geometry) => {
   }
   return "";
 };
+
+const lineToPath = (line, transform) => {
+  if (!line.length) return "";
+  const [firstX, firstY] = transform ? transform(line[0][0], line[0][1]) : line[0];
+  let d = `M ${firstX} ${firstY}`;
+  for (let i = 1; i < line.length; i += 1) {
+    const [x, y] = transform ? transform(line[i][0], line[i][1]) : line[i];
+    d += ` L ${x} ${y}`;
+  }
+  return d;
+};
+
+export const geometryToLinePath = (geometry, transform) => {
+  if (!geometry) return "";
+  if (geometry.type === "LineString") {
+    return lineToPath(geometry.coordinates, transform);
+  }
+  if (geometry.type === "MultiLineString") {
+    return geometry.coordinates.map((line) => lineToPath(line, transform)).join(" ");
+  }
+  return "";
+};

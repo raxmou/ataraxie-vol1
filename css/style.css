@@ -24,6 +24,7 @@
   --transition-fast: 220ms ease;
   --state-border: #263014;
   --state-border-hover: #bdff00;
+  --river-stroke: rgba(126, 214, 255, 0.75);
 }
 
 html,
@@ -193,6 +194,42 @@ body::before {
   --audio-glow: 0px;
 }
 
+.sigil-layer {
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+.sigil-layer .sigil {
+  filter: drop-shadow(0 8px 16px rgba(6, 8, 4, 0.6));
+  opacity: 0.95;
+}
+
+.sigil-layer--map {
+  opacity: 0.85;
+}
+
+#app.is-split .sigil-layer--map {
+  opacity: 0;
+}
+
+.sigil-layer--focus {
+  opacity: 0;
+}
+
+#app.is-split .sigil-layer--focus {
+  opacity: 1;
+}
+
+#map-rivers {
+  opacity: 0.75;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+
+#app.is-split #map-rivers {
+  opacity: 0;
+}
+
 #state-3d-canvas {
   position: absolute;
   inset: 0;
@@ -315,6 +352,23 @@ body::before {
   border: 1px solid rgba(189, 255, 0, 0.35);
   background: rgba(8, 12, 6, 0.75);
   color: var(--text-color);
+}
+
+.sigil-card {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(189, 255, 0, 0.35);
+  background: rgba(8, 12, 6, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sigil-image {
+  width: min(220px, 60%);
+  height: auto;
+  filter: drop-shadow(0 10px 20px rgba(6, 8, 4, 0.55));
 }
 
 .track-card.is-empty {
@@ -499,4 +553,13 @@ body::before {
 .state-border.is-hover {
   stroke: var(--state-border-hover);
   stroke-width: 2.4;
+}
+
+.river-line {
+  fill: none;
+  stroke: var(--river-stroke);
+  stroke-width: 0.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }

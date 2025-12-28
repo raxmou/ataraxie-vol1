@@ -27,7 +27,14 @@
             </textPath>
           </text>
         </svg>
-        <canvas id="state-3d-canvas" aria-hidden="true"></canvas>
+        <div class="state-3d-stack" id="state-3d-stack" aria-hidden="true">
+          <div class="state-3d-slot">
+            <canvas id="state-3d-canvas" aria-hidden="true"></canvas>
+          </div>
+          <div class="sigil-3d-slot">
+            <canvas id="sigil-3d-canvas" aria-hidden="true"></canvas>
+          </div>
+        </div>
         <svg
           id="map-svg"
           xmlns="http://www.w3.org/2000/svg"

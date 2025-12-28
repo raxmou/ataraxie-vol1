@@ -220,14 +220,33 @@ body::before {
 }
 
 
-#state-3d-canvas {
+.state-3d-stack {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
   opacity: 0;
   pointer-events: none;
   z-index: 1;
+  transition: opacity var(--transition-fast);
+}
+
+.state-3d-slot,
+.sigil-3d-slot {
+  position: relative;
+  overflow: hidden;
+}
+
+.sigil-3d-slot {
+  border-top: 1px solid rgba(189, 255, 0, 0.25);
+}
+
+#state-3d-canvas,
+#sigil-3d-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
 }
 
 #map-texture {
@@ -240,10 +259,9 @@ body::before {
   opacity: 0;
 }
 
-.map-pane.is-3d #state-3d-canvas {
+.map-pane.is-3d .state-3d-stack {
   opacity: 1;
   pointer-events: auto;
-  touch-action: none;
 }
 
 .map-pane.is-3d #map-svg {

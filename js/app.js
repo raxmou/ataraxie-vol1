@@ -14,12 +14,17 @@ const backButton = document.getElementById("state-back");
 const loadingScreen = document.getElementById("loading-screen");
 const loadingProgress = document.getElementById("loading-progress");
 const stateCanvas = document.getElementById("state-3d-canvas");
+const sigilCanvas = document.getElementById("sigil-3d-canvas");
+const threeStack = document.getElementById("state-3d-stack");
 const dataUrl = app?.dataset.geojson;
 const sigilsUrl = app?.dataset.sigils;
 const tracksUrl = app?.dataset.tracks;
 const shouldPreloadSnapshots = app?.dataset.preloadSnapshots === "true";
 
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const THREE_URL = "https://unpkg.com/three@0.164.1/build/three.module.js";
+const SVG_LOADER_URL =
+  "https://unpkg.com/three@0.164.1/examples/jsm/loaders/SVGLoader.js?module";
 
 let geojsonData = null;
 let activeStateId = null;
@@ -32,12 +37,19 @@ let lastSelectedViewBox = null;
 let trackByState = new Map();
 let trackById = new Map();
 let activeAudio = null;
+let threeModulePromise = null;
+let svgLoaderPromise = null;
 let threeApi = null;
 let threeInitPromise = null;
+let sigilThreeApi = null;
+let sigilInitPromise = null;
+let sigilLoadToken = 0;
 let colorForState = null;
 let sigilsByState = new Map();
 let sigilLayer = null;
 let focusSigilLayer = null;
+let sigilSvgCache = new Map();
+let sigilGeometryCache = new Map();
 let audioContext = null;
 let audioAnalyser = null;
 let audioData = null;
@@ -49,6 +61,10 @@ let isThreeDragging = false;
 let activePointerId = null;
 let lastPointerX = 0;
 let lastPointerY = 0;
+let isSigilDragging = false;
+let sigilPointerId = null;
+let sigilLastPointerX = 0;
+let sigilLastPointerY = 0;
 
 const formatTime = (value) => {
   if (!Number.isFinite(value)) return "--:--";
@@ -58,6 +74,20 @@ const formatTime = (value) => {
 };
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+const loadThreeModule = () => {
+  if (!threeModulePromise) {
+    threeModulePromise = import(THREE_URL);
+  }
+  return threeModulePromise;
+};
+
+const loadSvgLoader = () => {
+  if (!svgLoaderPromise) {
+    svgLoaderPromise = import(SVG_LOADER_URL);
+  }
+  return svgLoaderPromise;
+};
 
 const getSigilBaseSize = () => {
   const baseBox = mapApi?.fullViewBox;
@@ -397,21 +427,29 @@ const disposeThreeObject = (object) => {
   });
 };
 
-const resizeThree = () => {
-  if (!threeApi || !mapPane) return;
-  const rect = mapPane.getBoundingClientRect();
+const resizeRenderer = (api, canvas) => {
+  if (!api || !canvas) return;
+  const rect = canvas.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
-  threeApi.renderer.setPixelRatio(window.devicePixelRatio || 1);
-  threeApi.renderer.setSize(rect.width, rect.height, false);
-  threeApi.camera.aspect = rect.width / rect.height;
-  threeApi.camera.updateProjectionMatrix();
+  api.renderer.setPixelRatio(window.devicePixelRatio || 1);
+  api.renderer.setSize(rect.width, rect.height, false);
+  api.camera.aspect = rect.width / rect.height;
+  api.camera.updateProjectionMatrix();
+};
+
+const resizeThree = () => {
+  resizeRenderer(threeApi, stateCanvas);
+};
+
+const resizeSigilThree = () => {
+  resizeRenderer(sigilThreeApi, sigilCanvas);
 };
 
 const initThree = async () => {
   if (threeInitPromise) return threeInitPromise;
   threeInitPromise = (async () => {
     if (!stateCanvas) return null;
-    const THREE = await import("https://unpkg.com/three@0.164.1/build/three.module.js");
+    const THREE = await loadThreeModule();
     const renderer = new THREE.WebGLRenderer({
       canvas: stateCanvas,
       antialias: true,
@@ -437,6 +475,144 @@ const initThree = async () => {
     return threeApi;
   })();
   return threeInitPromise;
+};
+
+const initSigilThree = async () => {
+  if (sigilInitPromise) return sigilInitPromise;
+  sigilInitPromise = (async () => {
+    if (!sigilCanvas) return null;
+    const THREE = await loadThreeModule();
+    const renderer = new THREE.WebGLRenderer({
+      canvas: sigilCanvas,
+      antialias: true,
+      alpha: true,
+    });
+    renderer.setClearColor(0x000000, 0);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+    camera.position.set(0, 0.18, 3.4);
+    camera.lookAt(0, 0, 0);
+    const hemi = new THREE.HemisphereLight(0xe8ffb2, 0x0b0e07, 0.7);
+    scene.add(hemi);
+    const ambient = new THREE.AmbientLight(0x1b240f, 0.35);
+    scene.add(ambient);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+    dir.position.set(3, 2.4, 4.2);
+    scene.add(dir);
+    const rim = new THREE.DirectionalLight(0x6b7f2c, 0.75);
+    rim.position.set(-3.6, -2.6, 2.4);
+    scene.add(rim);
+    const key = new THREE.PointLight(0xffffff, 0.7, 18);
+    key.position.set(0, 1.2, 2.6);
+    scene.add(key);
+    sigilThreeApi = { THREE, renderer, scene, camera, mesh: null, frameId: null };
+    resizeSigilThree();
+    return sigilThreeApi;
+  })();
+  return sigilInitPromise;
+};
+
+const loadSigilSvg = async (href) => {
+  if (!href) return null;
+  const cached = sigilSvgCache.get(href);
+  if (cached) return cached;
+  const response = await fetch(encodeURI(href));
+  if (!response.ok) throw new Error(`Failed to load sigil: ${response.status}`);
+  const text = await response.text();
+  sigilSvgCache.set(href, text);
+  return text;
+};
+
+const buildSigilGeometry = async (sigilHref, THREE) => {
+  if (!sigilHref) return null;
+  const cached = sigilGeometryCache.get(sigilHref);
+  if (cached) return cached;
+  const svgText = await loadSigilSvg(sigilHref);
+  if (!svgText) return null;
+  const { SVGLoader } = await loadSvgLoader();
+  const loader = new SVGLoader();
+  const data = loader.parse(svgText);
+  const shapes = [];
+  data.paths.forEach((path) => {
+    const pathShapes = SVGLoader.createShapes(path);
+    shapes.push(...pathShapes);
+  });
+  if (!shapes.length) return null;
+  const geometry = new THREE.ExtrudeGeometry(shapes, {
+    depth: 2.0,
+    bevelEnabled: true,
+    bevelThickness: 0.12,
+    bevelSize: 0.1,
+    bevelSegments: 2,
+  });
+  geometry.scale(1, -1, 1);
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  if (box) {
+    const sizeX = box.max.x - box.min.x;
+    const sizeY = box.max.y - box.min.y;
+    const sizeZ = box.max.z - box.min.z;
+    const centerX = (box.max.x + box.min.x) / 2;
+    const centerY = (box.max.y + box.min.y) / 2;
+    const centerZ = (box.max.z + box.min.z) / 2;
+    geometry.translate(-centerX, -centerY, -centerZ);
+    const maxSize = Math.max(sizeX, sizeY, sizeZ || 0.1);
+    const scale = maxSize > 0 ? 2.2 / maxSize : 1;
+    geometry.scale(scale, scale, scale);
+  }
+  geometry.computeVertexNormals();
+  sigilGeometryCache.set(sigilHref, geometry);
+  return geometry;
+};
+
+const buildSigilMesh = async (stateId, sigilHref, THREE, depthRatio) => {
+  const baseGeometry = await buildSigilGeometry(sigilHref, THREE);
+  if (!baseGeometry) return null;
+  const geometry = baseGeometry.clone();
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  if (box) {
+    const sizeX = box.max.x - box.min.x;
+    const sizeY = box.max.y - box.min.y;
+    const sizeZ = box.max.z - box.min.z || 1;
+    const ratio = Number.isFinite(depthRatio) ? Math.max(depthRatio, 0.08) : 0.08;
+    const targetDepth = Math.max(sizeZ, Math.max(sizeX, sizeY) * ratio);
+    geometry.scale(1, 1, targetDepth / sizeZ);
+  }
+  geometry.computeVertexNormals();
+  const baseColorValue = colorForState ? colorForState(stateId, false) : "#bdff00";
+  const baseColor = new THREE.Color(baseColorValue);
+  const sideColor = baseColor.clone().multiplyScalar(0.45);
+  const faceMaterial = new THREE.MeshStandardMaterial({
+    color: baseColor,
+    roughness: 0.22,
+    metalness: 0.32,
+    emissive: baseColor.clone().multiplyScalar(0.2),
+    emissiveIntensity: 0.18,
+    side: THREE.DoubleSide,
+  });
+  const sideMaterial = new THREE.MeshStandardMaterial({
+    color: sideColor,
+    roughness: 0.8,
+    metalness: 0.16,
+    emissive: sideColor.clone().multiplyScalar(0.2),
+    emissiveIntensity: 0.18,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, [faceMaterial, sideMaterial]);
+  const edgeGeometry = new THREE.EdgesGeometry(geometry, 8);
+  const edgeMaterial = new THREE.LineBasicMaterial({
+    color: baseColor.clone().multiplyScalar(1.15),
+    transparent: true,
+    opacity: 0.65,
+  });
+  const edgeLines = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+  edgeLines.renderOrder = 2;
+  mesh.add(edgeLines);
+  mesh.rotation.x = -0.75;
+  mesh.rotation.y = 0.45;
+  mesh.userData = { faceMaterial, sideMaterial, edgeMaterial };
+  return mesh;
 };
 
 const buildShapesFromGeometry = (geometry, THREE) => {
@@ -643,6 +819,14 @@ const buildStateMesh = (stateId, THREE) => {
   }
   geometry.computeBoundingBox();
   const scaledBounds = geometry.boundingBox;
+  let depthRatio = null;
+  if (scaledBounds) {
+    const sizeX = scaledBounds.max.x - scaledBounds.min.x;
+    const sizeY = scaledBounds.max.y - scaledBounds.min.y;
+    const sizeZ = scaledBounds.max.z - scaledBounds.min.z;
+    const denom = Math.max(sizeX, sizeY, 1e-6);
+    depthRatio = sizeZ / denom;
+  }
   const transformPoint = (point) => ({
     x: (point.x - centerX) * scale,
     y: (point.y - centerY) * scale,
@@ -687,13 +871,15 @@ const buildStateMesh = (stateId, THREE) => {
     const terrainMat = new THREE.LineBasicMaterial({
       color: 0xbdff00,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.85,
+      depthTest: false,
     });
     terrainGroup = new THREE.Group();
     terrainGroup.frustumCulled = false;
+    terrainGroup.renderOrder = 2;
     const minX = scaledBounds.min.x;
     terrainRangeX = scaledBounds.max.x - scaledBounds.min.x || 1;
-    terrainTopZ = scaledBounds.max.z + 0.02;
+    terrainTopZ = scaledBounds.max.z + 0.08;
     terrainBaseHeight = 0.04;
     terrainMaxHeight = 0.35;
     const gridSize = terrainSize * 1.4;
@@ -770,6 +956,7 @@ const buildStateMesh = (stateId, THREE) => {
     faceMaterial,
     sideMaterial,
     baseScale: mesh.scale.clone(),
+    depthRatio,
   };
   return mesh;
 };
@@ -794,6 +981,26 @@ const stopThreeRender = () => {
   threeApi.frameId = null;
 };
 
+const startSigilRender = () => {
+  if (!sigilThreeApi) return;
+  const renderLoop = () => {
+    if (!sigilThreeApi) return;
+    if (sigilThreeApi.mesh && !isSigilDragging) {
+      sigilThreeApi.mesh.rotation.z += 0.002;
+    }
+    sigilThreeApi.renderer.render(sigilThreeApi.scene, sigilThreeApi.camera);
+    sigilThreeApi.frameId = requestAnimationFrame(renderLoop);
+  };
+  if (sigilThreeApi.frameId) cancelAnimationFrame(sigilThreeApi.frameId);
+  sigilThreeApi.frameId = requestAnimationFrame(renderLoop);
+};
+
+const stopSigilRender = () => {
+  if (!sigilThreeApi) return;
+  if (sigilThreeApi.frameId) cancelAnimationFrame(sigilThreeApi.frameId);
+  sigilThreeApi.frameId = null;
+};
+
 const showState3D = async (stateId) => {
   if (!stateId || !mapPane) return;
   const api = await initThree();
@@ -808,6 +1015,7 @@ const showState3D = async (stateId) => {
   api.scene.add(mesh);
   api.mesh = mesh;
   mapPane.classList.add("is-3d");
+  threeStack?.setAttribute("aria-hidden", "false");
   stateCanvas?.setAttribute("aria-hidden", "false");
   resizeThree();
   startThreeRender();
@@ -816,8 +1024,10 @@ const showState3D = async (stateId) => {
 const hideState3D = () => {
   if (!mapPane) return;
   mapPane.classList.remove("is-3d");
+  threeStack?.setAttribute("aria-hidden", "true");
   stateCanvas?.setAttribute("aria-hidden", "true");
   isThreeDragging = false;
+  hideSigil3D();
   if (!threeApi) return;
   if (threeApi.mesh) {
     threeApi.scene.remove(threeApi.mesh);
@@ -825,6 +1035,53 @@ const hideState3D = () => {
     threeApi.mesh = null;
   }
   stopThreeRender();
+};
+
+const showSigil3D = async (stateId) => {
+  if (!stateId || !mapPane || !sigilCanvas) return;
+  const sigilHref = sigilsByState.get(String(stateId));
+  if (!sigilHref) {
+    hideSigil3D();
+    return;
+  }
+  sigilLoadToken += 1;
+  const token = sigilLoadToken;
+  const api = await initSigilThree();
+  if (!api || token !== sigilLoadToken) return;
+  if (api.mesh) {
+    api.scene.remove(api.mesh);
+    disposeThreeObject(api.mesh);
+    api.mesh = null;
+  }
+  let mesh = null;
+  const depthRatio = threeApi?.mesh?.userData?.depthRatio;
+  try {
+    mesh = await buildSigilMesh(stateId, sigilHref, api.THREE, depthRatio);
+  } catch (error) {
+    console.warn("Failed to build sigil mesh", error);
+    return;
+  }
+  if (!mesh || token !== sigilLoadToken) return;
+  api.scene.add(mesh);
+  api.mesh = mesh;
+  mapPane.classList.add("is-3d");
+  threeStack?.setAttribute("aria-hidden", "false");
+  sigilCanvas?.setAttribute("aria-hidden", "false");
+  resizeSigilThree();
+  startSigilRender();
+};
+
+const hideSigil3D = () => {
+  sigilLoadToken += 1;
+  sigilCanvas?.setAttribute("aria-hidden", "true");
+  isSigilDragging = false;
+  if (!sigilThreeApi) return;
+  if (sigilThreeApi.mesh) {
+    sigilThreeApi.scene.remove(sigilThreeApi.mesh);
+    disposeThreeObject(sigilThreeApi.mesh);
+    sigilThreeApi.mesh = null;
+  }
+  stopSigilRender();
 };
 
 const handleThreePointerDown = (event) => {
@@ -858,12 +1115,51 @@ const handleThreePointerUp = (event) => {
   stateCanvas?.releasePointerCapture?.(event.pointerId);
 };
 
+const handleSigilPointerDown = (event) => {
+  if (!sigilCanvas || !mapPane?.classList.contains("is-3d")) return;
+  if (sigilPointerId !== null) return;
+  sigilPointerId = event.pointerId;
+  sigilLastPointerX = event.clientX;
+  sigilLastPointerY = event.clientY;
+  isSigilDragging = true;
+  sigilCanvas.setPointerCapture?.(event.pointerId);
+};
+
+const handleSigilPointerMove = (event) => {
+  if (!sigilThreeApi?.mesh) return;
+  if (sigilPointerId !== event.pointerId) return;
+  const deltaX = event.clientX - sigilLastPointerX;
+  const deltaY = event.clientY - sigilLastPointerY;
+  sigilLastPointerX = event.clientX;
+  sigilLastPointerY = event.clientY;
+  const speed = 0.004;
+  const nextX = sigilThreeApi.mesh.rotation.x + deltaY * speed;
+  const nextY = sigilThreeApi.mesh.rotation.y + deltaX * speed;
+  sigilThreeApi.mesh.rotation.x = Math.max(-1.6, Math.min(-0.2, nextX));
+  sigilThreeApi.mesh.rotation.y = nextY;
+};
+
+const handleSigilPointerUp = (event) => {
+  if (sigilPointerId !== event.pointerId) return;
+  sigilPointerId = null;
+  isSigilDragging = false;
+  sigilCanvas?.releasePointerCapture?.(event.pointerId);
+};
+
 if (stateCanvas) {
   stateCanvas.addEventListener("pointerdown", handleThreePointerDown);
   stateCanvas.addEventListener("pointermove", handleThreePointerMove);
   stateCanvas.addEventListener("pointerup", handleThreePointerUp);
   stateCanvas.addEventListener("pointercancel", handleThreePointerUp);
   stateCanvas.addEventListener("pointerleave", handleThreePointerUp);
+}
+
+if (sigilCanvas) {
+  sigilCanvas.addEventListener("pointerdown", handleSigilPointerDown);
+  sigilCanvas.addEventListener("pointermove", handleSigilPointerMove);
+  sigilCanvas.addEventListener("pointerup", handleSigilPointerUp);
+  sigilCanvas.addEventListener("pointercancel", handleSigilPointerUp);
+  sigilCanvas.addEventListener("pointerleave", handleSigilPointerUp);
 }
 
 const setSplitLayout = (isSplit) => {
@@ -1075,6 +1371,7 @@ const selectState = (stateId, options = {}) => {
   }
   setSplitLayout(true);
   showState3D(normalized);
+  showSigil3D(normalized);
   if (options.pushState !== false) updateUrlState(normalized);
   requestAnimationFrame(() => {
     const target = getTargetViewBoxForState(normalized);
@@ -1201,6 +1498,7 @@ backButton?.addEventListener("click", (event) => {
 
 window.addEventListener("resize", () => {
   resizeThree();
+  resizeSigilThree();
   if (!activeStateId) return;
   const target = getTargetViewBoxForState(activeStateId);
   viewbox.set(target);

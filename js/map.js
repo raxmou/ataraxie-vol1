@@ -45,8 +45,6 @@ export const createMap = ({ svg, geojson, colorForState }) => {
   baseGroup.setAttribute("id", "map-base");
   const cellGroup = document.createElementNS(svgNS, "g");
   cellGroup.setAttribute("id", "map-cells");
-  const textureGroup = document.createElementNS(svgNS, "g");
-  textureGroup.setAttribute("id", "map-texture");
   const borderGroup = document.createElementNS(svgNS, "g");
   borderGroup.setAttribute("id", "map-borders");
   const focusGroup = document.createElementNS(svgNS, "g");
@@ -55,7 +53,6 @@ export const createMap = ({ svg, geojson, colorForState }) => {
   snapshotGroup.setAttribute("id", "map-snapshot");
   snapshotGroup.setAttribute("visibility", "hidden");
   baseGroup.appendChild(cellGroup);
-  baseGroup.appendChild(textureGroup);
   baseGroup.appendChild(borderGroup);
   svg.appendChild(baseGroup);
   svg.appendChild(focusGroup);
@@ -70,6 +67,7 @@ export const createMap = ({ svg, geojson, colorForState }) => {
   const stateBounds = new Map();
   const stateCells = new Map();
   const snapshotCache = new Map();
+  const maxSnapshotCacheSize = 24;
   let activeNodes = [];
   let focusedNodes = [];
   let focusedStateId = null;
@@ -116,7 +114,6 @@ export const createMap = ({ svg, geojson, colorForState }) => {
   };
 
   const fragment = document.createDocumentFragment();
-  const textureFragment = document.createDocumentFragment();
 
   geojson.features.forEach((feature) => {
     const geometry = feature.geometry;
@@ -158,17 +155,9 @@ export const createMap = ({ svg, geojson, colorForState }) => {
 
     fragment.appendChild(path);
 
-    const texturePath = document.createElementNS(svgNS, "path");
-    texturePath.setAttribute("d", pathData);
-    texturePath.setAttribute("fill", "url(#state-texture)");
-    texturePath.setAttribute("stroke", "none");
-    texturePath.classList.add("cell-texture");
-    texturePath.dataset.state = stateId;
-    textureFragment.appendChild(texturePath);
   });
 
   cellGroup.appendChild(fragment);
-  textureGroup.appendChild(textureFragment);
 
   const stateBorderMap = new Map();
   const borderFragment = document.createDocumentFragment();
@@ -267,11 +256,34 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     };
   };
 
+  const evictOldestSnapshot = () => {
+    const first = snapshotCache.entries().next();
+    if (first.done) return;
+    const [key, snapshot] = first.value;
+    if (snapshot?.url) URL.revokeObjectURL(snapshot.url);
+    snapshotCache.delete(key);
+  };
+
+  const touchSnapshot = (key, snapshot) => {
+    if (!snapshot) return;
+    snapshotCache.delete(key);
+    snapshotCache.set(key, snapshot);
+  };
+
   const getSnapshotForState = (stateId) => {
     const key = String(stateId);
-    if (snapshotCache.has(key)) return snapshotCache.get(key);
+    if (snapshotCache.has(key)) {
+      const snapshot = snapshotCache.get(key);
+      touchSnapshot(key, snapshot);
+      return snapshot;
+    }
     const snapshot = buildSnapshotForState(key);
-    if (snapshot) snapshotCache.set(key, snapshot);
+    if (snapshot) {
+      snapshotCache.set(key, snapshot);
+      while (snapshotCache.size > maxSnapshotCacheSize) {
+        evictOldestSnapshot();
+      }
+    }
     return snapshot;
   };
 
@@ -301,7 +313,14 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     for (const stateId of stateIds) {
       if (!snapshotCache.has(stateId)) {
         const snapshot = buildSnapshotForState(stateId);
-        if (snapshot) snapshotCache.set(stateId, snapshot);
+        if (snapshot) {
+          snapshotCache.set(stateId, snapshot);
+          while (snapshotCache.size > maxSnapshotCacheSize) {
+            evictOldestSnapshot();
+          }
+        }
+      } else {
+        touchSnapshot(stateId, snapshotCache.get(stateId));
       }
       completed += 1;
       if (options.onProgress) options.onProgress(completed, total);
@@ -354,33 +373,6 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     const height = bounds.maxY - bounds.minY || 1;
     fullViewBox = { x: bounds.minX, y: bounds.minY, width, height };
   }
-  if (fullViewBox) {
-    const defs = document.createElementNS(svgNS, "defs");
-    const pattern = document.createElementNS(svgNS, "pattern");
-    pattern.setAttribute("id", "state-texture");
-    pattern.setAttribute("patternUnits", "userSpaceOnUse");
-    pattern.setAttribute("x", `${fullViewBox.x}`);
-    pattern.setAttribute("y", `${fullViewBox.y}`);
-    pattern.setAttribute("width", `${fullViewBox.width}`);
-    pattern.setAttribute("height", `${fullViewBox.height}`);
-    const image = document.createElementNS(svgNS, "image");
-    image.setAttribute("href", "assets/360_F_183367274_p7SCYNt7IyK5aSBQBBYOUPG5ZuGWjX5P.jpg");
-    image.setAttributeNS(
-      "http://www.w3.org/1999/xlink",
-      "xlink:href",
-      "assets/360_F_183367274_p7SCYNt7IyK5aSBQBBYOUPG5ZuGWjX5P.jpg"
-    );
-    image.setAttribute("x", `${fullViewBox.x}`);
-    image.setAttribute("y", `${fullViewBox.y}`);
-    image.setAttribute("width", `${fullViewBox.width}`);
-    image.setAttribute("height", `${fullViewBox.height}`);
-    image.setAttribute("preserveAspectRatio", "xMidYMid slice");
-    pattern.appendChild(image);
-
-    defs.appendChild(pattern);
-    svg.insertBefore(defs, svg.firstChild);
-  }
-
   return {
     fullViewBox,
     getStateBounds,

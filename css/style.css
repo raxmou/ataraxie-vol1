@@ -24,7 +24,6 @@
   --transition-fast: 220ms ease;
   --state-border: #263014;
   --state-border-hover: #bdff00;
-  --river-stroke: rgba(126, 214, 255, 0.75);
 }
 
 html,
@@ -220,15 +219,6 @@ body::before {
   opacity: 1;
 }
 
-#map-rivers {
-  opacity: 0.75;
-  pointer-events: none;
-  transition: opacity var(--transition-fast);
-}
-
-#app.is-split #map-rivers {
-  opacity: 0;
-}
 
 #state-3d-canvas {
   position: absolute;
@@ -553,13 +543,4 @@ body::before {
 .state-border.is-hover {
   stroke: var(--state-border-hover);
   stroke-width: 2.4;
-}
-
-.river-line {
-  fill: none;
-  stroke: var(--river-stroke);
-  stroke-width: 0.9;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
 }

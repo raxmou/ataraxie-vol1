@@ -15,7 +15,6 @@ const loadingScreen = document.getElementById("loading-screen");
 const loadingProgress = document.getElementById("loading-progress");
 const stateCanvas = document.getElementById("state-3d-canvas");
 const dataUrl = app?.dataset.geojson;
-const riversUrl = app?.dataset.rivers;
 const sigilsUrl = app?.dataset.sigils;
 const tracksUrl = app?.dataset.tracks;
 const shouldPreloadSnapshots = app?.dataset.preloadSnapshots === "true";
@@ -1131,10 +1130,9 @@ const init = async () => {
   if (!dataUrl || !svg) return;
   try {
     setLoading(true, "Loading map data...");
-    const [geojson, tracks, rivers, sigils] = await Promise.all([
+    const [geojson, tracks, sigils] = await Promise.all([
       loadGeoJSON(dataUrl),
       tracksUrl ? loadTracks(tracksUrl) : Promise.resolve(null),
-      riversUrl ? loadGeoJSON(riversUrl) : Promise.resolve(null),
       sigilsUrl ? loadSigils(sigilsUrl) : Promise.resolve(null),
     ]);
     geojsonData = geojson;
@@ -1151,7 +1149,7 @@ const init = async () => {
       sigilsByState = resolveSigilMap(sigils);
     }
     colorForState = createStateColor({ oceanColor: "#1b2212" });
-    mapApi = createMap({ svg, geojson, colorForState, riversGeojson: rivers });
+    mapApi = createMap({ svg, geojson, colorForState });
     transformAnimator = createTransformAnimator(mapApi.getSnapshotLayer(), {
       prefersReducedMotion,
     });

@@ -154,29 +154,19 @@ body::before {
 
 .arc-title {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  top: 20px;
+  left: 50%;
+  width: 80%;
+  height: 10%;
+  display: block;
+  object-fit: contain;
+  transform: translateX(-50%);
   pointer-events: none;
   z-index: 2;
-  overflow: visible;
 }
 
 #app.is-split .arc-title {
   opacity: 0;
-}
-
-.arc-title text {
-  font-family: "Sinistre Regular", "Goudy Old Style", "Palatino Linotype", "Book Antiqua", serif;
-  font-size: clamp(1.2rem, 2vw, 2.2rem);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  fill: #bdff00;
-  text-shadow: 0 0 12px rgba(189, 255, 0, 0.25);
-}
-
-.arc-title textPath {
-  text-anchor: middle;
 }
 
 
@@ -203,11 +193,35 @@ body::before {
   opacity: 0.95;
 }
 
-.sigil-layer--map {
-  opacity: 0.85;
+.sigil-layer--hover {
+  opacity: 0;
+  transform: scale(0.7);
+  transform-origin: center;
+  transform-box: fill-box;
+  transition: opacity 420ms ease, transform 420ms ease;
 }
 
-#app.is-split .sigil-layer--map {
+.sigil-layer--hover.is-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.sigil-layer--hover.is-animating {
+  animation: sigil-pop 420ms ease both;
+}
+
+@keyframes sigil-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+#app.is-split .sigil-layer--hover {
   opacity: 0;
 }
 
@@ -223,8 +237,6 @@ body::before {
 .state-3d-stack {
   position: absolute;
   inset: 0;
-  display: grid;
-  grid-template-rows: 1fr 1fr;
   opacity: 0;
   pointer-events: none;
   z-index: 1;
@@ -233,12 +245,12 @@ body::before {
 
 .state-3d-slot,
 .sigil-3d-slot {
-  position: relative;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-}
-
-.sigil-3d-slot {
-  border-top: 1px solid rgba(189, 255, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
 }
 
 #state-3d-canvas,
@@ -262,6 +274,70 @@ body::before {
 .map-pane.is-3d .state-3d-stack {
   opacity: 1;
   pointer-events: auto;
+}
+
+.map-pane.is-3d-state .state-3d-slot {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.map-pane.is-3d-sigil .sigil-3d-slot {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.three-toggle {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  display: flex;
+  gap: 8px;
+  z-index: 4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.map-pane.is-3d .three-toggle {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.toggle-button {
+  border: 1px solid rgba(189, 255, 0, 0.65);
+  background: rgba(8, 10, 6, 0.92);
+  color: #e8ffb2;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.toggle-button[aria-pressed="true"] {
+  box-shadow: 0 0 12px rgba(189, 255, 0, 0.35);
+}
+
+.toggle-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(189, 255, 0, 0.3);
+}
+
+.toggle-button:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+
+.toggle-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  box-shadow: none;
+  transform: none;
 }
 
 .map-pane.is-3d #map-svg {

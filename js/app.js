@@ -16,6 +16,8 @@ const loadingProgress = document.getElementById("loading-progress");
 const stateCanvas = document.getElementById("state-3d-canvas");
 const sigilCanvas = document.getElementById("sigil-3d-canvas");
 const threeStack = document.getElementById("state-3d-stack");
+const threeToggle = document.getElementById("three-toggle");
+const threeToggleButtons = threeToggle?.querySelectorAll("[data-3d-target]");
 const dataUrl = app?.dataset.geojson;
 const sigilsUrl = app?.dataset.sigils;
 const tracksUrl = app?.dataset.tracks;
@@ -48,6 +50,9 @@ let colorForState = null;
 let sigilsByState = new Map();
 let sigilLayer = null;
 let focusSigilLayer = null;
+let hoverSigilImage = null;
+let hoverSigilStateId = null;
+let hoverSigilToken = 0;
 let sigilSvgCache = new Map();
 let sigilGeometryCache = new Map();
 let audioContext = null;
@@ -69,6 +74,7 @@ let stateInertiaX = 0;
 let stateInertiaY = 0;
 let sigilInertiaX = 0;
 let sigilInertiaY = 0;
+let activeThreeView = "state";
 
 const formatTime = (value) => {
   if (!Number.isFinite(value)) return "--:--";
@@ -95,7 +101,7 @@ const loadSvgLoader = () => {
 
 const getSigilBaseSize = () => {
   const baseBox = mapApi?.fullViewBox;
-  return baseBox ? clamp(Math.min(baseBox.width, baseBox.height) * 0.04, 12, 28) : 18;
+  return baseBox ? clamp(Math.min(baseBox.width, baseBox.height) * 0.032, 10, 24) : 16;
 };
 
 const resolveSigilMap = (payload) => {
@@ -111,6 +117,8 @@ const clearSigilLayer = () => {
   if (!sigilLayer) return;
   sigilLayer.remove();
   sigilLayer = null;
+  hoverSigilImage = null;
+  hoverSigilStateId = null;
 };
 
 const clearFocusSigilLayer = () => {
@@ -119,39 +127,76 @@ const clearFocusSigilLayer = () => {
   focusSigilLayer = null;
 };
 
+const hideHoverSigil = () => {
+  if (!sigilLayer) return;
+  sigilLayer.classList.remove("is-visible");
+  sigilLayer.classList.remove("is-animating");
+  hoverSigilStateId = null;
+  hoverSigilToken += 1;
+  delete sigilLayer.dataset.hoverToken;
+};
+
+const showHoverSigil = (stateId) => {
+  if (!sigilLayer || !hoverSigilImage || !mapApi) return;
+  if (!stateId || stateId === "0") {
+    hideHoverSigil();
+    return;
+  }
+  const href = sigilsByState.get(String(stateId));
+  if (!href) {
+    hideHoverSigil();
+    return;
+  }
+  const bounds = mapApi.getStateBounds(stateId);
+  if (!bounds) {
+    hideHoverSigil();
+    return;
+  }
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  if (!Number.isFinite(width) || !Number.isFinite(height)) {
+    hideHoverSigil();
+    return;
+  }
+  const size = getSigilBaseSize() * 1.1;
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
+  const resolvedHref = encodeURI(href);
+  hoverSigilImage.setAttribute("href", resolvedHref);
+  hoverSigilImage.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", resolvedHref);
+  hoverSigilImage.setAttribute("x", (centerX - size / 2).toFixed(3));
+  hoverSigilImage.setAttribute("y", (centerY - size / 2).toFixed(3));
+  hoverSigilImage.setAttribute("width", size.toFixed(3));
+  hoverSigilImage.setAttribute("height", size.toFixed(3));
+  hoverSigilImage.dataset.state = String(stateId);
+  const nextState = String(stateId);
+  if (hoverSigilStateId !== nextState) {
+    hoverSigilToken += 1;
+    const token = hoverSigilToken;
+    sigilLayer.dataset.hoverToken = String(token);
+    sigilLayer.classList.remove("is-visible", "is-animating");
+    sigilLayer.getBoundingClientRect();
+    requestAnimationFrame(() => {
+      if (!sigilLayer || hoverSigilToken !== token) return;
+      sigilLayer.classList.add("is-visible", "is-animating");
+    });
+  } else {
+    sigilLayer.classList.add("is-visible");
+  }
+  hoverSigilStateId = nextState;
+};
+
 const renderSigilLayer = () => {
   clearSigilLayer();
   if (!svg || !mapApi || !sigilsByState.size) return;
-  const baseSize = getSigilBaseSize();
   const layer = document.createElementNS(svgNS, "g");
   layer.setAttribute("id", sigilLayerId);
-  layer.classList.add("sigil-layer", "sigil-layer--map");
+  layer.classList.add("sigil-layer", "sigil-layer--hover");
   layer.setAttribute("aria-hidden", "true");
-
-  sigilsByState.forEach((href, stateId) => {
-    if (!href || stateId === "0") return;
-    const bounds = mapApi.getStateBounds(stateId);
-    if (!bounds) return;
-    const width = bounds.maxX - bounds.minX;
-    const height = bounds.maxY - bounds.minY;
-    if (!Number.isFinite(width) || !Number.isFinite(height)) return;
-    const size = baseSize;
-    const centerX = bounds.minX + width / 2;
-    const centerY = bounds.minY + height / 2;
-    const image = document.createElementNS(svgNS, "image");
-    const resolvedHref = encodeURI(href);
-    image.setAttribute("href", resolvedHref);
-    image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", resolvedHref);
-    image.setAttribute("x", (centerX - size / 2).toFixed(3));
-    image.setAttribute("y", (centerY - size / 2).toFixed(3));
-    image.setAttribute("width", size.toFixed(3));
-    image.setAttribute("height", size.toFixed(3));
-    image.setAttribute("preserveAspectRatio", "xMidYMid meet");
-    image.classList.add("sigil");
-    image.dataset.state = stateId;
-    layer.appendChild(image);
-  });
-
+  const image = document.createElementNS(svgNS, "image");
+  image.classList.add("sigil");
+  image.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  layer.appendChild(image);
   const focusLayer = mapApi.getFocusLayer?.();
   if (focusLayer?.parentNode === svg) {
     svg.insertBefore(layer, focusLayer);
@@ -159,6 +204,14 @@ const renderSigilLayer = () => {
     svg.appendChild(layer);
   }
   sigilLayer = layer;
+  hoverSigilImage = image;
+  sigilLayer.addEventListener("animationend", (event) => {
+    if (event.animationName === "sigil-pop") {
+      const token = Number(sigilLayer?.dataset?.hoverToken || 0);
+      if (token !== hoverSigilToken) return;
+      sigilLayer.classList.remove("is-animating");
+    }
+  });
 };
 
 const renderFocusSigil = (stateId) => {
@@ -172,8 +225,8 @@ const renderFocusSigil = (stateId) => {
   const height = bounds.maxY - bounds.minY;
   if (!Number.isFinite(width) || !Number.isFinite(height)) return;
   const size = getSigilBaseSize();
-  const centerX = bounds.minX + width / 2;
-  const centerY = bounds.minY + height / 2;
+  const centerX = (bounds.minX + bounds.maxX) / 2;
+  const centerY = (bounds.minY + bounds.maxY) / 2;
   const layer = document.createElementNS(svgNS, "g");
   layer.classList.add("sigil-layer", "sigil-layer--focus");
   layer.setAttribute("aria-hidden", "true");
@@ -1173,15 +1226,18 @@ const showState3D = async (stateId) => {
   api.mesh = mesh;
   mapPane.classList.add("is-3d");
   threeStack?.setAttribute("aria-hidden", "false");
+  threeToggle?.setAttribute("aria-hidden", "false");
   stateCanvas?.setAttribute("aria-hidden", "false");
   resizeThree();
-  startThreeRender();
+  setThreeView(activeThreeView);
 };
 
 const hideState3D = () => {
   if (!mapPane) return;
   mapPane.classList.remove("is-3d");
+  mapPane.classList.remove("is-3d-state", "is-3d-sigil");
   threeStack?.setAttribute("aria-hidden", "true");
+  threeToggle?.setAttribute("aria-hidden", "true");
   stateCanvas?.setAttribute("aria-hidden", "true");
   isThreeDragging = false;
   stateInertiaX = 0;
@@ -1200,9 +1256,14 @@ const showSigil3D = async (stateId) => {
   if (!stateId || !mapPane || !sigilCanvas) return;
   const sigilHref = sigilsByState.get(String(stateId));
   if (!sigilHref) {
+    const sigilButton = threeToggle?.querySelector("[data-3d-target='sigil']");
+    sigilButton?.setAttribute("disabled", "");
+    if (activeThreeView === "sigil") setThreeView("state");
     hideSigil3D();
     return;
   }
+  const sigilButton = threeToggle?.querySelector("[data-3d-target='sigil']");
+  sigilButton?.removeAttribute("disabled");
   sigilLoadToken += 1;
   const token = sigilLoadToken;
   const api = await initSigilThree();
@@ -1225,9 +1286,10 @@ const showSigil3D = async (stateId) => {
   api.mesh = mesh;
   mapPane.classList.add("is-3d");
   threeStack?.setAttribute("aria-hidden", "false");
+  threeToggle?.setAttribute("aria-hidden", "false");
   sigilCanvas?.setAttribute("aria-hidden", "false");
   resizeSigilThree();
-  startSigilRender();
+  setThreeView(activeThreeView);
 };
 
 const hideSigil3D = () => {
@@ -1331,16 +1393,43 @@ if (sigilCanvas) {
   sigilCanvas.addEventListener("pointerleave", handleSigilPointerUp);
 }
 
+threeToggleButtons?.forEach((button) => {
+  button.addEventListener("click", () => {
+    const target = button.getAttribute("data-3d-target");
+    setThreeView(target);
+  });
+});
+
 const setSplitLayout = (isSplit) => {
   if (!app || !infoPane) return;
   if (isSplit) {
     app.classList.add("is-split");
     infoPane.removeAttribute("aria-hidden");
     backButton?.removeAttribute("hidden");
+    hideHoverSigil();
   } else {
     app.classList.remove("is-split");
     infoPane.setAttribute("aria-hidden", "true");
     backButton?.setAttribute("hidden", "");
+  }
+};
+
+const setThreeView = (mode) => {
+  if (!mapPane) return;
+  const nextMode = mode === "sigil" ? "sigil" : "state";
+  activeThreeView = nextMode;
+  mapPane.classList.toggle("is-3d-state", nextMode === "state");
+  mapPane.classList.toggle("is-3d-sigil", nextMode === "sigil");
+  threeToggleButtons?.forEach((button) => {
+    const target = button.getAttribute("data-3d-target");
+    button.setAttribute("aria-pressed", target === nextMode ? "true" : "false");
+  });
+  if (nextMode === "state") {
+    startThreeRender();
+    stopSigilRender();
+  } else {
+    startSigilRender();
+    stopThreeRender();
   }
 };
 
@@ -1526,6 +1615,7 @@ const selectState = (stateId, options = {}) => {
   if (!stateId) return;
   const normalized = String(stateId);
   if (normalized === "0" || normalized === activeStateId) return;
+  activeThreeView = "state";
   mapApi?.setActiveState(normalized);
   mapApi?.focusState(normalized);
   renderFocusSigil(normalized);
@@ -1658,6 +1748,38 @@ svg?.addEventListener("click", (event) => {
     }
     node = node.parentNode;
   }
+});
+
+svg?.addEventListener("pointerdown", (event) => {
+  if (app?.classList.contains("is-split")) return;
+  let node = event.target;
+  while (node && node !== svg) {
+    if (node.classList && node.classList.contains("cell")) {
+      const stateId = node.dataset.state;
+      showHoverSigil(stateId);
+      return;
+    }
+    node = node.parentNode;
+  }
+});
+
+svg?.addEventListener("pointermove", (event) => {
+  if (app?.classList.contains("is-split")) return;
+  if (svg?.classList.contains("is-collapsed")) return;
+  let node = event.target;
+  while (node && node !== svg) {
+    if (node.classList && node.classList.contains("cell")) {
+      const stateId = node.dataset.state;
+      showHoverSigil(stateId);
+      return;
+    }
+    node = node.parentNode;
+  }
+  hideHoverSigil();
+});
+
+svg?.addEventListener("pointerleave", () => {
+  hideHoverSigil();
 });
 
 backButton?.addEventListener("click", (event) => {

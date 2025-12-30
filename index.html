@@ -17,16 +17,7 @@
       data-tracks="data/tracks.json"
     >
       <section class="map-pane" aria-label="Map view">
-        <svg class="arc-title" viewBox="0 0 600 600" aria-hidden="true">
-          <defs>
-            <path id="arc-title-path" d="M 5 115 A 620 520 0 0 1 620 115" />
-          </defs>
-          <text>
-            <textPath href="#arc-title-path" startOffset="50%" textLength="480" lengthAdjust="spacingAndGlyphs">
-              Ataraxie Compilation Vol. 1
-            </textPath>
-          </text>
-        </svg>
+        <img class="arc-title" src="assets/banner.svg" alt="" aria-hidden="true" />
         <div class="state-3d-stack" id="state-3d-stack" aria-hidden="true">
           <div class="state-3d-slot">
             <canvas id="state-3d-canvas" aria-hidden="true"></canvas>
@@ -34,6 +25,14 @@
           <div class="sigil-3d-slot">
             <canvas id="sigil-3d-canvas" aria-hidden="true"></canvas>
           </div>
+        </div>
+        <div class="three-toggle" id="three-toggle" aria-hidden="true">
+          <button class="toggle-button" type="button" data-3d-target="state" aria-pressed="true">
+            State
+          </button>
+          <button class="toggle-button" type="button" data-3d-target="sigil" aria-pressed="false">
+            Sigil
+          </button>
         </div>
         <svg
           id="map-svg"

@@ -169,6 +169,9 @@ export const createMap = ({ svg, geojson, colorForState }) => {
       const path = document.createElementNS(svgNS, "path");
       path.setAttribute("d", `M ${a[0]} ${a[1]} L ${b[0]} ${b[1]}`);
       path.classList.add("state-border");
+      if (statesArray.includes("0")) {
+        path.classList.add("state-border--coast");
+      }
       path.dataset.states = statesArray.join(",");
       statesArray.forEach((state) => {
         if (!stateBorderMap.has(state)) stateBorderMap.set(state, []);

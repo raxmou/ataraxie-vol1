@@ -744,6 +744,120 @@ const updateSigilComet = (comet) => {
   comet.head.scale.setScalar(pulse);
 };
 
+const createArmorRoughnessMap = (THREE, seed = 0) => {
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  
+  // Base layer - medium gray
+  ctx.fillStyle = "#999999";
+  ctx.fillRect(0, 0, size, size);
+  
+  const random = (x, y) => {
+    const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  
+  // Heavy scratches - very dark lines for high roughness
+  const scratchCount = 35 + Math.floor(random(seed * 2, seed) * 25);
+  for (let i = 0; i < scratchCount; i += 1) {
+    const x1 = random(i * 13, seed * 2) * size;
+    const y1 = random(seed * 3, i * 17) * size;
+    const length = 30 + random(i * 5, seed) * 150;
+    const angle = random(i, seed * 4) * Math.PI * 2;
+    const x2 = x1 + Math.cos(angle) * length;
+    const y2 = y1 + Math.sin(angle) * length;
+    
+    // Very dark = rough surface
+    ctx.strokeStyle = "rgba(30, 30, 30, 0.8)";
+    ctx.lineWidth = 1 + random(i * 2, seed) * 3;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+  
+  // Dent marks - dark patches
+  const dentCount = 20 + Math.floor(random(seed, seed) * 15);
+  for (let i = 0; i < dentCount; i += 1) {
+    const x = random(i * 7, seed) * size;
+    const y = random(seed, i * 11) * size;
+    const radius = 12 + random(i, i) * 40;
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, "rgba(20, 20, 20, 0.9)");
+    gradient.addColorStop(0.5, "rgba(60, 60, 60, 0.5)");
+    gradient.addColorStop(1, "rgba(120, 120, 120, 0)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  // Polished areas - very light for smooth reflective spots
+  const polishCount = 6 + Math.floor(random(seed * 5, seed) * 5);
+  for (let i = 0; i < polishCount; i += 1) {
+    const x = random(i * 19, seed * 6) * size;
+    const y = random(seed * 7, i * 23) * size;
+    const radius = 40 + random(i * 4, seed) * 60;
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, "rgba(220, 220, 220, 0.8)");
+    gradient.addColorStop(0.6, "rgba(180, 180, 180, 0.4)");
+    gradient.addColorStop(1, "rgba(150, 150, 150, 0)");
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+};
+
+const applyBattleDamage = (geometry, seed = 0) => {
+  const random = (x, y) => {
+    const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
+    return n - Math.floor(n);
+  };
+  
+  const positionAttr = geometry.attributes.position;
+  if (!positionAttr) return;
+  
+  const vertexCount = positionAttr.count;
+  const dentCount = 8 + Math.floor(random(seed, seed) * 5);
+  
+  for (let d = 0; d < dentCount; d += 1) {
+    const dentX = (random(d * 3, seed) - 0.5) * 1.5;
+    const dentY = (random(seed, d * 5) - 0.5) * 1.5;
+    const dentZ = random(d * 7, seed * 2) * 0.5;
+    const dentRadius = 0.15 + random(d, d * 2) * 0.25;
+    const dentDepth = 0.015 + random(d * 2, seed) * 0.025;
+    
+    for (let i = 0; i < vertexCount; i += 1) {
+      const x = positionAttr.getX(i);
+      const y = positionAttr.getY(i);
+      const z = positionAttr.getZ(i);
+      
+      const dx = x - dentX;
+      const dy = y - dentY;
+      const dz = z - dentZ;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      
+      if (dist < dentRadius) {
+        const influence = 1 - (dist / dentRadius);
+        const push = influence * influence * dentDepth;
+        positionAttr.setZ(i, z - push);
+      }
+    }
+  }
+  
+  positionAttr.needsUpdate = true;
+  geometry.computeVertexNormals();
+};
+
 const buildSigilMesh = async (stateId, sigilHref, THREE, depthRatio) => {
   const geometryData = await buildSigilGeometry(sigilHref, THREE);
   if (!geometryData?.geometry) return null;
@@ -761,24 +875,39 @@ const buildSigilMesh = async (stateId, sigilHref, THREE, depthRatio) => {
     geometry.scale(1, 1, zScale);
   }
   geometry.computeVertexNormals();
+  
+  // Apply physical battle damage to geometry
+  const stateHash = parseInt(stateId, 10) || 1;
+  applyBattleDamage(geometry, stateHash * 456.789);
+  
   const baseColorValue = colorForState ? colorForState(stateId, false) : "#bdff00";
   const baseColor = new THREE.Color(baseColorValue);
-  const sideColor = baseColor.clone().multiplyScalar(0.45);
+  // Medieval plate armor: mix base color with silver for metallic look
+  const armorColor = baseColor.clone().lerp(new THREE.Color(0xc0c0c0), 0.35);
+  const sideColor = armorColor.clone().multiplyScalar(0.65);
+  
+  // Create battle-worn roughness map
+  const roughnessMap = createArmorRoughnessMap(THREE, stateHash * 123.456);
+  
   const faceMaterial = new THREE.MeshStandardMaterial({
-    color: baseColor,
-    roughness: 0.22,
-    metalness: 0.32,
-    emissive: baseColor.clone().multiplyScalar(0.2),
-    emissiveIntensity: 0.18,
+    color: armorColor,
+    roughness: 0.35, // Base roughness (roughnessMap will override per-pixel)
+    metalness: 0.92, // High metalness for plate armor
+    emissive: armorColor.clone().multiplyScalar(0.12),
+    emissiveIntensity: 0.08,
     side: THREE.DoubleSide,
+    envMapIntensity: 1.2, // Enhanced reflections
+    roughnessMap: roughnessMap, // Adds visible scratches and worn areas
   });
   const sideMaterial = new THREE.MeshStandardMaterial({
     color: sideColor,
-    roughness: 0.8,
-    metalness: 0.16,
-    emissive: sideColor.clone().multiplyScalar(0.2),
-    emissiveIntensity: 0.18,
+    roughness: 0.45, // More roughness on sides/edges
+    metalness: 0.88,
+    emissive: sideColor.clone().multiplyScalar(0.1),
+    emissiveIntensity: 0.08,
     side: THREE.DoubleSide,
+    envMapIntensity: 1.0,
+    roughnessMap: roughnessMap,
   });
   const mesh = new THREE.Mesh(geometry, [faceMaterial, sideMaterial]);
   const edgeGeometry = new THREE.EdgesGeometry(geometry, 8);

@@ -10,3 +10,6 @@
 
 # Logs
 *.log
+
+# Large audio files
+assets/music/*.wav

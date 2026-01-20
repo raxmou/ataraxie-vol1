@@ -377,6 +377,15 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     const height = bounds.maxY - bounds.minY || 1;
     fullViewBox = { x: bounds.minX, y: bounds.minY, width, height };
   }
+  const applyFog = (revealedStates) => {
+    stateCells.forEach((cells, stateId) => {
+      const isRevealed = revealedStates.has(stateId);
+      cells.forEach((cell) => {
+        cell.classList.toggle("is-fogged", !isRevealed);
+      });
+    });
+  };
+
   return {
     fullViewBox,
     getStateBounds,
@@ -387,6 +396,7 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     clearSnapshot,
     clearHover,
     preloadSnapshots,
+    applyFog,
     getFocusLayer: () => focusGroup,
     getSnapshotLayer: () => snapshotGroup,
   };

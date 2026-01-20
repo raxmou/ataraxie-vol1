@@ -1,6 +1,16 @@
 import { loadGeoJSON, loadSigils, loadTracks } from "./data.js";
 import { createMap, createStateColor } from "./map.js";
 import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
+import {
+  revealedStates,
+  questionedStates,
+  isStateRevealed,
+  hasBeenQuestioned,
+  markAsQuestioned,
+  revealState,
+  getNeighbors,
+  buildStateNeighborMap,
+} from "./fog.js";
 
 const svgNS = "http://www.w3.org/2000/svg";
 const sigilLayerId = "map-sigils";
@@ -13,6 +23,10 @@ const infoContent = document.getElementById("state-content");
 const backButton = document.getElementById("state-back");
 const loadingScreen = document.getElementById("loading-screen");
 const loadingProgress = document.getElementById("loading-progress");
+const questionModal = document.getElementById("question-modal");
+const questionText = document.getElementById("question-text");
+const answerBtn1 = document.getElementById("answer-btn-1");
+const answerBtn2 = document.getElementById("answer-btn-2");
 const stateCanvas = document.getElementById("state-3d-canvas");
 const sigilCanvas = document.getElementById("sigil-3d-canvas");
 const threeStack = document.getElementById("state-3d-stack");
@@ -75,6 +89,7 @@ let stateInertiaY = 0;
 let sigilInertiaX = 0;
 let sigilInertiaY = 0;
 let activeThreeView = "state";
+let questionTimeout = null;
 
 const formatTime = (value) => {
   if (!Number.isFinite(value)) return "--:--";
@@ -1744,6 +1759,9 @@ const selectState = (stateId, options = {}) => {
   if (!stateId) return;
   const normalized = String(stateId);
   if (normalized === "0" || normalized === activeStateId) return;
+  
+  const skipQuestion = options.skipQuestion || hasBeenQuestioned(normalized);
+  
   activeThreeView = "state";
   mapApi?.setActiveState(normalized);
   mapApi?.focusState(normalized);
@@ -1751,12 +1769,22 @@ const selectState = (stateId, options = {}) => {
   setCollapsed(true);
   activeStateId = normalized;
   renderInfo(normalized);
+  
   if (activeAudio) {
     const playPromise = activeAudio.play();
     if (playPromise && typeof playPromise.catch === "function") {
       playPromise.catch(() => {});
     }
   }
+  
+  // Show question immediately if this is first visit
+  if (!skipQuestion) {
+    // Use requestAnimationFrame to ensure info is rendered first
+    requestAnimationFrame(() => {
+      showQuestionModal(normalized);
+    });
+  }
+  
   setSplitLayout(true);
   showState3D(normalized);
   showSigil3D(normalized);
@@ -1772,9 +1800,92 @@ const selectState = (stateId, options = {}) => {
   });
 };
 
+const showQuestionModal = (stateId) => {
+  const neighbors = getNeighbors(stateId);
+  let unrevealedNeighbors = neighbors.filter((n) => !isStateRevealed(n));
+  
+  // If no unrevealed neighbors, find any unrevealed state from all states
+  if (unrevealedNeighbors.length === 0) {
+    // Get all states from stateCounts
+    const allStates = Array.from(stateCounts.keys());
+    unrevealedNeighbors = allStates.filter((s) => s !== "0" && !isStateRevealed(s));
+    
+    // If all states are revealed, mark as questioned and return
+    if (unrevealedNeighbors.length === 0) {
+      markAsQuestioned(stateId);
+      return;
+    }
+  }
+  
+  // Pick up to 2 random unrevealed states
+  const shuffled = unrevealedNeighbors.sort(() => Math.random() - 0.5);
+  const option1 = shuffled[0];
+  const option2 = shuffled[1] || shuffled[0]; // Duplicate if only 1 option
+  
+  // Append question to existing info panel content
+  if (!infoContent) return;
+  
+  const questionMarkup = `
+    <div class="question-container">
+      <div class="question-prompt">
+        <p class="question-text">Which direction do you explore?</p>
+      </div>
+      <div class="question-answers">
+        <button class="answer-btn" data-answer="${option1}" type="button">Explore territory ${option1}</button>
+        <button class="answer-btn" data-answer="${option2}" type="button">Explore territory ${option2}</button>
+      </div>
+    </div>
+  `;
+  
+  infoContent.insertAdjacentHTML('beforeend', questionMarkup);
+  
+  // Add click handlers to answer buttons
+  const answerButtons = infoContent.querySelectorAll(".answer-btn");
+  answerButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const answer = btn.dataset.answer;
+      if (answer) handleAnswer(answer, stateId);
+    });
+  });
+};
+
+const hideQuestionModal = () => {
+  // Questions now render in info panel, so this just ensures modal stays hidden
+  if (questionModal) {
+    questionModal.setAttribute("aria-hidden", "true");
+  }
+};
+
+const handleAnswer = (revealedStateId, currentStateId) => {
+  // Reveal the selected state
+  revealState(revealedStateId);
+  
+  // Mark current state as questioned
+  markAsQuestioned(currentStateId);
+  
+  // Update fog on map
+  if (mapApi?.applyFog) {
+    mapApi.applyFog(revealedStates);
+  }
+  
+  // Remove question container without re-rendering (to keep audio playing)
+  const questionContainer = infoContent?.querySelector('.question-container');
+  if (questionContainer) {
+    questionContainer.remove();
+  }
+};
+
 const clearSelection = (options = {}) => {
   const stateId = activeStateId;
   const previousBox = lastSelectedViewBox;
+  
+  // Clear question timeout and hide modal
+  if (questionTimeout) {
+    clearTimeout(questionTimeout);
+    questionTimeout = null;
+  }
+  hideQuestionModal();
+  
   mapApi?.resetFocus();
   mapApi?.setActiveState(null);
   mapApi?.clearHover();
@@ -1840,6 +1951,13 @@ const init = async () => {
     });
     fullViewBox = mapApi.fullViewBox;
     if (fullViewBox) viewbox.set(fullViewBox);
+    
+    // Initialize fog of war system
+    buildStateNeighborMap(geojson);
+    if (mapApi?.applyFog) {
+      mapApi.applyFog(revealedStates);
+    }
+    
     renderSigilLayer();
     renderInfo(null);
 
@@ -1871,7 +1989,11 @@ svg?.addEventListener("click", (event) => {
     if (node.classList && node.classList.contains("cell")) {
       const stateId = node.dataset.state;
       if (stateId && stateId !== "0") {
-        selectState(stateId);
+        // Check if state is revealed before allowing selection
+        if (isStateRevealed(stateId)) {
+          const skipQuestion = hasBeenQuestioned(stateId);
+          selectState(stateId, { skipQuestion });
+        }
       }
       return;
     }

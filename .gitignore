@@ -11,5 +11,5 @@
 # Logs
 *.log
 
-# Large audio files
+# Large audio files (wav format)
 assets/music/*.wav

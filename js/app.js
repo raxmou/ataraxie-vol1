@@ -1,6 +1,7 @@
 import { loadGeoJSON, loadSigils, loadTracks } from "./data.js";
 import { createMap, createStateColor } from "./map.js";
 import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
+import { createTextureCanvas } from "./texture-canvas.js";
 import {
   revealedStates,
   questionedStates,
@@ -61,6 +62,7 @@ let sigilThreeApi = null;
 let sigilInitPromise = null;
 let sigilLoadToken = 0;
 let colorForState = null;
+let textureCanvas = null;
 let sigilsByState = new Map();
 let sigilLayer = null;
 let focusSigilLayer = null;
@@ -90,6 +92,19 @@ let sigilInertiaX = 0;
 let sigilInertiaY = 0;
 let activeThreeView = "state";
 let questionTimeout = null;
+let bgTextureCache = new Map();
+
+const stateTextureFiles = [
+  "assets/textures/VISUALWORKS1 6.png",
+  "assets/textures/VISUALWORKS14 1.png",
+  "assets/textures/VISUALWORKS33 1.png",
+  "assets/textures/VISUALWORKS41 1.png",
+  "assets/textures/VISUALWORKS54 1.png",
+  "assets/textures/VISUALWORKS57 1.png",
+];
+
+const getTextureIndexForState = (stateId) =>
+  Math.abs(Number(stateId)) % stateTextureFiles.length;
 
 const formatTime = (value) => {
   if (!Number.isFinite(value)) return "--:--";
@@ -112,6 +127,29 @@ const loadSvgLoader = () => {
     svgLoaderPromise = import(SVG_LOADER_URL);
   }
   return svgLoaderPromise;
+};
+
+const loadBgTexture = (stateId, THREE) => {
+  const index = getTextureIndexForState(stateId);
+  if (bgTextureCache.has(index)) return Promise.resolve(bgTextureCache.get(index));
+  return new Promise((resolve) => {
+    const loader = new THREE.TextureLoader();
+    const url = encodeURI(stateTextureFiles[index]);
+    loader.load(
+      url,
+      (texture) => {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        bgTextureCache.set(index, texture);
+        resolve(texture);
+      },
+      undefined,
+      (err) => {
+        console.warn("Failed to load texture:", url, err);
+        resolve(null);
+      }
+    );
+  });
 };
 
 const getSigilBaseSize = () => {
@@ -375,11 +413,11 @@ const startAudioReactive = (audio) => {
       if (Array.isArray(terrainData) && terrainBaseHeight !== null && terrainMaxHeight !== null) {
         const maxBin = audioData.length - 1;
         const rawHeights = new Float32Array(terrainData.length);
-        const smoothFactor = 0.25;
+        const smoothFactor = 0.45;
         terrainData.forEach((cell, index) => {
           const bin = Math.max(0, Math.min(maxBin, Math.floor(cell.xNorm * maxBin)));
           const amp = audioData[bin] / 255;
-          const noise = 0.6 + 0.4 * Math.sin(cell.x * 1.1 + cell.y * 0.9 + audioTime * 0.6);
+          const noise = 0.3 + 0.7 * (0.5 + 0.3 * Math.sin(cell.x * 2.2 + audioTime * 1.8) + 0.2 * Math.sin(cell.y * 1.7 + audioTime * 1.2));
           rawHeights[index] = terrainBaseHeight + amp * terrainMaxHeight * cell.weight * noise;
         });
         terrainData.forEach((cell, index) => {
@@ -393,7 +431,7 @@ const startAudioReactive = (audio) => {
             });
           }
           const neighborAvg = neighborCount ? neighborSum / neighborCount : rawHeights[index];
-          const smoothed = rawHeights[index] * 0.35 + neighborAvg * 0.65;
+          const smoothed = rawHeights[index] * 0.55 + neighborAvg * 0.45;
           const current = terrainHeights ? terrainHeights[index] : smoothed;
           const blended = current + (smoothed - current) * smoothFactor;
           if (terrainHeights) terrainHeights[index] = blended;
@@ -573,25 +611,38 @@ const initSigilThree = async () => {
       canvas: sigilCanvas,
       antialias: true,
       alpha: true,
+      powerPreference: "high-performance",
     });
     renderer.setClearColor(0x000000, 0);
+    // Enable tone mapping for realistic PBR glossy materials
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
     camera.position.set(0, 0.18, 3.4);
     camera.lookAt(0, 0, 0);
-    const hemi = new THREE.HemisphereLight(0xe8ffb2, 0x0b0e07, 0.7);
+    // Atmospheric hemisphere light for medieval ambiance
+    const hemi = new THREE.HemisphereLight(0xfff4e6, 0x1a1510, 0.6);
     scene.add(hemi);
-    const ambient = new THREE.AmbientLight(0x1b240f, 0.35);
+    const ambient = new THREE.AmbientLight(0x2a2015, 0.3);
     scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+    // Main key light - warm torch-like illumination
+    const dir = new THREE.DirectionalLight(0xffeedd, 1.4);
     dir.position.set(3, 2.4, 4.2);
     scene.add(dir);
-    const rim = new THREE.DirectionalLight(0x6b7f2c, 0.75);
+    // Rim light for dramatic edge highlights (cool contrast)
+    const rim = new THREE.DirectionalLight(0x8899aa, 0.6);
     rim.position.set(-3.6, -2.6, 2.4);
     scene.add(rim);
-    const key = new THREE.PointLight(0xffffff, 0.7, 18);
+    // Point light for specular highlights on glossy surface
+    const key = new THREE.PointLight(0xffffff, 1.0, 18);
     key.position.set(0, 1.2, 2.6);
     scene.add(key);
+    // Secondary fill light for clearcoat reflections
+    const fill = new THREE.PointLight(0xffd4a0, 0.5, 12);
+    fill.position.set(-2, 0.5, 3);
+    scene.add(fill);
     sigilThreeApi = { THREE, renderer, scene, camera, mesh: null, frameId: null };
     resizeSigilThree();
     return sigilThreeApi;
@@ -765,61 +816,62 @@ const createArmorRoughnessMap = (THREE, seed = 0) => {
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext("2d");
-  
-  // Base layer - medium gray
-  ctx.fillStyle = "#999999";
+
+  // Base layer - light gray for glossy base (low roughness = light color)
+  ctx.fillStyle = "#cccccc";
   ctx.fillRect(0, 0, size, size);
-  
+
   const random = (x, y) => {
     const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
     return n - Math.floor(n);
   };
-  
-  // Heavy scratches - very dark lines for high roughness
-  const scratchCount = 35 + Math.floor(random(seed * 2, seed) * 25);
-  for (let i = 0; i < scratchCount; i += 1) {
-    const x1 = random(i * 13, seed * 2) * size;
-    const y1 = random(seed * 3, i * 17) * size;
-    const length = 30 + random(i * 5, seed) * 150;
-    const angle = random(i, seed * 4) * Math.PI * 2;
-    const x2 = x1 + Math.cos(angle) * length;
-    const y2 = y1 + Math.sin(angle) * length;
-    
-    // Very dark = rough surface
-    ctx.strokeStyle = "rgba(30, 30, 30, 0.8)";
-    ctx.lineWidth = 1 + random(i * 2, seed) * 3;
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
-  
-  // Dent marks - dark patches
-  const dentCount = 20 + Math.floor(random(seed, seed) * 15);
-  for (let i = 0; i < dentCount; i += 1) {
-    const x = random(i * 7, seed) * size;
-    const y = random(seed, i * 11) * size;
-    const radius = 12 + random(i, i) * 40;
+
+  // Large polished areas first - very light for mirror-like reflections
+  const polishCount = 12 + Math.floor(random(seed * 5, seed) * 8);
+  for (let i = 0; i < polishCount; i += 1) {
+    const x = random(i * 19, seed * 6) * size;
+    const y = random(seed * 7, i * 23) * size;
+    const radius = 60 + random(i * 4, seed) * 100;
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, "rgba(20, 20, 20, 0.9)");
-    gradient.addColorStop(0.5, "rgba(60, 60, 60, 0.5)");
-    gradient.addColorStop(1, "rgba(120, 120, 120, 0)");
+    gradient.addColorStop(0, "rgba(240, 240, 240, 0.9)");
+    gradient.addColorStop(0.4, "rgba(220, 220, 220, 0.6)");
+    gradient.addColorStop(0.8, "rgba(200, 200, 200, 0.3)");
+    gradient.addColorStop(1, "rgba(180, 180, 180, 0)");
     ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
   }
-  
-  // Polished areas - very light for smooth reflective spots
-  const polishCount = 6 + Math.floor(random(seed * 5, seed) * 5);
-  for (let i = 0; i < polishCount; i += 1) {
-    const x = random(i * 19, seed * 6) * size;
-    const y = random(seed * 7, i * 23) * size;
-    const radius = 40 + random(i * 4, seed) * 60;
+
+  // Fine scratches - subtle, thin lines (less aggressive)
+  const scratchCount = 20 + Math.floor(random(seed * 2, seed) * 15);
+  for (let i = 0; i < scratchCount; i += 1) {
+    const x1 = random(i * 13, seed * 2) * size;
+    const y1 = random(seed * 3, i * 17) * size;
+    const length = 20 + random(i * 5, seed) * 80;
+    const angle = random(i, seed * 4) * Math.PI * 2;
+    const x2 = x1 + Math.cos(angle) * length;
+    const y2 = y1 + Math.sin(angle) * length;
+
+    // Medium gray = moderate roughness (subtle scratches)
+    ctx.strokeStyle = `rgba(80, 80, 80, ${0.3 + random(i, seed) * 0.4})`;
+    ctx.lineWidth = 0.5 + random(i * 2, seed) * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+
+  // Small worn spots - moderate roughness patches
+  const wornCount = 8 + Math.floor(random(seed, seed) * 6);
+  for (let i = 0; i < wornCount; i += 1) {
+    const x = random(i * 7, seed) * size;
+    const y = random(seed, i * 11) * size;
+    const radius = 8 + random(i, i) * 20;
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, "rgba(220, 220, 220, 0.8)");
-    gradient.addColorStop(0.6, "rgba(180, 180, 180, 0.4)");
-    gradient.addColorStop(1, "rgba(150, 150, 150, 0)");
+    gradient.addColorStop(0, "rgba(60, 60, 60, 0.6)");
+    gradient.addColorStop(0.6, "rgba(100, 100, 100, 0.3)");
+    gradient.addColorStop(1, "rgba(140, 140, 140, 0)");
     ctx.fillStyle = gradient;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -873,6 +925,128 @@ const applyBattleDamage = (geometry, seed = 0) => {
   geometry.computeVertexNormals();
 };
 
+// Create procedural environment cube map for glossy reflections
+const createMedievalEnvMap = (THREE) => {
+  const size = 256;
+
+  // Create 6 face textures for a cube map
+  const createFaceTexture = (topColor, bottomColor, accentHue) => {
+    const faceCanvas = document.createElement("canvas");
+    faceCanvas.width = size;
+    faceCanvas.height = size;
+    const faceCtx = faceCanvas.getContext("2d");
+
+    // Gradient background - dark medieval atmosphere
+    const gradient = faceCtx.createLinearGradient(0, 0, 0, size);
+    gradient.addColorStop(0, topColor);
+    gradient.addColorStop(1, bottomColor);
+    faceCtx.fillStyle = gradient;
+    faceCtx.fillRect(0, 0, size, size);
+
+    // Add subtle warm light spots (torch/candle reflections)
+    for (let i = 0; i < 5; i++) {
+      const x = Math.random() * size;
+      const y = Math.random() * size;
+      const r = 20 + Math.random() * 40;
+      const spotGradient = faceCtx.createRadialGradient(x, y, 0, x, y, r);
+      spotGradient.addColorStop(0, `hsla(${accentHue}, 60%, 70%, 0.3)`);
+      spotGradient.addColorStop(0.5, `hsla(${accentHue}, 50%, 50%, 0.1)`);
+      spotGradient.addColorStop(1, "transparent");
+      faceCtx.fillStyle = spotGradient;
+      faceCtx.fillRect(0, 0, size, size);
+    }
+
+    return faceCanvas;
+  };
+
+  // Create the 6 cube faces
+  const faces = [
+    createFaceTexture("#1a1612", "#0d0a08", 35),  // px (right) - warm
+    createFaceTexture("#12151a", "#080a0d", 210), // nx (left) - cool
+    createFaceTexture("#2a2218", "#1a1612", 45),  // py (top) - bright warm
+    createFaceTexture("#080604", "#040302", 30),  // ny (bottom) - dark
+    createFaceTexture("#1a1815", "#0d0c0a", 40),  // pz (front) - neutral warm
+    createFaceTexture("#15161a", "#0a0b0d", 220), // nz (back) - cool
+  ];
+
+  const cubeTexture = new THREE.CubeTexture(faces);
+  cubeTexture.needsUpdate = true;
+
+  return cubeTexture;
+};
+
+// Create hammered metal normal map for medieval texture
+const createHammeredNormalMap = (THREE, seed = 0) => {
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+
+  // Neutral normal (pointing up) as base
+  ctx.fillStyle = "#8080ff";
+  ctx.fillRect(0, 0, size, size);
+
+  const random = (x, y) => {
+    const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
+    return n - Math.floor(n);
+  };
+
+  // Hammered dents - circular depressions with directional normals
+  const dentCount = 60 + Math.floor(random(seed, seed * 2) * 40);
+  for (let i = 0; i < dentCount; i++) {
+    const cx = random(i * 13, seed) * size;
+    const cy = random(seed * 3, i * 17) * size;
+    const radius = 8 + random(i * 5, seed * 2) * 25;
+    const depth = 0.3 + random(i, seed) * 0.5;
+
+    // Draw radial gradient for dent normals
+    for (let y = Math.max(0, cy - radius); y < Math.min(size, cy + radius); y++) {
+      for (let x = Math.max(0, cx - radius); x < Math.min(size, cx + radius); x++) {
+        const dx = x - cx;
+        const dy = y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < radius) {
+          const factor = 1 - (dist / radius);
+          const influence = factor * factor * depth;
+
+          // Normal map: R=X, G=Y, B=Z (tangent space)
+          // Point normals inward toward dent center
+          const nx = (dx / radius) * influence;
+          const ny = (dy / radius) * influence;
+
+          // Convert to 0-255 range (128 = neutral)
+          const r = Math.floor(128 + nx * 127);
+          const g = Math.floor(128 - ny * 127); // Flip Y for OpenGL convention
+          const b = 255; // Z always pointing up
+
+          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+  }
+
+  // Add fine grain texture
+  const imageData = ctx.getImageData(0, 0, size, size);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const noise = (random(i, seed) - 0.5) * 8;
+    data[i] = Math.max(0, Math.min(255, data[i] + noise));
+    data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
+  }
+  ctx.putImageData(imageData, 0, 0);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+};
+
+// Cached env map reference
+let sigilEnvMap = null;
+
 const buildSigilMesh = async (stateId, sigilHref, THREE, depthRatio) => {
   const geometryData = await buildSigilGeometry(sigilHref, THREE);
   if (!geometryData?.geometry) return null;
@@ -897,32 +1071,64 @@ const buildSigilMesh = async (stateId, sigilHref, THREE, depthRatio) => {
   
   const baseColorValue = colorForState ? colorForState(stateId, false) : "#bdff00";
   const baseColor = new THREE.Color(baseColorValue);
-  // Medieval plate armor: mix base color with silver for metallic look
-  const armorColor = baseColor.clone().lerp(new THREE.Color(0xc0c0c0), 0.35);
-  const sideColor = armorColor.clone().multiplyScalar(0.65);
-  
-  // Create battle-worn roughness map
+  // Medieval plate armor: mix base color with gold/silver for luxurious metallic look
+  const armorColor = baseColor.clone().lerp(new THREE.Color(0xd4af37), 0.25); // Gold tint
+  armorColor.lerp(new THREE.Color(0xc0c0c0), 0.2); // Silver highlight
+  const sideColor = armorColor.clone().multiplyScalar(0.7);
+
+  // Create textures for glossy medieval look
   const roughnessMap = createArmorRoughnessMap(THREE, stateHash * 123.456);
-  
-  const faceMaterial = new THREE.MeshStandardMaterial({
+  const normalMap = createHammeredNormalMap(THREE, stateHash * 789.012);
+
+  // Create/cache environment map for reflections
+  if (!sigilEnvMap && sigilThreeApi?.renderer) {
+    sigilEnvMap = createMedievalEnvMap(THREE);
+  }
+
+  // MeshPhysicalMaterial for glossy lacquered armor effect
+  const faceMaterial = new THREE.MeshPhysicalMaterial({
     color: armorColor,
-    roughness: 0.35, // Base roughness (roughnessMap will override per-pixel)
-    metalness: 0.92, // High metalness for plate armor
-    emissive: armorColor.clone().multiplyScalar(0.12),
-    emissiveIntensity: 0.08,
+    roughness: 0.15, // Low roughness for glossy surface
+    metalness: 0.95, // High metalness for polished metal
+    emissive: armorColor.clone().multiplyScalar(0.08),
+    emissiveIntensity: 0.1,
     side: THREE.DoubleSide,
-    envMapIntensity: 1.2, // Enhanced reflections
-    roughnessMap: roughnessMap, // Adds visible scratches and worn areas
-  });
-  const sideMaterial = new THREE.MeshStandardMaterial({
-    color: sideColor,
-    roughness: 0.45, // More roughness on sides/edges
-    metalness: 0.88,
-    emissive: sideColor.clone().multiplyScalar(0.1),
-    emissiveIntensity: 0.08,
-    side: THREE.DoubleSide,
-    envMapIntensity: 1.0,
+    envMap: sigilEnvMap,
+    envMapIntensity: 1.8, // Strong reflections
     roughnessMap: roughnessMap,
+    normalMap: normalMap,
+    normalScale: new THREE.Vector2(0.4, 0.4), // Subtle hammered texture
+    // Clearcoat for lacquered/varnished medieval armor look
+    clearcoat: 0.8, // Strong clear lacquer layer
+    clearcoatRoughness: 0.1, // Very smooth lacquer
+    // Reflectivity and IOR for realistic glass-like clearcoat
+    reflectivity: 0.9,
+    ior: 1.5,
+    // Subtle sheen for velvet-like edge glow (heraldic fabric influence)
+    sheen: 0.3,
+    sheenRoughness: 0.4,
+    sheenColor: new THREE.Color(baseColorValue).multiplyScalar(0.5),
+  });
+
+  const sideMaterial = new THREE.MeshPhysicalMaterial({
+    color: sideColor,
+    roughness: 0.25, // Slightly more rough on edges
+    metalness: 0.92,
+    emissive: sideColor.clone().multiplyScalar(0.06),
+    emissiveIntensity: 0.1,
+    side: THREE.DoubleSide,
+    envMap: sigilEnvMap,
+    envMapIntensity: 1.4,
+    roughnessMap: roughnessMap,
+    normalMap: normalMap,
+    normalScale: new THREE.Vector2(0.5, 0.5),
+    clearcoat: 0.6, // Less clearcoat on edges (worn away)
+    clearcoatRoughness: 0.2,
+    reflectivity: 0.8,
+    ior: 1.5,
+    sheen: 0.2,
+    sheenRoughness: 0.5,
+    sheenColor: new THREE.Color(baseColorValue).multiplyScalar(0.4),
   });
   const mesh = new THREE.Mesh(geometry, [faceMaterial, sideMaterial]);
   const edgeGeometry = new THREE.EdgesGeometry(geometry, 8);
@@ -1162,6 +1368,23 @@ const buildStateMesh = (stateId, THREE) => {
     const sizeZ = scaledBounds.max.z - scaledBounds.min.z;
     const denom = Math.max(sizeX, sizeY, 1e-6);
     depthRatio = sizeZ / denom;
+    // Recompute UVs based on transformed geometry bounds for texture mapping
+    const uvAttr = geometry.getAttribute("uv");
+    const posAttr = geometry.getAttribute("position");
+    if (uvAttr && posAttr) {
+      const uvArray = uvAttr.array;
+      const posArray = posAttr.array;
+      for (let i = 0; i < posAttr.count; i++) {
+        const x = posArray[i * 3];
+        const y = posArray[i * 3 + 1];
+        // Map position to UV in [0,1] range based on bounding box
+        const u = (x - scaledBounds.min.x) / sizeX;
+        const v = (y - scaledBounds.min.y) / sizeY;
+        uvArray[i * 2] = u;
+        uvArray[i * 2 + 1] = v;
+      }
+      uvAttr.needsUpdate = true;
+    }
   }
   const transformPoint = (point) => ({
     x: (point.x - centerX) * scale,
@@ -1217,7 +1440,7 @@ const buildStateMesh = (stateId, THREE) => {
     terrainRangeX = scaledBounds.max.x - scaledBounds.min.x || 1;
     terrainTopZ = scaledBounds.max.z + 0.08;
     terrainBaseHeight = 0.04;
-    terrainMaxHeight = 0.35;
+    terrainMaxHeight = 0.7;
     const gridSize = terrainSize * 1.4;
     const grid = new Map();
     features.forEach((feature) => {
@@ -1232,7 +1455,7 @@ const buildStateMesh = (stateId, THREE) => {
       const gridY = gridSize > 0 ? Math.round(y / gridSize) : 0;
       const key = `${gridX},${gridY}`;
       if (!grid.has(key)) grid.set(key, []);
-      const weight = 0.35 + hash2(x, y) * 0.65;
+      const weight = 0.15 + hash2(x, y) * 0.85;
       const meshes = shapesForCell.map((shape) => {
         const cellGeometry = new THREE.ExtrudeGeometry([shape], {
           depth: 1,
@@ -1368,6 +1591,17 @@ const showState3D = async (stateId) => {
   if (!mesh) return;
   api.scene.add(mesh);
   api.mesh = mesh;
+  // Apply texture to the face material (top surface beneath grid)
+  const bgTexture = await loadBgTexture(stateId, api.THREE);
+  if (bgTexture && Array.isArray(mesh.material) && mesh.material[0]) {
+    const faceMat = mesh.material[0];
+    bgTexture.repeat.set(2, 2);
+    faceMat.map = bgTexture;
+    faceMat.color.setHex(0xffffff);
+    faceMat.emissive.setHex(0x000000);
+    faceMat.emissiveIntensity = 0;
+    faceMat.needsUpdate = true;
+  }
   mapPane.classList.add("is-3d");
   threeStack?.setAttribute("aria-hidden", "false");
   threeToggle?.setAttribute("aria-hidden", "false");
@@ -1867,7 +2101,11 @@ const handleAnswer = (revealedStateId, currentStateId) => {
   if (mapApi?.applyFog) {
     mapApi.applyFog(revealedStates);
   }
-  
+  // Update texture canvas
+  if (textureCanvas) {
+    textureCanvas.syncWithSvg();
+  }
+
   // Remove question container without re-rendering (to keep audio playing)
   const questionContainer = infoContent?.querySelector('.question-container');
   if (questionContainer) {
@@ -1951,11 +2189,32 @@ const init = async () => {
     });
     fullViewBox = mapApi.fullViewBox;
     if (fullViewBox) viewbox.set(fullViewBox);
-    
+
+    // Initialize texture canvas for patchwork effect
+    const stateOutlines = mapApi.getStateOutlines();
+    if (stateOutlines && mapPane && svg) {
+      textureCanvas = createTextureCanvas({
+        container: mapPane,
+        svg,
+        stateOutlines,
+      });
+      await textureCanvas.loadTextures();
+
+      // Sync canvas on viewBox changes
+      const viewBoxObserver = new MutationObserver(() => {
+        textureCanvas?.syncWithSvg();
+      });
+      viewBoxObserver.observe(svg, { attributes: true, attributeFilter: ["viewBox"] });
+    }
+
     // Initialize fog of war system
     buildStateNeighborMap(geojson);
     if (mapApi?.applyFog) {
       mapApi.applyFog(revealedStates);
+    }
+    // Initial texture canvas render
+    if (textureCanvas && fullViewBox) {
+      textureCanvas.render(revealedStates, fullViewBox);
     }
     
     renderSigilLayer();

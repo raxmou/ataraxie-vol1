@@ -1,7 +1,20 @@
 import { forEachCoordinate, geometryToPath } from "./geometry.js";
+import { buildStateEdgeCounts, computeStateOutlines } from "./outline.js";
 
 const svgNS = "http://www.w3.org/2000/svg";
 const goldenAngle = 137.508;
+
+const textureFiles = [
+  "assets/textures/VISUALWORKS1 6.png",
+  "assets/textures/VISUALWORKS14 1.png",
+  "assets/textures/VISUALWORKS33 1.png",
+  "assets/textures/VISUALWORKS41 1.png",
+  "assets/textures/VISUALWORKS54 1.png",
+  "assets/textures/VISUALWORKS57 1.png",
+];
+
+const getTextureIndexForState = (stateId) =>
+  Math.abs(Number(stateId)) % textureFiles.length;
 
 export const createStateColor = (options = {}) => {
   const oceanColor = options.oceanColor || "#1b2212";
@@ -43,6 +56,26 @@ export const createMap = ({ svg, geojson, colorForState }) => {
 
   const baseGroup = document.createElementNS(svgNS, "g");
   baseGroup.setAttribute("id", "map-base");
+  const defs = document.createElementNS(svgNS, "defs");
+  baseGroup.appendChild(defs);
+
+  // Create all texture patterns upfront (6 patterns shared by all states)
+  textureFiles.forEach((texture, i) => {
+    const pattern = document.createElementNS(svgNS, "pattern");
+    pattern.setAttribute("id", `texture-${i}`);
+    pattern.setAttribute("patternUnits", "userSpaceOnUse");
+    pattern.setAttribute("width", "256");
+    pattern.setAttribute("height", "256");
+
+    const image = document.createElementNS(svgNS, "image");
+    image.setAttribute("href", texture);
+    image.setAttribute("width", "256");
+    image.setAttribute("height", "256");
+
+    pattern.appendChild(image);
+    defs.appendChild(pattern);
+  });
+
   const cellGroup = document.createElementNS(svgNS, "g");
   cellGroup.setAttribute("id", "map-cells");
   const borderGroup = document.createElementNS(svgNS, "g");
@@ -144,7 +177,11 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     const path = document.createElementNS(svgNS, "path");
     path.setAttribute("d", pathData);
     const fill = colorForState(stateId, isOcean);
-    path.setAttribute("fill", fill);
+    if (isOcean) {
+      path.setAttribute("fill", fill);
+    } else {
+      path.setAttribute("fill", `url(#texture-${getTextureIndexForState(stateId)})`);
+    }
     path.setAttribute("stroke", fill);
     path.style.color = fill;
     path.classList.add("cell");
@@ -386,6 +423,10 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     });
   };
 
+  // Compute state outlines for canvas texture rendering
+  const stateEdgeCounts = buildStateEdgeCounts(geojson);
+  const stateOutlines = computeStateOutlines(stateEdgeCounts, stateBounds);
+
   return {
     fullViewBox,
     getStateBounds,
@@ -399,5 +440,6 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     applyFog,
     getFocusLayer: () => focusGroup,
     getSnapshotLayer: () => snapshotGroup,
+    getStateOutlines: () => stateOutlines,
   };
 };

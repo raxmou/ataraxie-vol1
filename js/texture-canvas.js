@@ -37,6 +37,7 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
   // Current state
   let currentViewBox = null;
   let currentRevealedStates = new Set();
+  let currentHoveredState = null;
 
   // Precomputed Path2D objects for each state
   const statePaths = new Map();
@@ -183,15 +184,20 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
 
     // Draw borders on top of textures for revealed states
     ctx.strokeStyle = "#bdff00";
-    ctx.lineWidth = 4 / Math.max(scaleX, scaleY); // Scale-independent line width
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.globalAlpha = 0.85;
+
+    const baseLineWidth = 4 / Math.max(scaleX, scaleY);
+    const hoverLineWidth = 8 / Math.max(scaleX, scaleY);
 
     for (const stateId of revealedStates) {
       if (stateId === "0") continue;
       const path = statePaths.get(stateId);
       if (!path) continue;
+
+      const isHovered = stateId === currentHoveredState;
+      ctx.lineWidth = isHovered ? hoverLineWidth : baseLineWidth;
+      ctx.globalAlpha = isHovered ? 1 : 0.85;
       ctx.stroke(path);
     }
     ctx.globalAlpha = 1;
@@ -204,6 +210,18 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
     const viewBoxStr = svg.getAttribute("viewBox");
     if (viewBoxStr) {
       render(currentRevealedStates, viewBoxStr);
+    }
+  };
+
+  /**
+   * Set hovered state and re-render.
+   * @param {string|null} stateId - State ID to highlight, or null to clear
+   */
+  const setHoveredState = (stateId) => {
+    if (currentHoveredState === stateId) return;
+    currentHoveredState = stateId;
+    if (currentViewBox) {
+      render(currentRevealedStates, currentViewBox);
     }
   };
 
@@ -233,6 +251,7 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
     resize,
     render,
     syncWithSvg,
+    setHoveredState,
     dispose,
     get texturesLoaded() {
       return texturesLoaded;

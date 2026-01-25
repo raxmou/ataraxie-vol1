@@ -2339,15 +2339,18 @@ svg?.addEventListener("pointermove", (event) => {
     if (node.classList && node.classList.contains("cell")) {
       const stateId = node.dataset.state;
       showHoverSigil(stateId);
+      textureCanvas?.setHoveredState(stateId);
       return;
     }
     node = node.parentNode;
   }
   hideHoverSigil();
+  textureCanvas?.setHoveredState(null);
 });
 
 svg?.addEventListener("pointerleave", () => {
   hideHoverSigil();
+  textureCanvas?.setHoveredState(null);
 });
 
 backButton?.addEventListener("click", (event) => {

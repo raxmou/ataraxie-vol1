@@ -180,6 +180,21 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
 
       ctx.restore();
     }
+
+    // Draw borders on top of textures for revealed states
+    ctx.strokeStyle = "#bdff00";
+    ctx.lineWidth = 4 / Math.max(scaleX, scaleY); // Scale-independent line width
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.globalAlpha = 0.85;
+
+    for (const stateId of revealedStates) {
+      if (stateId === "0") continue;
+      const path = statePaths.get(stateId);
+      if (!path) continue;
+      ctx.stroke(path);
+    }
+    ctx.globalAlpha = 1;
   };
 
   /**

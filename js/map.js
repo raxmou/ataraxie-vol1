@@ -86,10 +86,10 @@ export const createMap = ({ svg, geojson, colorForState }) => {
   snapshotGroup.setAttribute("id", "map-snapshot");
   snapshotGroup.setAttribute("visibility", "hidden");
   baseGroup.appendChild(cellGroup);
-  baseGroup.appendChild(borderGroup);
   svg.appendChild(baseGroup);
   svg.appendChild(focusGroup);
   svg.appendChild(snapshotGroup);
+  svg.appendChild(borderGroup); // Borders on top of everything
 
   const bounds = {
     minX: Infinity,
@@ -419,6 +419,16 @@ export const createMap = ({ svg, geojson, colorForState }) => {
       const isRevealed = revealedStates.has(stateId);
       cells.forEach((cell) => {
         cell.classList.toggle("is-fogged", !isRevealed);
+      });
+    });
+    // Also apply fog to borders - only show if BOTH adjacent states are revealed
+    stateBorderMap.forEach((paths, stateId) => {
+      paths.forEach((path) => {
+        const adjacentStates = path.dataset.states.split(",");
+        const allRevealed = adjacentStates.every(
+          (s) => s === "0" || revealedStates.has(s)
+        );
+        path.classList.toggle("is-fogged", !allRevealed);
       });
     });
   };

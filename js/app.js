@@ -28,6 +28,9 @@ const questionModal = document.getElementById("question-modal");
 const questionText = document.getElementById("question-text");
 const answerBtn1 = document.getElementById("answer-btn-1");
 const answerBtn2 = document.getElementById("answer-btn-2");
+const infoButton = document.getElementById("info-button");
+const creditsModal = document.getElementById("credits-modal");
+const creditsClose = document.getElementById("credits-close");
 const stateCanvas = document.getElementById("state-3d-canvas");
 const sigilCanvas = document.getElementById("sigil-3d-canvas");
 const threeStack = document.getElementById("state-3d-stack");
@@ -1919,16 +1922,12 @@ const renderInfo = (stateId) => {
     return;
   }
   const count = stateCounts.get(String(stateId)) ?? 0;
-  const sigilHref = sigilsByState.get(String(stateId));
   const trackId = trackByState.get(String(stateId));
   const track = trackId ? trackById.get(trackId) : null;
-  const sigilMarkup = sigilHref
-    ? `<div class="sigil-card"><img class="sigil-image" src="${encodeURI(sigilHref)}" alt="State ${stateId} sigil" /></div>`
-    : "";
   const trackMarkup = track
     ? `<div class="track-card"><div class="track-label">Now playing</div><div class="track-title">${track.title}</div><div class="track-player" data-track-player><button class="track-glyph" type="button" data-action="play">Play</button><input class="track-scrub" type="range" min="0" max="0" step="0.1" value="0" data-action="scrub" aria-label="Seek" /><div class="track-time" data-role="current">--:--</div><div class="track-time" data-role="total">--:--</div><button class="track-glyph" type="button" data-action="mute">Sound</button></div><audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio></div>`
     : '<div class="track-card is-empty">No track assigned.</div>';
-  infoContent.innerHTML = `<h2 class="info-title">State ${stateId}</h2><div class="info-body">${count} mapped cell${count === 1 ? "" : "s"}.</div>${sigilMarkup}${trackMarkup}`;
+  infoContent.innerHTML = `<h2 class="info-title">State ${stateId}</h2><div class="info-body">${count} mapped cell${count === 1 ? "" : "s"}.</div>${trackMarkup}`;
   const audio = infoContent.querySelector(".track-audio");
   if (audio instanceof HTMLAudioElement) {
     if (activeAudio && activeAudio !== audio) {
@@ -2044,9 +2043,10 @@ const showQuestionModal = (stateId) => {
     const allStates = Array.from(stateCounts.keys());
     unrevealedNeighbors = allStates.filter((s) => s !== "0" && !isStateRevealed(s));
     
-    // If all states are revealed, mark as questioned and return
+    // If all states are revealed, mark as questioned, celebrate, and return
     if (unrevealedNeighbors.length === 0) {
       markAsQuestioned(stateId);
+      celebrateMapCompletion();
       return;
     }
   }
@@ -2087,6 +2087,64 @@ const hideQuestionModal = () => {
   // Questions now render in info panel, so this just ensures modal stays hidden
   if (questionModal) {
     questionModal.setAttribute("aria-hidden", "true");
+  }
+};
+
+const celebrateMapCompletion = () => {
+  // Show confetti with themed colors
+  if (typeof confetti === "function") {
+    const colors = ["#bdff00", "#e8ffb2", "#b8d982"];
+
+    // Fire multiple bursts for a more celebratory effect
+    const fire = (particleRatio, opts) => {
+      confetti({
+        origin: { y: 0.7 },
+        colors,
+        ...opts,
+        particleCount: Math.floor(200 * particleRatio),
+      });
+    };
+
+    fire(0.25, { spread: 26, startVelocity: 55 });
+    fire(0.2, { spread: 60 });
+    fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+    fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+    fire(0.1, { spread: 120, startVelocity: 45 });
+
+    // Additional side bursts after a delay
+    setTimeout(() => {
+      confetti({
+        particleCount: 50,
+        angle: 60,
+        spread: 55,
+        origin: { x: 0 },
+        colors,
+      });
+      confetti({
+        particleCount: 50,
+        angle: 120,
+        spread: 55,
+        origin: { x: 1 },
+        colors,
+      });
+    }, 250);
+  }
+
+  // Show the info button
+  if (infoButton) {
+    infoButton.classList.add("is-visible");
+  }
+};
+
+const showCreditsModal = () => {
+  if (creditsModal) {
+    creditsModal.setAttribute("aria-hidden", "false");
+  }
+};
+
+const hideCreditsModal = () => {
+  if (creditsModal) {
+    creditsModal.setAttribute("aria-hidden", "true");
   }
 };
 
@@ -2311,6 +2369,28 @@ window.addEventListener("popstate", () => {
     selectState(stateId, { pushState: false });
   } else {
     clearSelection({ pushState: false });
+  }
+});
+
+// Info button and credits modal event listeners
+infoButton?.addEventListener("click", () => {
+  showCreditsModal();
+});
+
+creditsClose?.addEventListener("click", () => {
+  hideCreditsModal();
+});
+
+creditsModal?.addEventListener("click", (event) => {
+  // Close on backdrop click
+  if (event.target === creditsModal) {
+    hideCreditsModal();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && creditsModal?.getAttribute("aria-hidden") === "false") {
+    hideCreditsModal();
   }
 });
 

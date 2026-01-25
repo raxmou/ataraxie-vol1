@@ -2135,6 +2135,7 @@ const celebrateMapCompletion = () => {
     infoButton.classList.add("is-visible");
   }
 };
+window.celebrateMapCompletion = celebrateMapCompletion; // dev testing
 
 const showCreditsModal = () => {
   if (creditsModal) {

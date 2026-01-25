@@ -1590,6 +1590,9 @@ const showState3D = async (stateId) => {
     disposeThreeObject(api.mesh);
     api.mesh = null;
   }
+  // Reset inertia when loading new state
+  stateInertiaX = 0;
+  stateInertiaY = 0;
   const mesh = buildStateMesh(stateId, api.THREE);
   if (!mesh) return;
   api.scene.add(mesh);
@@ -1654,6 +1657,9 @@ const showSigil3D = async (stateId) => {
     disposeThreeObject(api.mesh);
     api.mesh = null;
   }
+  // Reset inertia when loading new sigil
+  sigilInertiaX = 0;
+  sigilInertiaY = 0;
   let mesh = null;
   const depthRatio = threeApi?.mesh?.userData?.depthRatio;
   try {
@@ -1805,6 +1811,17 @@ const setThreeView = (mode) => {
     const target = button.getAttribute("data-3d-target");
     button.setAttribute("aria-pressed", target === nextMode ? "true" : "false");
   });
+  // Reset drag states when switching views to avoid stuck pointer captures
+  if (activePointerId !== null && stateCanvas) {
+    stateCanvas.releasePointerCapture?.(activePointerId);
+  }
+  if (sigilPointerId !== null && sigilCanvas) {
+    sigilCanvas.releasePointerCapture?.(sigilPointerId);
+  }
+  isThreeDragging = false;
+  isSigilDragging = false;
+  activePointerId = null;
+  sigilPointerId = null;
   if (nextMode === "state") {
     startThreeRender();
     stopSigilRender();

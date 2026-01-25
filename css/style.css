@@ -318,6 +318,7 @@ body::before {
 .map-pane.is-3d .state-3d-stack {
   opacity: 1;
   pointer-events: auto;
+  z-index: 3;
 }
 
 .map-pane.is-3d-state .state-3d-slot {
@@ -325,8 +326,16 @@ body::before {
   pointer-events: auto;
 }
 
+.map-pane.is-3d-state #state-3d-canvas {
+  pointer-events: auto;
+}
+
 .map-pane.is-3d-sigil .sigil-3d-slot {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.map-pane.is-3d-sigil #sigil-3d-canvas {
   pointer-events: auto;
 }
 

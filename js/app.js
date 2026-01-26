@@ -2,6 +2,7 @@ import { loadGeoJSON, loadSigils, loadTracks } from "./data.js";
 import { createMap, createStateColor } from "./map.js";
 import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
 import { createTextureCanvas } from "./texture-canvas.js";
+import { createHourglassPlayer } from "./hourglass-player.js";
 import {
   revealedStates,
   questionedStates,
@@ -81,6 +82,7 @@ let audioAnimationFrame = null;
 let audioSource = null;
 let audioElement = null;
 let audioTime = 0;
+let hourglassPlayer = null;
 let isThreeDragging = false;
 let activePointerId = null;
 let lastPointerX = 0;
@@ -457,71 +459,20 @@ const startAudioReactive = (audio) => {
 
 const setupTrackPlayer = (container, audio) => {
   if (!container || !(audio instanceof HTMLAudioElement)) return;
-  const playButton = container.querySelector("[data-action='play']");
-  const muteButton = container.querySelector("[data-action='mute']");
-  const scrubber = container.querySelector("[data-action='scrub']");
-  const currentLabel = container.querySelector("[data-role='current']");
-  const totalLabel = container.querySelector("[data-role='total']");
 
-  const updatePlayLabel = () => {
-    if (!playButton) return;
-    playButton.textContent = audio.paused ? "Play" : "Pause";
-  };
+  // Dispose previous hourglass player if exists
+  if (hourglassPlayer) {
+    hourglassPlayer.dispose();
+    hourglassPlayer = null;
+  }
 
-  const updateMuteLabel = () => {
-    if (!muteButton) return;
-    muteButton.textContent = audio.muted ? "Muted" : "Sound";
-  };
+  // Create new hourglass player
+  hourglassPlayer = createHourglassPlayer(container, audio);
 
-  const updateTime = () => {
-    if (currentLabel) currentLabel.textContent = formatTime(audio.currentTime);
-    if (scrubber) {
-      const duration = audio.duration;
-      scrubber.max = Number.isFinite(duration) ? String(duration) : "0";
-      scrubber.value = Number.isFinite(audio.currentTime) ? String(audio.currentTime) : "0";
-    }
-  };
-
-  const updateDuration = () => {
-    if (totalLabel) totalLabel.textContent = formatTime(audio.duration);
-    if (scrubber) {
-      scrubber.max = Number.isFinite(audio.duration) ? String(audio.duration) : "0";
-    }
-  };
-
-  playButton?.addEventListener("click", () => {
-    if (audio.paused) {
-      const playPromise = audio.play();
-      if (playPromise && typeof playPromise.catch === "function") {
-        playPromise.catch(() => {});
-      }
-    } else {
-      audio.pause();
-    }
-  });
-
-  muteButton?.addEventListener("click", () => {
-    audio.muted = !audio.muted;
-  });
-
-  scrubber?.addEventListener("input", () => {
-    const value = Number(scrubber.value);
-    if (Number.isFinite(value)) audio.currentTime = value;
-  });
-
-  audio.addEventListener("timeupdate", updateTime);
-  audio.addEventListener("loadedmetadata", updateDuration);
-  audio.addEventListener("play", updatePlayLabel);
-  audio.addEventListener("pause", updatePlayLabel);
-  audio.addEventListener("volumechange", updateMuteLabel);
+  // Connect audio reactive events
   audio.addEventListener("play", () => startAudioReactive(audio));
   audio.addEventListener("pause", stopAudioReactive);
   audio.addEventListener("ended", stopAudioReactive);
-
-  updatePlayLabel();
-  updateMuteLabel();
-  updateDuration();
-  updateTime();
 };
 
 const viewbox = createViewBoxAnimator(svg, { prefersReducedMotion });
@@ -1927,6 +1878,10 @@ const renderInfo = (stateId) => {
   if (!stateId) {
     infoContent.innerHTML =
       '<h2 class="info-title">Explore the map</h2><div class="info-body">Select a state to see it highlighted and focused here.</div>';
+    if (hourglassPlayer) {
+      hourglassPlayer.dispose();
+      hourglassPlayer = null;
+    }
     if (activeAudio) {
       activeAudio.pause();
       activeAudio = null;
@@ -1935,16 +1890,21 @@ const renderInfo = (stateId) => {
     return;
   }
   if (!geojsonData) {
-    infoContent.innerHTML = `<h2 class="info-title">State ${stateId}</h2><div class="info-body">Loading details...</div>`;
+    infoContent.innerHTML = `<div class="info-body">Loading details...</div>`;
     return;
   }
   const count = stateCounts.get(String(stateId)) ?? 0;
   const trackId = trackByState.get(String(stateId));
   const track = trackId ? trackById.get(trackId) : null;
   const trackMarkup = track
-    ? `<div class="track-card"><div class="track-label">Now playing</div><div class="track-title">${track.title}</div><div class="track-player" data-track-player><button class="track-glyph" type="button" data-action="play">Play</button><input class="track-scrub" type="range" min="0" max="0" step="0.1" value="0" data-action="scrub" aria-label="Seek" /><div class="track-time" data-role="current">--:--</div><div class="track-time" data-role="total">--:--</div><button class="track-glyph" type="button" data-action="mute">Sound</button></div><audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio></div>`
+    ? `<div class="track-card">
+        <div class="track-label">Now playing</div>
+        <div class="track-title">${track.title}</div>
+        <div class="hourglass-player" data-track-player></div>
+        <audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>
+      </div>`
     : '<div class="track-card is-empty">No track assigned.</div>';
-  infoContent.innerHTML = `<h2 class="info-title">State ${stateId}</h2><div class="info-body">${count} mapped cell${count === 1 ? "" : "s"}.</div>${trackMarkup}`;
+  infoContent.innerHTML = trackMarkup;
   const audio = infoContent.querySelector(".track-audio");
   if (audio instanceof HTMLAudioElement) {
     if (activeAudio && activeAudio !== audio) {
@@ -1954,6 +1914,10 @@ const renderInfo = (stateId) => {
     const player = infoContent.querySelector("[data-track-player]");
     setupTrackPlayer(player, audio);
   } else {
+    if (hourglassPlayer) {
+      hourglassPlayer.dispose();
+      hourglassPlayer = null;
+    }
     if (activeAudio) {
       activeAudio.pause();
       activeAudio = null;

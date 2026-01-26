@@ -360,8 +360,20 @@ body::before {
 
 .toggle-button {
   border: 1px solid rgba(189, 255, 0, 0.65);
-  background: rgba(8, 10, 6, 0.92);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(45, 55, 30, 0.95) 0%,
+      rgba(20, 26, 14, 0.98) 45%,
+      rgba(12, 16, 8, 0.98) 55%,
+      rgba(25, 32, 18, 0.95) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.4);
   color: #e8ffb2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   border-radius: 999px;
   padding: 6px 14px;
   font-size: 0.75rem;
@@ -373,12 +385,19 @@ body::before {
 }
 
 .toggle-button[aria-pressed="true"] {
-  box-shadow: 0 0 12px rgba(189, 255, 0, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.25),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 0 12px rgba(189, 255, 0, 0.35);
 }
 
 .toggle-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(189, 255, 0, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(189, 255, 0, 0.25),
+    0 8px 18px rgba(0, 0, 0, 0.3);
 }
 
 .toggle-button:focus-visible {
@@ -453,9 +472,24 @@ body::before {
 }
 
 .back-button {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
   border: 1px solid rgba(189, 255, 0, 0.7);
-  background: rgba(8, 10, 6, 0.92);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(45, 55, 30, 0.95) 0%,
+      rgba(20, 26, 14, 0.98) 45%,
+      rgba(12, 16, 8, 0.98) 55%,
+      rgba(25, 32, 18, 0.95) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.4);
   color: #e8ffb2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   border-radius: 999px;
   padding: 8px 14px;
   font-size: 0.85rem;
@@ -465,10 +499,57 @@ body::before {
 
 .back-button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(189, 255, 0, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(189, 255, 0, 0.25),
+    0 8px 18px rgba(0, 0, 0, 0.3);
 }
 
 .back-button:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+
+.back-link {
+  display: inline-block;
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  color: #e8ffb2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(189, 255, 0, 0.7);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(45, 55, 30, 0.95) 0%,
+      rgba(20, 26, 14, 0.98) 45%,
+      rgba(12, 16, 8, 0.98) 55%,
+      rgba(25, 32, 18, 0.95) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.4);
+  border-radius: 999px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  margin-bottom: 18px;
+}
+
+.back-link:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(189, 255, 0, 0.25),
+    0 8px 18px rgba(0, 0, 0, 0.3);
+}
+
+.back-link:focus-visible {
   outline: 2px solid rgba(189, 255, 0, 0.9);
   outline-offset: 2px;
 }
@@ -878,21 +959,47 @@ body::before {
   justify-content: center;
   gap: 12px;
   padding: 14px 24px;
-  border: 2px solid rgba(189, 255, 0, 0.4);
+  border: 1px solid rgba(189, 255, 0, 0.5);
   border-radius: 12px;
-  background: rgba(14, 18, 10, 0.6);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(45, 55, 30, 0.9) 0%,
+      rgba(20, 26, 14, 0.95) 45%,
+      rgba(12, 16, 8, 0.95) 55%,
+      rgba(25, 32, 18, 0.9) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.15),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.4);
   color: var(--text-color);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   text-decoration: none;
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
   font-size: 1rem;
   font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
   transition: all 0.2s ease;
 }
 
 .credits-link:hover {
-  background: rgba(189, 255, 0, 0.12);
-  border-color: #bdff00;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(55, 68, 35, 0.95) 0%,
+      rgba(28, 36, 18, 0.98) 45%,
+      rgba(18, 24, 12, 0.98) 55%,
+      rgba(35, 45, 25, 0.95) 100%
+    );
+  border-color: rgba(189, 255, 0, 0.7);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(189, 255, 0, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.25),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(189, 255, 0, 0.2),
+    0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 .credits-link svg {
@@ -919,5 +1026,139 @@ body::before {
 
   .credits-title {
     font-size: 1.6rem;
+  }
+}
+
+/* Hourglass Audio Player */
+.hourglass-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+}
+
+.hourglass-container {
+  position: relative;
+  width: 100px;
+  height: 160px;
+  cursor: pointer;
+}
+
+.hourglass-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.hourglass-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(189, 255, 0, 0.15));
+  transition: filter 0.3s ease;
+}
+
+.hourglass-container:hover .hourglass-frame {
+  filter: drop-shadow(0 0 10px rgba(189, 255, 0, 0.3));
+}
+
+.hourglass-scrub {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 4;
+  cursor: ns-resize;
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.hourglass-scrub:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(189, 255, 0, 0.5);
+  border-radius: 4px;
+}
+
+.hourglass-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.hourglass-rune {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(189, 255, 0, 0.5);
+  background: rgba(8, 12, 6, 0.9);
+  color: #bdff00;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 0.8rem;
+}
+
+.hourglass-rune:hover {
+  border-color: #bdff00;
+  box-shadow: 0 0 12px rgba(189, 255, 0, 0.4);
+  transform: scale(1.05);
+}
+
+.hourglass-rune:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+
+.hourglass-rune:active {
+  transform: scale(0.95);
+}
+
+.rune-icon {
+  font-family: "Segoe UI Symbol", "Apple Color Emoji", sans-serif;
+  line-height: 1;
+}
+
+.hourglass-time {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  color: #e8ffb2;
+  min-width: 90px;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .hourglass-container {
+    width: 80px;
+    height: 128px;
+  }
+
+  .hourglass-canvas {
+    width: 80px !important;
+    height: 128px !important;
+  }
+
+  .hourglass-rune {
+    width: 32px;
+    height: 32px;
+    font-size: 0.7rem;
+  }
+
+  .hourglass-time {
+    font-size: 0.65rem;
+    min-width: 80px;
   }
 }

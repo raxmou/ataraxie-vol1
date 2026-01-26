@@ -67,7 +67,7 @@ const render = (geojson, stateId) => {
 
   const features = geojson.features.filter((f) => String((f.properties||{}).state ?? "0") === String(stateId));
   if (!features.length) {
-    content.innerHTML = `<h2 class="info-title">State ${stateId}</h2><div class="info-body">No geometry found for this state.</div>`;
+    content.innerHTML = `<div class="info-body">No geometry found for this state.</div>`;
     infoPane.removeAttribute("aria-hidden");
     return;
   }
@@ -142,7 +142,7 @@ const render = (geojson, stateId) => {
     }
   }
 
-  content.innerHTML = `<h2 class="info-title">State ${stateId}</h2><div class="info-body">Placeholder information about state ${stateId}.</div>`;
+  content.innerHTML = ``;
   infoPane.removeAttribute("aria-hidden");
 };
 

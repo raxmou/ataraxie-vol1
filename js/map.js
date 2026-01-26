@@ -282,7 +282,13 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     wrapper.setAttribute("height", `${height}`);
     const group = document.createElementNS(svgNS, "g");
     const nodes = stateCells.get(String(stateId)) || [];
-    nodes.forEach((node) => group.appendChild(node.cloneNode(true)));
+    nodes.forEach((node) => {
+      const clone = node.cloneNode(true);
+      // Make cells transparent - canvas shows textures
+      clone.setAttribute("fill", "transparent");
+      clone.setAttribute("stroke", "none");
+      group.appendChild(clone);
+    });
     wrapper.appendChild(group);
     const serializer = new XMLSerializer();
     const svgString = serializer.serializeToString(wrapper);

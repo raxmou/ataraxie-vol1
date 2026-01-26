@@ -131,10 +131,40 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
     const scaleY = canvasHeight / height;
     ctx.setTransform(scaleX, 0, 0, scaleY, -x * scaleX, -y * scaleY);
 
-    // Draw light fog overlay for unrevealed areas
-    ctx.fillStyle = "#0a0d08";
-    ctx.globalAlpha = 0.4;
-    ctx.fillRect(x, y, width, height);
+    // Draw faint textures for fogged (unrevealed) states
+    ctx.globalAlpha = 0.5;
+    for (const [stateId, path] of statePaths) {
+      if (stateId === "0" || revealedStates.has(stateId)) continue;
+
+      const outline = stateOutlines.get(stateId);
+      if (!outline) continue;
+
+      const textureIndex = getTextureIndexForState(stateId);
+      const textureImg = textureImages.get(textureIndex);
+      if (!textureImg) continue;
+
+      const { bounds } = outline;
+
+      ctx.save();
+      ctx.clip(path);
+
+      // Same adaptive tile sizing as revealed states
+      const scale = Math.max(scaleX, scaleY);
+      const texNaturalSize = Math.max(textureImg.naturalWidth, textureImg.naturalHeight);
+      let texSize = texNaturalSize / scale;
+      texSize = Math.max(64, Math.min(512, texSize));
+
+      const startX = Math.floor(bounds.minX / texSize) * texSize;
+      const startY = Math.floor(bounds.minY / texSize) * texSize;
+
+      for (let tx = startX; tx < bounds.maxX; tx += texSize) {
+        for (let ty = startY; ty < bounds.maxY; ty += texSize) {
+          ctx.drawImage(textureImg, tx, ty, texSize, texSize);
+        }
+      }
+
+      ctx.restore();
+    }
     ctx.globalAlpha = 1;
 
     // Draw textures for revealed states

@@ -52,7 +52,6 @@
       </section>
       <aside class="info-pane" id="info-pane" aria-hidden="true">
         <header class="info-header">
-          <h1 class="panel-title">State details</h1>
           <button class="back-button" id="state-back" type="button" hidden>
             Back to full map
           </button>
@@ -64,6 +63,27 @@
       <div class="loading-card">
         <div class="loading-title">Preparing the map</div>
         <div class="loading-subtitle" id="loading-progress">Loading...</div>
+      </div>
+    </div>
+
+    <div class="character-select" id="character-select" aria-hidden="true">
+      <div class="character-select-card">
+        <h2 class="character-select-title">Choose your character</h2>
+        <div class="character-grid">
+          <button class="character-card" type="button" data-character="demon">
+            <img class="character-card-img" src="assets/characters/demon.svg" alt="Demon" />
+            <span class="character-name">Demon</span>
+          </button>
+          <button class="character-card" type="button" data-character="succube">
+            <img class="character-card-img" src="assets/characters/succube.svg" alt="Succube" />
+            <span class="character-name">Succube</span>
+          </button>
+          <button class="character-card" type="button" data-character="gargoyle">
+            <img class="character-card-img" src="assets/characters/gargoyle.svg" alt="Gargoyle" />
+            <span class="character-name">Gargoyle</span>
+          </button>
+        </div>
+        <button class="character-confirm" id="character-confirm" type="button" hidden>Confirm</button>
       </div>
     </div>
 
@@ -111,6 +131,7 @@
             <span>Instagram</span>
           </a>
         </div>
+        <button class="credits-change-character" id="credits-change-character" type="button">Change character</button>
         <p class="credits-footer">&copy; 2025 Ataraxie</p>
       </div>
     </div>

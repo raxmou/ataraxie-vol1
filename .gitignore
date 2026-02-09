@@ -13,3 +13,4 @@
 
 # Large audio files (wav format)
 assets/music/*.wav
+.DS_Store

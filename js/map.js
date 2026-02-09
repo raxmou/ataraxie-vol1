@@ -85,8 +85,12 @@ export const createMap = ({ svg, geojson, colorForState }) => {
   const snapshotGroup = document.createElementNS(svgNS, "g");
   snapshotGroup.setAttribute("id", "map-snapshot");
   snapshotGroup.setAttribute("visibility", "hidden");
+  const trailGroup = document.createElementNS(svgNS, "g");
+  trailGroup.setAttribute("id", "map-trails");
+
   baseGroup.appendChild(cellGroup);
   svg.appendChild(baseGroup);
+  svg.appendChild(trailGroup);
   svg.appendChild(focusGroup);
   svg.appendChild(snapshotGroup);
   svg.appendChild(borderGroup); // Borders on top of everything
@@ -439,6 +443,25 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     });
   };
 
+  const getSharedBorderMidpoint = (stateA, stateB) => {
+    const a = String(stateA);
+    const b = String(stateB);
+    let sumX = 0;
+    let sumY = 0;
+    let count = 0;
+    for (const entry of edgeMap.values()) {
+      const states = Array.from(entry.states).map(String);
+      if (states.includes(a) && states.includes(b)) {
+        const [p1, p2] = entry.coords;
+        sumX += (p1[0] + p2[0]) / 2;
+        sumY += (p1[1] + p2[1]) / 2;
+        count += 1;
+      }
+    }
+    if (count === 0) return null;
+    return { x: sumX / count, y: sumY / count };
+  };
+
   // Compute state outlines for canvas texture rendering
   const stateEdgeCounts = buildStateEdgeCounts(geojson);
   const stateOutlines = computeStateOutlines(stateEdgeCounts, stateBounds);
@@ -456,6 +479,8 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     applyFog,
     getFocusLayer: () => focusGroup,
     getSnapshotLayer: () => snapshotGroup,
+    getTrailLayer: () => trailGroup,
+    getSharedBorderMidpoint,
     getStateOutlines: () => stateOutlines,
   };
 };

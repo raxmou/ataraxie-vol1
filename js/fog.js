@@ -6,6 +6,15 @@ export const revealedStates = new Set(["1"]);
 // Track which states have shown their question (to avoid re-asking)
 export const questionedStates = new Set();
 
+// Exploration trail data
+export const explorationTrails = [];   // [{ from: string, to: string }]
+export const explorationOrder = ["1"]; // Discovery sequence (state "1" is the origin)
+
+export const addTrail = (fromStateId, toStateId) => {
+  explorationTrails.push({ from: String(fromStateId), to: String(toStateId) });
+  explorationOrder.push(String(toStateId));
+};
+
 // State neighbor map (built from GeoJSON)
 let stateNeighborMap = new Map();
 

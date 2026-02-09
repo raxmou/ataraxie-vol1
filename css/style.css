@@ -100,6 +100,175 @@ body::before {
   color: #b8d982;
 }
 
+/* Character Selection Screen */
+.character-select {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, rgba(16, 20, 10, 0.97), rgba(6, 8, 4, 0.99));
+  z-index: 12;
+  transition: opacity 0.4s ease;
+}
+
+.character-select[aria-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.character-select-card {
+  text-align: center;
+  max-width: 720px;
+  width: 90%;
+}
+
+.character-select-title {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #bdff00;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 0 0 36px 0;
+}
+
+.character-grid {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.character-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 20px;
+  border: 2px solid rgba(189, 255, 0, 0.3);
+  border-radius: 18px;
+  background: rgba(8, 12, 6, 0.85);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  width: 180px;
+}
+
+.character-card:hover {
+  border-color: rgba(189, 255, 0, 0.6);
+  background: rgba(14, 18, 10, 0.9);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(189, 255, 0, 0.15);
+}
+
+.character-card:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+
+.character-card.is-selected {
+  border-color: #bdff00;
+  box-shadow: 0 0 24px rgba(189, 255, 0, 0.35), inset 0 0 16px rgba(189, 255, 0, 0.08);
+}
+
+.character-card-img {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(189, 255, 0, 0.15));
+  transition: filter 0.25s ease;
+}
+
+.character-card:hover .character-card-img,
+.character-card.is-selected .character-card-img {
+  filter: drop-shadow(0 4px 16px rgba(189, 255, 0, 0.3));
+}
+
+.character-name {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 0.9rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #e8ffb2;
+}
+
+.character-confirm {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  border: 1px solid rgba(189, 255, 0, 0.7);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(45, 55, 30, 0.95) 0%,
+      rgba(20, 26, 14, 0.98) 45%,
+      rgba(12, 16, 8, 0.98) 55%,
+      rgba(25, 32, 18, 0.95) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.4);
+  color: #e8ffb2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  border-radius: 999px;
+  padding: 12px 32px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.character-confirm:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 rgba(189, 255, 0, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(189, 255, 0, 0.25),
+    0 8px 18px rgba(0, 0, 0, 0.3);
+}
+
+.character-confirm:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+
+/* Character avatar in info panel header */
+.character-avatar {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(189, 255, 0, 0.2));
+}
+
+/* Change character button in credits modal */
+.credits-change-character {
+  display: inline-block;
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  border: 1px solid rgba(189, 255, 0, 0.4);
+  border-radius: 999px;
+  background: transparent;
+  color: #b8d982;
+  padding: 8px 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 20px;
+}
+
+.credits-change-character:hover {
+  border-color: rgba(189, 255, 0, 0.7);
+  color: #bdff00;
+  box-shadow: 0 0 12px rgba(189, 255, 0, 0.15);
+}
+
+.credits-change-character:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+
+
 .question-modal {
   position: fixed;
   inset: 0;
@@ -449,7 +618,7 @@ body::before {
 .info-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   margin-bottom: 18px;
   padding-bottom: 18px;
@@ -585,6 +754,73 @@ body::before {
   }
 }
 
+/* Character dialog balloon */
+.character-dialog {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.character-dialog-avatar {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(189, 255, 0, 0.25));
+  animation: avatar-pop 400ms ease both;
+}
+
+@keyframes avatar-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.character-dialog-bubble {
+  flex: 1;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(189, 255, 0, 0.3);
+  background: rgba(8, 12, 6, 0.65);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Speech bubble tail pointing left toward avatar */
+.character-dialog-bubble::before {
+  content: "";
+  position: absolute;
+  left: -8px;
+  top: 18px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-right: 8px solid rgba(189, 255, 0, 0.3);
+}
+
+.character-dialog-bubble::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 19px;
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-right: 7px solid rgba(8, 12, 6, 0.65);
+}
+
 .question-prompt {
   padding: 20px;
   border-radius: 12px;
@@ -593,8 +829,8 @@ body::before {
 }
 
 .question-text {
-  font-size: 1.05rem;
-  line-height: 1.6;
+  font-size: 1rem;
+  line-height: 1.5;
   color: var(--text-color);
   margin: 0;
 }
@@ -602,16 +838,16 @@ body::before {
 .question-answers {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .question-answers .answer-btn {
-  padding: 16px 20px;
+  padding: 12px 16px;
   border: 2px solid var(--panel-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(14, 18, 10, 0.8);
   color: var(--text-color);
-  font-size: 1rem;
+  font-size: 0.92rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -629,7 +865,49 @@ body::before {
   transform: translateX(2px);
 }
 
+.answer-btn--selected {
+  border-color: #bdff00 !important;
+  background: rgba(189, 255, 0, 0.15) !important;
+  transform: none !important;
+  cursor: default;
+}
+
+.answer-btn--dismissed {
+  animation: answer-dismiss 380ms ease forwards;
+  pointer-events: none;
+}
+
+@keyframes answer-dismiss {
+  to {
+    opacity: 0;
+    height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin: 0;
+    border-width: 0;
+    overflow: hidden;
+  }
+}
+
+.answer-btn--continue {
+  margin-top: 8px;
+  border-color: #bdff00 !important;
+  animation: continue-appear 400ms ease both;
+}
+
+@keyframes continue-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .track-card {
+  position: relative;
   margin-top: 18px;
   padding: 14px 16px;
   border-radius: 12px;
@@ -778,6 +1056,25 @@ body::before {
     padding: 20px;
     transform: translateY(0);
   }
+
+  .character-dialog-avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .character-dialog-bubble {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .question-text {
+    font-size: 0.9rem;
+  }
+
+  .question-answers .answer-btn {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+  }
 }
 
 .cell {
@@ -822,6 +1119,59 @@ body::before {
 
 .state-border {
   display: none;
+}
+
+/* Exploration trail */
+#map-trails {
+  pointer-events: none;
+}
+
+.trail-line {
+  stroke: rgba(189, 255, 0, 0.5);
+  stroke-width: 3px;
+  stroke-dasharray: 8 5;
+  stroke-linecap: round;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.trail-line--animating {
+  stroke-dasharray: none;
+}
+
+.trail-marker {
+  fill: #bdff00;
+  stroke: rgba(8, 12, 6, 0.8);
+  stroke-width: 0.8px;
+  opacity: 0.9;
+  vector-effect: non-scaling-stroke;
+}
+
+.trail-marker--origin {
+  fill: #e8ffb2;
+  stroke: #bdff00;
+  stroke-width: 1.2px;
+  filter: drop-shadow(0 0 3px rgba(189, 255, 0, 0.6));
+}
+
+.trail-marker--appear {
+  animation: trail-marker-in 400ms ease both;
+}
+
+@keyframes trail-marker-in {
+  0% {
+    opacity: 0;
+    r: 0;
+  }
+  100% {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trail-marker--appear {
+    animation: none;
+  }
 }
 
 /* Info Button - Hidden until map completion */
@@ -1064,24 +1414,72 @@ body::before {
   z-index: 2;
   pointer-events: none;
   filter: drop-shadow(0 0 6px rgba(189, 255, 0, 0.15));
-  transition: filter 0.3s ease;
+  animation: hg-breathe 4s ease-in-out infinite;
+  overflow: visible;
+}
+
+@keyframes hg-breathe {
+  0%, 100% { filter: drop-shadow(0 0 5px rgba(189, 255, 0, 0.12)); }
+  50% { filter: drop-shadow(0 0 9px rgba(189, 255, 0, 0.22)); }
 }
 
 .hourglass-container:hover .hourglass-frame {
-  filter: drop-shadow(0 0 10px rgba(189, 255, 0, 0.3));
+  animation: none;
+  filter: drop-shadow(0 0 12px rgba(189, 255, 0, 0.35));
+  transition: filter 0.3s ease;
+}
+
+.hourglass-container.is-boosted .hourglass-frame {
+  animation: none;
+  filter: drop-shadow(0 0 18px rgba(189, 255, 0, 0.6));
+  transition: filter 0.3s ease;
+}
+
+.hourglass-3d {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(189, 255, 0, 0.15));
+  animation: hg-breathe 4s ease-in-out infinite;
+}
+
+.hourglass-container:hover .hourglass-3d {
+  animation: none;
+  filter: drop-shadow(0 0 12px rgba(189, 255, 0, 0.35));
+  transition: filter 0.3s ease;
+}
+
+.hourglass-container.is-boosted .hourglass-3d {
+  animation: none;
+  filter: drop-shadow(0 0 18px rgba(189, 255, 0, 0.6));
+  transition: filter 0.3s ease;
 }
 
 .hourglass-scrub {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  bottom: 10px;
+  top: 30%;
+  left: 25%;
+  right: 25%;
+  bottom: 30%;
   z-index: 4;
   cursor: ns-resize;
   background: transparent;
   border: none;
   outline: none;
+}
+
+.hourglass-drag-zone {
+  position: absolute;
+  top: -30px;
+  left: -30px;
+  right: -30px;
+  bottom: -30px;
+  z-index: 0;
+  cursor: grab;
 }
 
 .hourglass-scrub:focus-visible {
@@ -1140,6 +1538,70 @@ body::before {
   text-align: center;
 }
 
+.hourglass-info-wrap {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+}
+
+.hourglass-info-btn {
+  width: auto;
+  height: auto;
+  padding: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hourglass-info-btn:hover {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+}
+
+.hourglass-info-tip {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: max-content;
+  max-width: 240px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(189, 255, 0, 0.35);
+  background: rgba(8, 12, 6, 0.95);
+  color: #b8d982;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 10;
+}
+
+.hourglass-info-tip ul {
+  margin: 0;
+  padding: 0 0 0 14px;
+  list-style: disc;
+}
+
+.hourglass-info-tip li {
+  margin-bottom: 3px;
+}
+
+.hourglass-info-tip li:last-child {
+  margin-bottom: 0;
+}
+
+.hourglass-info-wrap:hover .hourglass-info-tip {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
 @media (max-width: 900px) {
   .hourglass-container {
     width: 80px;
@@ -1151,14 +1613,30 @@ body::before {
     height: 128px !important;
   }
 
+  .hourglass-3d {
+    width: 80px !important;
+    height: 128px !important;
+  }
+
   .hourglass-rune {
     width: 32px;
     height: 32px;
     font-size: 0.7rem;
   }
 
+  .hourglass-info-btn {
+    width: 20px;
+    height: 20px;
+    font-size: 0.55rem;
+  }
+
   .hourglass-time {
     font-size: 0.65rem;
     min-width: 80px;
+  }
+
+  .hourglass-info-tip {
+    max-width: 200px;
+    font-size: 0.65rem;
   }
 }

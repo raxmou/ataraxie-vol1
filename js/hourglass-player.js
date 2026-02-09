@@ -29,6 +29,156 @@ const PACKING_EFFICIENCY = 0.35; // Physics packing in triangular shape is ~35% 
 // Detect reduced motion preference
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+// Three.js lazy-load (same CDN as app.js)
+const THREE_URL = "https://unpkg.com/three@0.164.1/build/three.module.js";
+let threeModulePromise = null;
+const loadThreeModule = () => {
+  if (!threeModulePromise) threeModulePromise = import(THREE_URL);
+  return threeModulePromise;
+};
+
+/**
+ * Build a procedural 3D hourglass overlay.
+ * @param {HTMLElement} wrapper - The .hourglass-container element
+ * @returns {Promise<{ render: (dt: number) => void, dispose: () => void, canvas: HTMLCanvasElement } | null>}
+ */
+const initHourglass3D = async (wrapper) => {
+  const THREE = await loadThreeModule();
+
+  // --- Renderer ---
+  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(wrapper.clientWidth, wrapper.clientHeight);
+  const canvas3d = renderer.domElement;
+  canvas3d.className = "hourglass-3d";
+
+  // --- Scene & Camera ---
+  const scene = new THREE.Scene();
+  const fov = 20;
+  const vFov = (fov * Math.PI) / 180;
+  const camDist = (160 / 2) / Math.tan(vFov / 2);
+  const camera = new THREE.PerspectiveCamera(fov, wrapper.clientWidth / wrapper.clientHeight, 1, camDist * 3);
+  camera.position.set(0, 0, camDist);
+  camera.lookAt(0, 0, 0);
+
+  // --- Lighting ---
+  const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+  scene.add(ambient);
+
+  const keyLight = new THREE.DirectionalLight(0xffffff, 0.6);
+  keyLight.position.set(30, 60, 80);
+  scene.add(keyLight);
+
+  const rimLight = new THREE.DirectionalLight(0xbdff00, 0.35);
+  rimLight.position.set(-40, -20, 60);
+  scene.add(rimLight);
+
+  // --- Hourglass profile (LatheGeometry) ---
+  const BASE_R = 40;
+  const NECK_R = 4;
+  const HALF_H = 70;
+  const POINTS = 48;
+  const profilePts = [];
+  for (let i = 0; i <= POINTS; i++) {
+    const u = (i / POINTS) * 2 - 1; // -1 (bottom) to +1 (top)
+    const r = NECK_R + (BASE_R - NECK_R) * Math.pow(Math.abs(u), 1.3);
+    const y = u * HALF_H;
+    profilePts.push(new THREE.Vector2(r, y));
+  }
+  const hourglassGeo = new THREE.LatheGeometry(profilePts, 32);
+
+  // --- Materials (all depthWrite: false for transparency layering) ---
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0xbdff00,
+    emissive: 0xbdff00,
+    emissiveIntensity: 0.08,
+    transparent: true,
+    opacity: 0.05,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    roughness: 0.2,
+    metalness: 0.0,
+    clearcoat: 0.3,
+  });
+
+  const wireMat = new THREE.MeshBasicMaterial({
+    color: 0xbdff00,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.07,
+    depthWrite: false,
+  });
+
+  const edgeMat = new THREE.MeshBasicMaterial({
+    color: 0xbdff00,
+    transparent: true,
+    opacity: 0.1,
+    depthWrite: false,
+    side: THREE.BackSide,
+  });
+
+  const rimMat = new THREE.MeshStandardMaterial({
+    color: 0xbdff00,
+    emissive: 0xbdff00,
+    emissiveIntensity: 0.15,
+    transparent: true,
+    opacity: 0.18,
+    depthWrite: false,
+    metalness: 0.6,
+    roughness: 0.3,
+  });
+
+  // --- Group ---
+  const group = new THREE.Group();
+
+  group.add(new THREE.Mesh(hourglassGeo, glassMat));
+  group.add(new THREE.Mesh(hourglassGeo, wireMat));
+  group.add(new THREE.Mesh(hourglassGeo, edgeMat));
+
+  // Rims at top & bottom
+  const rimGeo = new THREE.TorusGeometry(BASE_R, 1.2, 12, 32);
+  const topRim = new THREE.Mesh(rimGeo, rimMat);
+  topRim.position.y = HALF_H;
+  topRim.rotation.x = Math.PI / 2;
+  group.add(topRim);
+
+  const bottomRim = new THREE.Mesh(rimGeo, rimMat);
+  bottomRim.position.y = -HALF_H;
+  bottomRim.rotation.x = Math.PI / 2;
+  group.add(bottomRim);
+
+  // Neck ring
+  const neckGeo = new THREE.TorusGeometry(NECK_R, 0.6, 8, 32);
+  const neckRing = new THREE.Mesh(neckGeo, rimMat);
+  neckRing.rotation.x = Math.PI / 2;
+  group.add(neckRing);
+
+  scene.add(group);
+
+  // --- Animation state ---
+  let elapsed = 0;
+
+  return {
+    canvas: canvas3d,
+    render(dt) {
+      elapsed += dt;
+      group.rotation.y = Math.sin(elapsed * 0.4) * 0.15;
+      renderer.render(scene, camera);
+    },
+    dispose() {
+      hourglassGeo.dispose();
+      rimGeo.dispose();
+      neckGeo.dispose();
+      glassMat.dispose();
+      wireMat.dispose();
+      edgeMat.dispose();
+      rimMat.dispose();
+      renderer.dispose();
+      if (canvas3d.parentNode) canvas3d.parentNode.removeChild(canvas3d);
+    },
+  };
+};
+
 /**
  * Calculate particle radius based on count to fill 80% of triangle area.
  * Accounts for circle packing inefficiency.
@@ -132,16 +282,108 @@ class Particle {
 }
 
 /**
- * SVG frame for the hourglass - trapezoids with hole
+ * SVG frame for the hourglass - glyph-style with layered depth
  */
 const HOURGLASS_FRAME_SVG = `
-<svg viewBox="0 0 100 160" width="100" height="160" xmlns="http://www.w3.org/2000/svg">
-  <!-- Top trapezoid (inverted, with hole at bottom) -->
+<svg viewBox="0 0 100 160" width="100" height="160" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+  <defs>
+    <linearGradient id="hg-st" x1="50" y1="10" x2="50" y2="78" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#bdff00" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#bdff00" stop-opacity="0.15"/>
+    </linearGradient>
+    <linearGradient id="hg-sb" x1="50" y1="82" x2="50" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#bdff00" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#bdff00" stop-opacity="0.55"/>
+    </linearGradient>
+    <linearGradient id="hg-ft" x1="50" y1="10" x2="50" y2="78" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#bdff00" stop-opacity="0.035"/>
+      <stop offset="100%" stop-color="#bdff00" stop-opacity="0.008"/>
+    </linearGradient>
+    <linearGradient id="hg-fb" x1="50" y1="82" x2="50" y2="150" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#bdff00" stop-opacity="0.008"/>
+      <stop offset="100%" stop-color="#bdff00" stop-opacity="0.035"/>
+    </linearGradient>
+    <filter id="hg-gl" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3"/>
+    </filter>
+  </defs>
+
+  <!-- Ambient aura -->
+  <g opacity="0.2" filter="url(#hg-gl)">
+    <path d="M 10,10 L 90,10 L 54,78 L 46,78 Z" fill="none" stroke="#bdff00" stroke-width="3"/>
+    <path d="M 46,82 L 54,82 L 90,150 L 10,150 Z" fill="none" stroke="#bdff00" stroke-width="3"/>
+  </g>
+
+  <!-- Glass body fill -->
+  <path d="M 10,10 L 90,10 L 54,78 L 46,78 Z" fill="url(#hg-ft)"/>
+  <path d="M 46,82 L 54,82 L 90,150 L 10,150 Z" fill="url(#hg-fb)"/>
+
+  <!-- Inner frame (etched depth) -->
+  <path d="M 14,13.5 L 86,13.5 L 53,76 L 47,76 Z"
+        fill="none" stroke="rgba(189,255,0,0.09)" stroke-width="0.5" stroke-linejoin="round"/>
+  <path d="M 47,84 L 53,84 L 86,146.5 L 14,146.5 Z"
+        fill="none" stroke="rgba(189,255,0,0.09)" stroke-width="0.5" stroke-linejoin="round"/>
+
+  <!-- Main frame -->
   <path d="M 10,10 L 90,10 L 54,78 L 46,78 Z"
-        fill="none" stroke="rgba(189,255,0,0.4)" stroke-width="2"/>
-  <!-- Bottom trapezoid (with hole at top) -->
+        fill="none" stroke="url(#hg-st)" stroke-width="1.5" stroke-linejoin="round"/>
   <path d="M 46,82 L 54,82 L 90,150 L 10,150 Z"
-        fill="none" stroke="rgba(189,255,0,0.4)" stroke-width="2"/>
+        fill="none" stroke="url(#hg-sb)" stroke-width="1.5" stroke-linejoin="round"/>
+
+  <!-- Base cap extensions -->
+  <line x1="5" y1="10" x2="10" y2="10" stroke="rgba(189,255,0,0.3)" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="90" y1="10" x2="95" y2="10" stroke="rgba(189,255,0,0.3)" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="5" y1="150" x2="10" y2="150" stroke="rgba(189,255,0,0.3)" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="90" y1="150" x2="95" y2="150" stroke="rgba(189,255,0,0.3)" stroke-width="0.8" stroke-linecap="round"/>
+
+  <!-- Corner vertex dots -->
+  <circle cx="10" cy="10" r="1.6" fill="rgba(189,255,0,0.45)"/>
+  <circle cx="90" cy="10" r="1.6" fill="rgba(189,255,0,0.45)"/>
+  <circle cx="10" cy="150" r="1.6" fill="rgba(189,255,0,0.45)"/>
+  <circle cx="90" cy="150" r="1.6" fill="rgba(189,255,0,0.45)"/>
+
+  <!-- Edge midpoint dots -->
+  <circle cx="28" cy="44" r="0.9" fill="rgba(189,255,0,0.2)"/>
+  <circle cx="72" cy="44" r="0.9" fill="rgba(189,255,0,0.2)"/>
+  <circle cx="28" cy="116" r="0.9" fill="rgba(189,255,0,0.2)"/>
+  <circle cx="72" cy="116" r="0.9" fill="rgba(189,255,0,0.2)"/>
+
+  <!-- Rune ticks on top base -->
+  <line x1="30" y1="10" x2="30" y2="6" stroke="rgba(189,255,0,0.2)" stroke-width="0.5" stroke-linecap="round"/>
+  <line x1="50" y1="10" x2="50" y2="5" stroke="rgba(189,255,0,0.3)" stroke-width="0.6" stroke-linecap="round"/>
+  <line x1="70" y1="10" x2="70" y2="6" stroke="rgba(189,255,0,0.2)" stroke-width="0.5" stroke-linecap="round"/>
+
+  <!-- Rune ticks on bottom base -->
+  <line x1="30" y1="150" x2="30" y2="154" stroke="rgba(189,255,0,0.2)" stroke-width="0.5" stroke-linecap="round"/>
+  <line x1="50" y1="150" x2="50" y2="155" stroke="rgba(189,255,0,0.3)" stroke-width="0.6" stroke-linecap="round"/>
+  <line x1="70" y1="150" x2="70" y2="154" stroke="rgba(189,255,0,0.2)" stroke-width="0.5" stroke-linecap="round"/>
+
+  <!-- Vertical axis whiskers -->
+  <line x1="50" y1="2" x2="50" y2="5" stroke="rgba(189,255,0,0.12)" stroke-width="0.4" stroke-linecap="round"/>
+  <line x1="50" y1="155" x2="50" y2="158" stroke="rgba(189,255,0,0.12)" stroke-width="0.4" stroke-linecap="round"/>
+
+  <!-- Chevrons near neck -->
+  <path d="M 36,73 L 40,76.5 L 36,76.5" fill="none" stroke="rgba(189,255,0,0.18)" stroke-width="0.5" stroke-linejoin="round"/>
+  <path d="M 64,73 L 60,76.5 L 64,76.5" fill="none" stroke="rgba(189,255,0,0.18)" stroke-width="0.5" stroke-linejoin="round"/>
+  <path d="M 36,87 L 40,83.5 L 36,83.5" fill="none" stroke="rgba(189,255,0,0.18)" stroke-width="0.5" stroke-linejoin="round"/>
+  <path d="M 64,87 L 60,83.5 L 64,83.5" fill="none" stroke="rgba(189,255,0,0.18)" stroke-width="0.5" stroke-linejoin="round"/>
+
+  <!-- Neck horizontal accents -->
+  <line x1="33" y1="80" x2="41" y2="80" stroke="rgba(189,255,0,0.22)" stroke-width="0.6" stroke-linecap="round"/>
+  <line x1="59" y1="80" x2="67" y2="80" stroke="rgba(189,255,0,0.22)" stroke-width="0.6" stroke-linecap="round"/>
+
+  <!-- Neck ornament -->
+  <circle cx="50" cy="80" r="7" fill="none" stroke="rgba(189,255,0,0.1)" stroke-width="0.4">
+    <animate attributeName="r" values="6.5;7.5;6.5" dur="5s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="50" cy="80" r="3.5" fill="none" stroke="rgba(189,255,0,0.25)" stroke-width="0.6"/>
+  <circle cx="50" cy="80" r="1.2" fill="rgba(189,255,0,0.4)">
+    <animate attributeName="opacity" values="0.3;0.55;0.3" dur="3s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Neck cardinal dots -->
+  <circle cx="50" cy="73" r="0.6" fill="rgba(189,255,0,0.2)"/>
+  <circle cx="50" cy="87" r="0.6" fill="rgba(189,255,0,0.2)"/>
 </svg>
 `;
 
@@ -174,24 +416,109 @@ export const createHourglassPlayer = (container, audio) => {
   let isDragging = false;
   let disposed = false;
   let fallenCount = 0; // Tracks how many particles have fallen through the hole
+  let particleProgress = 0; // Independent progress for particles (can go backwards)
+  let three3d = null; // 3D hourglass overlay (set async)
 
   // Rotation state
   let rotationAngle = 0;        // Current visual rotation (degrees)
-  let targetRotation = 0;       // Target for snapping
   let isRotating = false;       // Rotation drag state
   let rotationStartAngle = 0;   // Angle when drag started
   let pointerStartAngle = 0;    // Pointer angle when drag started
-  let isRewinding = false;      // Whether we're in rewind mode
-  let lastRewindTime = 0;       // For manual rewind timing
   let userPaused = false;       // Track if user manually paused
+
+  // Playback speed state
+  let playbackSpeed = 1;           // Current speed: -2 to 2
+  let shakeHistory = [];           // Recent rotation direction changes (timestamps)
+  let lastRotationDirection = 0;   // 1 = clockwise, -1 = counter-clockwise
+  let lastRotationAngle = 0;       // Previous angle for direction detection
+  let isShaking = false;           // Shake boost active
+  let shakeDecayTimer = null;      // Timer to reset shake boost
+
+  // Shake detection constants
+  const SHAKE_WINDOW = 500;           // ms to detect shake pattern
+  const SHAKE_MIN_CHANGES = 2;        // Min direction reversals needed
+  const SHAKE_BOOST_DURATION = 2000;  // How long x2 lasts (ms)
 
   // Particle size and hole width (calculated when duration is known)
   let particleRadius = 3;
   let holeHalfWidth = 4; // Minimum hole half-width to fit one particle
+  let lastPhysicsAngle = 0; // Track rotation for waking settled particles
 
-  // Rotation constants
-  const SNAP_ANGLES = [0, 90, 180, 270];
-  const SNAP_THRESHOLD = 15;
+  // Reverse audio playback (Web Audio API)
+  let audioCtx = null;
+  let reversedBuffer = null;
+  let reverseSource = null;
+  let reverseStartCtxTime = 0; // AudioContext.currentTime when reverse started
+  let reverseStartOffset = 0;  // Offset in reversed buffer when started
+  let isPlayingReversed = false;
+
+  const ensureAudioContext = () => {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  };
+
+  /** Fetch + decode audio, then reverse the buffer data. */
+  const prepareReverseBuffer = async () => {
+    if (reversedBuffer) return;
+    const src = audio.currentSrc || audio.src;
+    if (!src) return;
+    try {
+      const ctx = ensureAudioContext();
+      const resp = await fetch(src);
+      const buf = await resp.arrayBuffer();
+      const original = await ctx.decodeAudioData(buf);
+      reversedBuffer = ctx.createBuffer(
+        original.numberOfChannels,
+        original.length,
+        original.sampleRate
+      );
+      for (let ch = 0; ch < original.numberOfChannels; ch++) {
+        const fwd = original.getChannelData(ch);
+        const rev = reversedBuffer.getChannelData(ch);
+        for (let i = 0, len = fwd.length; i < len; i++) {
+          rev[i] = fwd[len - 1 - i];
+        }
+      }
+    } catch (_) {
+      // Reverse audio unavailable — silent fallback
+    }
+  };
+
+  const startReversePlayback = (forwardTime) => {
+    if (!reversedBuffer) return;
+    stopReversePlayback();
+    const ctx = ensureAudioContext();
+    const offset = Math.max(0, reversedBuffer.duration - forwardTime);
+    reverseSource = ctx.createBufferSource();
+    reverseSource.buffer = reversedBuffer;
+    reverseSource.playbackRate.value = Math.min(4, Math.max(0.25, Math.abs(playbackSpeed)));
+    reverseSource.connect(ctx.destination);
+    reverseSource.start(0, offset);
+    reverseStartCtxTime = ctx.currentTime;
+    reverseStartOffset = offset;
+    isPlayingReversed = true;
+  };
+
+  const stopReversePlayback = () => {
+    if (reverseSource) {
+      try { reverseSource.stop(); } catch (_) {}
+      reverseSource.disconnect();
+      reverseSource = null;
+    }
+    isPlayingReversed = false;
+  };
+
+  /** Map current position in reversed buffer back to forward time. */
+  const getReverseForwardTime = () => {
+    if (!isPlayingReversed || !audioCtx || !reversedBuffer) return audio.currentTime || 0;
+    const elapsed = audioCtx.currentTime - reverseStartCtxTime;
+    const rate = reverseSource ? reverseSource.playbackRate.value : 1;
+    const pos = reverseStartOffset + elapsed * rate;
+    return Math.max(0, reversedBuffer.duration - pos);
+  };
 
   /**
    * Get pointer angle from center of wrapper (0° at top, clockwise positive).
@@ -205,20 +532,6 @@ export const createHourglassPlayer = (container, audio) => {
   };
 
   /**
-   * Snap angle to nearest key angle if within threshold.
-   */
-  const snapToNearestAngle = (angle) => {
-    const normalized = ((angle % 360) + 360) % 360;
-    for (const snap of SNAP_ANGLES) {
-      const diff = Math.abs(normalized - snap);
-      if (diff < SNAP_THRESHOLD || diff > 360 - SNAP_THRESHOLD) {
-        return snap;
-      }
-    }
-    return normalized;
-  };
-
-  /**
    * Get normalized rotation (0-360).
    */
   const getNormalizedRotation = () => {
@@ -226,25 +539,82 @@ export const createHourglassPlayer = (container, audio) => {
   };
 
   /**
-   * Update audio playback based on rotation angle.
+   * Get playback speed from rotation angle using linear interpolation.
+   * 0° → 1 (forward), 90° → 0 (paused), 180° → -1 (reverse), 270° → 0 (paused)
    */
-  const updateAudioFromRotation = () => {
-    const normalized = getNormalizedRotation();
+  const getSpeedFromRotation = (angle) => {
+    const normalized = ((angle % 360) + 360) % 360;
 
-    if (normalized === 0 || normalized === 360) {
-      // Normal forward playback
-      if (audio.paused && !userPaused) audio.play().catch(() => {});
-      isRewinding = false;
-    } else if (normalized === 90 || normalized === 270) {
-      // Paused state
-      audio.pause();
-      isRewinding = false;
-    } else if (normalized === 180) {
-      // Rewind at 2x speed
-      audio.pause();
-      isRewinding = true;
-      lastRewindTime = performance.now();
+    if (normalized <= 90) {
+      // 0° to 90°: x1 → x0
+      return 1 - (normalized / 90);
+    } else if (normalized <= 180) {
+      // 90° to 180°: x0 → x-1
+      return -((normalized - 90) / 90);
+    } else if (normalized <= 270) {
+      // 180° to 270°: x-1 → x0
+      return -1 + ((normalized - 180) / 90);
+    } else {
+      // 270° to 360°: x0 → x1
+      return (normalized - 270) / 90;
     }
+  };
+
+  /**
+   * Detect shake gesture by tracking rotation direction reversals.
+   */
+  const detectShake = (currentAngle) => {
+    const delta = currentAngle - lastRotationAngle;
+    // Ignore very small movements
+    if (Math.abs(delta) < 2) return;
+
+    const direction = delta > 0 ? 1 : -1;
+
+    if (direction !== lastRotationDirection && lastRotationDirection !== 0) {
+      // Direction changed - record timestamp
+      shakeHistory.push(performance.now());
+
+      // Clean old entries outside the window
+      const now = performance.now();
+      shakeHistory = shakeHistory.filter(t => now - t < SHAKE_WINDOW);
+
+      // Check if enough reversals in window
+      if (shakeHistory.length >= SHAKE_MIN_CHANGES) {
+        triggerShakeBoost();
+      }
+    }
+
+    lastRotationDirection = direction;
+    lastRotationAngle = currentAngle;
+  };
+
+  /**
+   * Trigger shake boost - doubles speed for SHAKE_BOOST_DURATION.
+   */
+  const triggerShakeBoost = () => {
+    isShaking = true;
+    shakeHistory = [];
+
+    // Clear previous timer
+    if (shakeDecayTimer) clearTimeout(shakeDecayTimer);
+
+    // Auto-decay after duration
+    shakeDecayTimer = setTimeout(() => {
+      isShaking = false;
+      wrapper.classList.remove("is-boosted");
+    }, SHAKE_BOOST_DURATION);
+
+    // Visual feedback
+    wrapper.classList.add("is-boosted");
+  };
+
+  /**
+   * Update playback speed based on rotation and shake state.
+   */
+  const updatePlaybackSpeed = () => {
+    const baseSpeed = getSpeedFromRotation(rotationAngle);
+    // Shake doubles the speed (preserving direction)
+    playbackSpeed = isShaking ? baseSpeed * 2 : baseSpeed;
   };
 
   /**
@@ -288,9 +658,26 @@ export const createHourglassPlayer = (container, audio) => {
     const bounceDamping = 0.3;
 
     // Calculate gravity vector based on rotation
+    // Transforms world gravity (always down) into hourglass local coordinates
     const rotationRad = rotationAngle * (Math.PI / 180);
     const gravityX = gravityMagnitude * Math.sin(rotationRad);
     const gravityY = gravityMagnitude * Math.cos(rotationRad);
+
+    // Wake settled particles when rotation changes (gravity direction shifted)
+    const angleDelta = Math.abs(rotationAngle - lastPhysicsAngle);
+    if (angleDelta > 0.5) {
+      particles.forEach((p) => {
+        if (p.settled && !p.falling) {
+          p.settled = false;
+          p.onFloor = false;
+        }
+      });
+      lastPhysicsAngle = rotationAngle;
+    }
+
+    // Determine if we're inverted based on playback speed direction
+    // (negative speed means we're going backwards, so particles should flow upward)
+    const isInverted = playbackSpeed < 0;
 
     // Target: 1 particle should fall per second of audio
     const targetFallen = Math.min(Math.floor(currentTime), totalParticles);
@@ -313,42 +700,80 @@ export const createHourglassPlayer = (container, audio) => {
       p.y += p.vy * dt * 60;
     });
 
-    // Find best particle to release (if needed)
-    if (!releasedThisFrame && fallenCount < targetFallen) {
-      let bestParticle = null;
-      let bestScore = Infinity;
+    // Particle release logic - depends on direction
+    if (!isInverted) {
+      // Normal: release from top triangle when more particles should have fallen
+      if (!releasedThisFrame && fallenCount < targetFallen) {
+        let bestParticle = null;
+        let bestScore = Infinity;
 
-      // Find the settled particle in top triangle closest to the hole
-      particles.forEach((p) => {
-        if (p.settled && !p.inBottom && !p.falling) {
-          // Score: distance from center + distance from bottom (lower = better)
-          const distFromCenter = Math.abs(p.x - CENTER_X);
-          const distFromBottom = TOP_APEX_Y - p.y;
-          const score = distFromCenter + distFromBottom * 0.5;
-          if (score < bestScore) {
-            bestScore = score;
-            bestParticle = p;
-          }
-        }
-      });
-
-      // Release the best candidate
-      if (bestParticle) {
-        bestParticle.settled = false;
-        bestParticle.falling = true;
-        bestParticle.x = CENTER_X;
-        bestParticle.y = TOP_APEX_Y;
-        bestParticle.vy = 0.5;
-        fallenCount++;
-        releasedThisFrame = true;
-
-        // Wake up all other settled particles in top triangle so they fall to fill the gap
+        // Find the settled particle in top triangle closest to the hole
         particles.forEach((p) => {
-          if (p !== bestParticle && p.settled && !p.inBottom) {
-            p.settled = false;
-            p.onFloor = false;
+          if (p.settled && !p.inBottom && !p.falling) {
+            const distFromCenter = Math.abs(p.x - CENTER_X);
+            const distFromBottom = TOP_APEX_Y - p.y;
+            const score = distFromCenter + distFromBottom * 0.5;
+            if (score < bestScore) {
+              bestScore = score;
+              bestParticle = p;
+            }
           }
         });
+
+        if (bestParticle) {
+          bestParticle.settled = false;
+          bestParticle.falling = true;
+          bestParticle.x = CENTER_X;
+          bestParticle.y = TOP_APEX_Y;
+          bestParticle.vy = 0.5;
+          fallenCount++;
+          releasedThisFrame = true;
+
+          // Wake up particles in top triangle
+          particles.forEach((p) => {
+            if (p !== bestParticle && p.settled && !p.inBottom) {
+              p.settled = false;
+              p.onFloor = false;
+            }
+          });
+        }
+      }
+    } else {
+      // Inverted: release from bottom triangle when particles should return
+      if (!releasedThisFrame && fallenCount > targetFallen) {
+        let bestParticle = null;
+        let bestScore = Infinity;
+
+        // Find the settled particle in bottom triangle closest to the hole (at top of bottom)
+        particles.forEach((p) => {
+          if (p.settled && p.inBottom && !p.falling) {
+            const distFromCenter = Math.abs(p.x - CENTER_X);
+            const distFromTop = p.y - BOTTOM_APEX_Y; // Distance from hole
+            const score = distFromCenter + distFromTop * 0.5;
+            if (score < bestScore) {
+              bestScore = score;
+              bestParticle = p;
+            }
+          }
+        });
+
+        if (bestParticle) {
+          bestParticle.settled = false;
+          bestParticle.falling = true;
+          bestParticle.x = CENTER_X;
+          bestParticle.y = BOTTOM_APEX_Y;
+          bestParticle.vy = -0.5; // Upward velocity
+          fallenCount--;
+          releasedThisFrame = true;
+
+          // Wake up particles in bottom triangle
+          particles.forEach((p) => {
+            if (p !== bestParticle && p.settled && p.inBottom) {
+              p.settled = false;
+              p.onFloor = false;
+            }
+          });
+        }
       }
     }
 
@@ -361,19 +786,36 @@ export const createHourglassPlayer = (container, audio) => {
         p.x += p.vx * dt * 60;
         p.y += p.vy * dt * 60;
 
-        if (p.y > BOTTOM_APEX_Y + p.size) {
-          p.falling = false;
-          p.inBottom = true;
-          p.settled = false;
+        if (!isInverted) {
+          // Normal: falling down from top to bottom
+          if (p.y > BOTTOM_APEX_Y + p.size) {
+            p.falling = false;
+            p.inBottom = true;
+            p.settled = false;
 
-          // Wake up settled particles in bottom triangle so they recompute positions
-          // when the new particle arrives and collides with them
-          particles.forEach((other) => {
-            if (other !== p && other.inBottom && other.settled) {
-              other.settled = false;
-              other.onFloor = false;
-            }
-          });
+            // Wake up particles in bottom triangle
+            particles.forEach((other) => {
+              if (other !== p && other.inBottom && other.settled) {
+                other.settled = false;
+                other.onFloor = false;
+              }
+            });
+          }
+        } else {
+          // Inverted: falling up from bottom to top
+          if (p.y < TOP_APEX_Y - p.size) {
+            p.falling = false;
+            p.inBottom = false;
+            p.settled = false;
+
+            // Wake up particles in top triangle
+            particles.forEach((other) => {
+              if (other !== p && !other.inBottom && other.settled) {
+                other.settled = false;
+                other.onFloor = false;
+              }
+            });
+          }
         }
         return;
       }
@@ -385,24 +827,40 @@ export const createHourglassPlayer = (container, audio) => {
         // Top triangle
         const bounds = getTriangleBounds(p.y, true, holeHalfWidth);
         if (bounds) {
-          // Wall collisions
+          // Wall collisions with extra damping (matches bottom triangle)
           if (p.x < bounds.left + p.size) {
             p.x = bounds.left + p.size;
-            p.vx = Math.abs(p.vx) * bounceDamping;
+            p.vx = Math.abs(p.vx) * bounceDamping * 0.5;
+            p.vy *= 0.8;
           }
           if (p.x > bounds.right - p.size) {
             p.x = bounds.right - p.size;
-            p.vx = -Math.abs(p.vx) * bounceDamping;
+            p.vx = -Math.abs(p.vx) * bounceDamping * 0.5;
+            p.vy *= 0.8;
           }
+          // Track if near wall (for settling when tilted)
+          p.nearWall = (p.x < bounds.left + p.size * 3) || (p.x > bounds.right - p.size * 3);
         }
 
-        // Floor collision (bottom of top triangle)
-        if (p.y >= TOP_APEX_Y - p.size) {
-          p.y = TOP_APEX_Y - p.size;
-          p.vy = -Math.abs(p.vy) * bounceDamping;
-          p.onFloor = true;
+        // Floor/ceiling collision depends on gravity direction
+        if (!isInverted) {
+          // Normal: floor at bottom of top triangle (apex)
+          if (p.y >= TOP_APEX_Y - p.size) {
+            p.y = TOP_APEX_Y - p.size;
+            p.vy = -Math.abs(p.vy) * bounceDamping;
+            p.onFloor = true;
+          } else {
+            p.onFloor = false;
+          }
         } else {
-          p.onFloor = false;
+          // Inverted: floor at top of top triangle (base)
+          if (p.y <= TOP_BASE_Y + p.size) {
+            p.y = TOP_BASE_Y + p.size;
+            p.vy = Math.abs(p.vy) * bounceDamping;
+            p.onFloor = true;
+          } else {
+            p.onFloor = false;
+          }
         }
       } else {
         // Bottom triangle
@@ -425,14 +883,27 @@ export const createHourglassPlayer = (container, audio) => {
           p.nearWall = (p.x < bounds.left + p.size * 3) || (p.x > bounds.right - p.size * 3);
         }
 
-        // Floor collision
-        if (p.y >= BOTTOM_BASE_Y - p.size - 2) {
-          p.y = BOTTOM_BASE_Y - p.size - 2;
-          p.vy = -Math.abs(p.vy) * bounceDamping;
-          p.vx *= 0.9; // Friction on floor
-          p.onFloor = true;
+        // Floor/ceiling collision depends on gravity direction
+        if (!isInverted) {
+          // Normal: floor at bottom of bottom triangle (base)
+          if (p.y >= BOTTOM_BASE_Y - p.size - 2) {
+            p.y = BOTTOM_BASE_Y - p.size - 2;
+            p.vy = -Math.abs(p.vy) * bounceDamping;
+            p.vx *= 0.9; // Friction on floor
+            p.onFloor = true;
+          } else {
+            p.onFloor = false;
+          }
         } else {
-          p.onFloor = false;
+          // Inverted: floor at top of bottom triangle (apex)
+          if (p.y <= BOTTOM_APEX_Y + p.size + 2) {
+            p.y = BOTTOM_APEX_Y + p.size + 2;
+            p.vy = Math.abs(p.vy) * bounceDamping;
+            p.vx *= 0.9; // Friction on floor
+            p.onFloor = true;
+          } else {
+            p.onFloor = false;
+          }
         }
 
         // General velocity decay in bottom triangle to help settling
@@ -577,6 +1048,11 @@ export const createHourglassPlayer = (container, audio) => {
       } else {
         // Top triangle: settle when on floor or resting on particles, and slow
         if (p.onFloor && speed < 0.5) {
+          p.settled = true;
+          p.vx = 0;
+          p.vy = 0;
+        } else if (p.nearWall && speed < 0.3) {
+          // Near wall and very slow - settle to prevent jitter when tilted
           p.settled = true;
           p.vx = 0;
           p.vy = 0;
@@ -763,6 +1239,48 @@ export const createHourglassPlayer = (container, audio) => {
   };
 
   /**
+   * Apply playback speed to audio.
+   * Forward: HTML5 audio. Reverse: Web Audio reversed buffer.
+   */
+  const applyPlaybackSpeed = () => {
+    updatePlaybackSpeed();
+
+    if (userPaused) {
+      if (isPlayingReversed) stopReversePlayback();
+      return;
+    }
+
+    const absSpeed = Math.abs(playbackSpeed);
+
+    if (absSpeed < 0.01) {
+      // Paused (speed near 0 — at 90° or 270°)
+      if (!audio.paused) audio.pause();
+      if (isPlayingReversed) stopReversePlayback();
+      return;
+    }
+
+    if (playbackSpeed > 0) {
+      // Forward — HTML5 audio
+      if (isPlayingReversed) {
+        const t = getReverseForwardTime();
+        stopReversePlayback();
+        audio.currentTime = t;
+      }
+      audio.playbackRate = Math.min(4, Math.max(0.25, playbackSpeed));
+      if (audio.paused) audio.play().catch(() => {});
+    } else {
+      // Reverse — Web Audio reversed buffer
+      if (!audio.paused) audio.pause();
+      if (!isPlayingReversed && reversedBuffer) {
+        startReversePlayback(audio.currentTime);
+      } else if (isPlayingReversed && reverseSource) {
+        // Update speed on the fly
+        reverseSource.playbackRate.value = Math.min(4, Math.max(0.25, absSpeed));
+      }
+    }
+  };
+
+  /**
    * Animation loop.
    */
   let lastTime = performance.now();
@@ -773,40 +1291,36 @@ export const createHourglassPlayer = (container, audio) => {
     const dt = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
 
-    // Handle rewind mode
-    if (isRewinding && audio.currentTime > 0) {
-      const elapsed = (now - lastRewindTime) / 1000;
-      lastRewindTime = now;
+    // Apply playback speed (skip during scrub drag)
+    if (!isDragging) applyPlaybackSpeed();
 
-      // Rewind at 2x speed (2 seconds of audio per real second)
-      const rewindAmount = elapsed * 2;
-      const newTime = Math.max(0, audio.currentTime - rewindAmount);
-      audio.currentTime = newTime;
-      redistributeParticles(newTime);
-    }
-
-    // Animate rotation snapping
-    if (!isRotating && Math.abs(rotationAngle - targetRotation) > 0.5) {
-      const diff = targetRotation - rotationAngle;
-      rotationAngle += diff * 0.15; // Smooth interpolation
-      if (Math.abs(diff) < 0.5) {
-        rotationAngle = targetRotation;
+    // Update progress and particle time
+    const duration = audio.duration;
+    if (!isDragging && duration && Number.isFinite(duration)) {
+      if (isPlayingReversed) {
+        // Reverse: get position from Web Audio reversed buffer
+        const t = getReverseForwardTime();
+        particleProgress = t;
+        progress = t / duration;
+        // Update time display (timeupdate doesn't fire when HTML5 audio is paused)
+        if (currentLabel) currentLabel.textContent = formatTime(t);
+      } else {
+        // Forward: sync with HTML5 audio
+        const currentTime = audio.currentTime || 0;
+        particleProgress = currentTime;
+        progress = currentTime / duration;
       }
-      wrapper.style.transform = `rotate(${rotationAngle}deg)`;
-    }
-
-    // Update progress from audio
-    const currentTime = audio.currentTime || 0;
-    if (!isDragging && audio.duration && Number.isFinite(audio.duration)) {
-      progress = currentTime / audio.duration;
     }
 
     if (prefersReducedMotion) {
       renderStatic();
     } else {
-      updateParticles(dt, currentTime);
+      updateParticles(dt, particleProgress);
       render();
     }
+
+    // Render 3D overlay
+    if (three3d) three3d.render(dt);
 
     animationFrame = requestAnimationFrame(tick);
   };
@@ -823,7 +1337,12 @@ export const createHourglassPlayer = (container, audio) => {
 
   wrapper.insertBefore(canvas, frameEl);
 
-  // Scrub zone
+  // Drag zone (large hit area for rotation)
+  const dragZone = document.createElement("div");
+  dragZone.className = "hourglass-drag-zone";
+  wrapper.appendChild(dragZone);
+
+  // Scrub zone (small center area)
   const scrubZone = document.createElement("div");
   scrubZone.className = "hourglass-scrub";
   scrubZone.setAttribute("role", "slider");
@@ -838,51 +1357,44 @@ export const createHourglassPlayer = (container, audio) => {
   const controls = document.createElement("div");
   controls.className = "hourglass-controls";
 
-  const playBtn = document.createElement("button");
-  playBtn.className = "hourglass-rune";
-  playBtn.type = "button";
-  playBtn.setAttribute("data-action", "play");
-  playBtn.innerHTML = '<span class="rune-icon">&#9654;</span>';
-  playBtn.setAttribute("aria-label", "Play");
-
   const timeDisplay = document.createElement("div");
   timeDisplay.className = "hourglass-time";
   timeDisplay.innerHTML = `<span data-role="current">--:--</span> / <span data-role="total">--:--</span>`;
 
-  const muteBtn = document.createElement("button");
-  muteBtn.className = "hourglass-rune";
-  muteBtn.type = "button";
-  muteBtn.setAttribute("data-action", "mute");
-  muteBtn.innerHTML = '<span class="rune-icon">&#9836;</span>';
-  muteBtn.setAttribute("aria-label", "Mute");
+  const infoBtn = document.createElement("button");
+  infoBtn.className = "hourglass-rune hourglass-info-btn";
+  infoBtn.type = "button";
+  infoBtn.setAttribute("aria-label", "Usage info");
+  infoBtn.innerHTML = '<span class="rune-icon">?</span>';
 
-  controls.appendChild(playBtn);
+  const infoTip = document.createElement("div");
+  infoTip.className = "hourglass-info-tip";
+  infoTip.innerHTML =
+    "<ul>" +
+    "<li>Click hourglass to play / pause</li>" +
+    "<li>Drag edge to rotate &mdash; controls speed &amp; direction</li>" +
+    "<li>Flip upside down for reverse playback</li>" +
+    "<li>Drag center to scrub</li>" +
+    "<li>Shake for 2&times; speed boost</li>" +
+    "</ul>";
+
+  const infoWrap = document.createElement("div");
+  infoWrap.className = "hourglass-info-wrap";
+  infoWrap.appendChild(infoBtn);
+  infoWrap.appendChild(infoTip);
+
   controls.appendChild(timeDisplay);
-  controls.appendChild(muteBtn);
 
   // Assemble
   container.appendChild(wrapper);
   container.appendChild(controls);
+  container.appendChild(infoWrap);
 
   // Element references
   const currentLabel = timeDisplay.querySelector("[data-role='current']");
   const totalLabel = timeDisplay.querySelector("[data-role='total']");
 
   // Event handlers
-  const updatePlayState = () => {
-    playBtn.innerHTML = audio.paused
-      ? '<span class="rune-icon">&#9654;</span>'
-      : '<span class="rune-icon">&#10074;&#10074;</span>';
-    playBtn.setAttribute("aria-label", audio.paused ? "Play" : "Pause");
-  };
-
-  const updateMuteState = () => {
-    muteBtn.innerHTML = audio.muted
-      ? '<span class="rune-icon">&#128263;</span>'
-      : '<span class="rune-icon">&#9836;</span>';
-    muteBtn.setAttribute("aria-label", audio.muted ? "Unmute" : "Mute");
-  };
-
   const updateTime = () => {
     if (currentLabel) currentLabel.textContent = formatTime(audio.currentTime);
     scrubZone.setAttribute("aria-valuenow", String(Math.round((audio.currentTime / audio.duration) * 100) || 0));
@@ -894,36 +1406,24 @@ export const createHourglassPlayer = (container, audio) => {
     if (audio.duration && Number.isFinite(audio.duration) && particles.length === 0) {
       initParticles(audio.duration);
     }
+    // Prepare reversed audio buffer in background for reverse playback
+    prepareReverseBuffer();
   };
-
-  playBtn.addEventListener("click", () => {
-    if (audio.paused) {
-      userPaused = false;
-      audio.play().catch(() => {});
-    } else {
-      userPaused = true;
-      audio.pause();
-    }
-  });
-
-  muteBtn.addEventListener("click", () => {
-    audio.muted = !audio.muted;
-  });
 
   // Click on hourglass to toggle play (only if not rotating)
   wrapper.addEventListener("click", (e) => {
     if (e.target === scrubZone) return;
-    // Don't toggle if this was a rotation gesture
     if (wrapper.dataset.wasRotating === "true") {
       wrapper.dataset.wasRotating = "false";
       return;
     }
-    if (audio.paused) {
-      userPaused = false;
-      audio.play().catch(() => {});
-    } else {
+    const playing = !audio.paused || isPlayingReversed;
+    if (playing) {
       userPaused = true;
       audio.pause();
+      stopReversePlayback();
+    } else {
+      userPaused = false;
     }
   });
 
@@ -933,6 +1433,7 @@ export const createHourglassPlayer = (container, audio) => {
 
   const handleScrubStart = (e) => {
     if (!audio.duration || !Number.isFinite(audio.duration)) return;
+    if (isPlayingReversed) stopReversePlayback();
     isDragging = true;
     scrubStartY = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
     scrubStartProgress = progress;
@@ -947,6 +1448,7 @@ export const createHourglassPlayer = (container, audio) => {
     progress = Math.max(0, Math.min(1, scrubStartProgress + deltaProgress));
     const newTime = progress * audio.duration;
     audio.currentTime = newTime;
+    particleProgress = newTime;
     redistributeParticles(newTime);
   };
 
@@ -968,15 +1470,20 @@ export const createHourglassPlayer = (container, audio) => {
     const clientX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
     const clientY = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
 
-    // Check if pointer is near the edge (for rotation) vs center (for click)
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const distFromCenter = Math.sqrt(
-      Math.pow(clientX - centerX, 2) + Math.pow(clientY - centerY, 2)
-    );
-    const minRotationRadius = Math.min(rect.width, rect.height) * 0.25;
+    // Drag zone hit — always allow rotation
+    const fromDragZone = e.target === dragZone;
 
-    if (distFromCenter < minRotationRadius) return; // Too close to center
+    if (!fromDragZone) {
+      // Check if pointer is near the edge (for rotation) vs center (for click)
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const distFromCenter = Math.sqrt(
+        Math.pow(clientX - centerX, 2) + Math.pow(clientY - centerY, 2)
+      );
+      const minRotationRadius = Math.min(rect.width, rect.height) * 0.15;
+
+      if (distFromCenter < minRotationRadius) return; // Too close to center
+    }
 
     isRotating = true;
     rotationStartAngle = rotationAngle;
@@ -992,11 +1499,37 @@ export const createHourglassPlayer = (container, audio) => {
     const clientY = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
 
     const currentPointerAngle = getPointerAngle(clientX, clientY, rect);
-    const deltaAngle = currentPointerAngle - pointerStartAngle;
+    let deltaAngle = currentPointerAngle - pointerStartAngle;
 
-    rotationAngle = rotationStartAngle + deltaAngle;
-    targetRotation = rotationAngle; // During drag, target follows current
+    // Normalize delta to [-180, 180] to handle atan2 discontinuity at ±180°
+    if (deltaAngle > 180) deltaAngle -= 360;
+    if (deltaAngle < -180) deltaAngle += 360;
+
+    let newAngle = rotationStartAngle + deltaAngle;
+
+    // Detect shake gesture before updating angle
+    detectShake(newAngle);
+
+    // Magnetic snap detents at 0°, 90°, 180°, 270°
+    const SNAP_THRESHOLD = 6;  // degrees — zone of influence
+    const SNAP_STRENGTH = 0.35; // 0 = no pull, 1 = hard snap
+    const normalized = ((newAngle % 360) + 360) % 360;
+    const detents = [0, 90, 180, 270];
+    for (const d of detents) {
+      let dist = normalized - d;
+      if (dist > 180) dist -= 360;
+      if (dist < -180) dist += 360;
+      if (Math.abs(dist) < SNAP_THRESHOLD) {
+        newAngle -= dist * SNAP_STRENGTH;
+        break;
+      }
+    }
+
+    rotationAngle = newAngle;
     wrapper.style.transform = `rotate(${rotationAngle}deg)`;
+
+    // Rotation is an explicit playback control — override manual pause
+    userPaused = false;
   };
 
   const handleRotationEnd = () => {
@@ -1005,17 +1538,11 @@ export const createHourglassPlayer = (container, audio) => {
     isRotating = false;
     wrapper.dataset.wasRotating = "true"; // Prevent click handler
 
-    // Snap to nearest angle
-    const snappedAngle = snapToNearestAngle(rotationAngle);
-    targetRotation = snappedAngle;
+    // Reset direction tracking
+    lastRotationDirection = 0;
 
-    // Update audio based on snapped rotation
-    // We need to wait for the animation to complete, so set a small delay
-    setTimeout(() => {
-      rotationAngle = targetRotation;
-      wrapper.style.transform = `rotate(${rotationAngle}deg)`;
-      updateAudioFromRotation();
-    }, 200);
+    // No snapping - hourglass stays where released
+    // Speed continues to be calculated from rotation angle
   };
 
   wrapper.addEventListener("mousedown", handleRotationStart);
@@ -1043,27 +1570,41 @@ export const createHourglassPlayer = (container, audio) => {
   // Audio events
   audio.addEventListener("timeupdate", updateTime);
   audio.addEventListener("loadedmetadata", updateDuration);
-  audio.addEventListener("play", updatePlayState);
-  audio.addEventListener("pause", updatePlayState);
-  audio.addEventListener("volumechange", updateMuteState);
 
   // Initial state
-  updatePlayState();
-  updateMuteState();
   updateDuration();
   updateTime();
 
   // Start animation
   animationFrame = requestAnimationFrame(tick);
 
+  // Launch 3D overlay (non-blocking, SVG fallback on failure)
+  if (!prefersReducedMotion) {
+    initHourglass3D(wrapper).then((api) => {
+      if (disposed) { api?.dispose(); return; }
+      three3d = api;
+      if (three3d) {
+        frameEl.style.display = "none";
+        wrapper.insertBefore(three3d.canvas, scrubZone);
+      }
+    }).catch(() => {});
+  }
+
   // API
   return {
+    /** Current effective playback speed (-2 … 2). */
+    get speed() { return userPaused ? 0 : playbackSpeed; },
+
     /**
      * Dispose of the player and clean up resources.
      */
     dispose() {
       disposed = true;
       if (animationFrame) cancelAnimationFrame(animationFrame);
+      if (shakeDecayTimer) clearTimeout(shakeDecayTimer);
+      stopReversePlayback();
+      if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+      if (three3d) { three3d.dispose(); three3d = null; }
 
       window.removeEventListener("mousemove", handleScrubMove);
       window.removeEventListener("touchmove", handleScrubMove);
@@ -1077,9 +1618,6 @@ export const createHourglassPlayer = (container, audio) => {
 
       audio.removeEventListener("timeupdate", updateTime);
       audio.removeEventListener("loadedmetadata", updateDuration);
-      audio.removeEventListener("play", updatePlayState);
-      audio.removeEventListener("pause", updatePlayState);
-      audio.removeEventListener("volumechange", updateMuteState);
 
       if (wrapper.parentNode) {
         wrapper.parentNode.removeChild(wrapper);

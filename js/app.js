@@ -12,6 +12,9 @@ import {
   revealState,
   getNeighbors,
   buildStateNeighborMap,
+  explorationTrails,
+  explorationOrder,
+  addTrail,
 } from "./fog.js";
 
 const svgNS = "http://www.w3.org/2000/svg";
@@ -32,6 +35,10 @@ const answerBtn2 = document.getElementById("answer-btn-2");
 const infoButton = document.getElementById("info-button");
 const creditsModal = document.getElementById("credits-modal");
 const creditsClose = document.getElementById("credits-close");
+const characterSelect = document.getElementById("character-select");
+const characterConfirm = document.getElementById("character-confirm");
+const characterCards = document.querySelectorAll(".character-card[data-character]");
+const creditsChangeCharacter = document.getElementById("credits-change-character");
 const stateCanvas = document.getElementById("state-3d-canvas");
 const sigilCanvas = document.getElementById("sigil-3d-canvas");
 const threeStack = document.getElementById("state-3d-stack");
@@ -98,6 +105,7 @@ let sigilInertiaY = 0;
 let activeThreeView = "state";
 let questionTimeout = null;
 let bgTextureCache = new Map();
+let selectedCharacter = null;
 
 const stateTextureFiles = [
   "assets/textures/VISUALWORKS1 6.png",
@@ -1385,7 +1393,6 @@ const buildStateMesh = (stateId, THREE) => {
       color: 0xbdff00,
       transparent: true,
       opacity: 0.85,
-      depthTest: false,
     });
     terrainGroup = new THREE.Group();
     terrainGroup.frustumCulled = false;
@@ -1454,6 +1461,41 @@ const buildStateMesh = (stateId, THREE) => {
     terrainHeights = new Float32Array(terrainData.length).fill(terrainBaseHeight);
     mesh.add(terrainGroup);
   }
+  // Easter egg: track info on the back face
+  const trackId = trackByState.get(String(stateId));
+  const track = trackId ? trackById.get(trackId) : null;
+  if (track && scaledBounds) {
+    const parts = track.title.split(" - ");
+    const artist = parts[0] || "";
+    const title = parts.slice(1).join(" - ") || track.title;
+    const cvs = document.createElement("canvas");
+    cvs.width = 512;
+    cvs.height = 256;
+    const ctx = cvs.getContext("2d");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, cvs.width, cvs.height);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#bdff00";
+    ctx.font = "bold 36px monospace";
+    ctx.fillText(title, cvs.width / 2, 110, cvs.width - 40);
+    ctx.fillStyle = "rgba(189,255,0,0.5)";
+    ctx.font = "24px monospace";
+    ctx.fillText(artist, cvs.width / 2, 155, cvs.width - 40);
+    const tex = new THREE.CanvasTexture(cvs);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const sX = scaledBounds.max.x - scaledBounds.min.x;
+    const sY = scaledBounds.max.y - scaledBounds.min.y;
+    const planeW = Math.min(sX, sY) * 0.7;
+    const planeH = planeW * 0.5;
+    const backPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(planeW, planeH),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.FrontSide })
+    );
+    backPlane.rotation.y = Math.PI;
+    backPlane.position.z = scaledBounds.min.z - 0.02;
+    mesh.add(backPlane);
+  }
+
   mesh.rotation.x = -0.85;
   mesh.rotation.y = 0.55;
   mesh.userData = {
@@ -1479,7 +1521,8 @@ const startThreeRender = () => {
   const renderLoop = () => {
     if (!threeApi) return;
     if (threeApi.mesh && !isThreeDragging) {
-      threeApi.mesh.rotation.z += 0.002;
+      const speed = hourglassPlayer ? hourglassPlayer.speed : 1;
+      threeApi.mesh.rotation.z += 0.002 * speed;
       const inertia = applyInertiaRotation(
         threeApi.mesh,
         stateInertiaX,
@@ -2040,14 +2083,21 @@ const showQuestionModal = (stateId) => {
   // Append question to existing info panel content
   if (!infoContent) return;
   
+  const characterSrc = selectedCharacter ? CHARACTER_SVG_MAP[selectedCharacter] : "";
+  const characterLabel = selectedCharacter ? selectedCharacter.replace("-", " ") : "";
   const questionMarkup = `
     <div class="question-container">
       <div class="question-prompt">
         <p class="question-text">Which direction do you explore?</p>
       </div>
-      <div class="question-answers">
-        <button class="answer-btn" data-answer="${option1}" type="button">Explore territory ${option1}</button>
-        <button class="answer-btn" data-answer="${option2}" type="button">Explore territory ${option2}</button>
+      <div class="character-dialog">
+        ${characterSrc ? `<img class="character-dialog-avatar" src="${characterSrc}" alt="${characterLabel}" />` : ""}
+        <div class="character-dialog-bubble">
+          <div class="question-answers">
+            <button class="answer-btn" data-answer="${option1}" type="button">Explore territory ${option1}</button>
+            <button class="answer-btn" data-answer="${option2}" type="button">Explore territory ${option2}</button>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -2059,7 +2109,30 @@ const showQuestionModal = (stateId) => {
   answerButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       const answer = btn.dataset.answer;
-      if (answer) handleAnswer(answer, stateId);
+      if (!answer) return;
+      // Disable all buttons immediately
+      answerButtons.forEach((b) => { b.disabled = true; });
+      // Animate: keep selected, dismiss the other
+      btn.classList.add("answer-btn--selected");
+      answerButtons.forEach((b) => {
+        if (b !== btn) b.classList.add("answer-btn--dismissed");
+      });
+      setTimeout(() => {
+        handleAnswer(answer, stateId);
+        const container = infoContent?.querySelector('.question-container');
+        if (container) {
+          const continueBtn = document.createElement('button');
+          continueBtn.className = 'answer-btn answer-btn--continue';
+          continueBtn.type = 'button';
+          continueBtn.textContent = 'Continue exploring';
+          continueBtn.addEventListener('click', () => {
+            clearSelection();
+            // Draw trail after map is visible so user sees the line animate
+            setTimeout(() => drawTrailSegment(stateId, answer), 300);
+          });
+          container.appendChild(continueBtn);
+        }
+      }, 420);
     });
   });
 };
@@ -2130,13 +2203,200 @@ const hideCreditsModal = () => {
   }
 };
 
+const CHARACTER_STORAGE_KEY = "ataraxie-character";
+const CHARACTER_SVG_MAP = {
+  demon: "assets/characters/demon.svg",
+  succube: "assets/characters/succube.svg",
+  gargoyle: "assets/characters/gargoyle.svg",
+};
+
+const showCharacterSelect = () => {
+  if (characterSelect) {
+    characterCards.forEach((c) => c.classList.remove("is-selected"));
+    if (characterConfirm) characterConfirm.hidden = true;
+    characterSelect.setAttribute("aria-hidden", "false");
+  }
+};
+
+const hideCharacterSelect = () => {
+  if (characterSelect) {
+    characterSelect.setAttribute("aria-hidden", "true");
+  }
+};
+
+const updateCharacterAvatar = () => {};
+
+const waitForCharacterSelection = () =>
+  new Promise((resolve) => {
+    showCharacterSelect();
+
+    const selectCard = (card) => {
+      characterCards.forEach((c) => c.classList.remove("is-selected"));
+      card.classList.add("is-selected");
+      if (characterConfirm) characterConfirm.hidden = false;
+    };
+
+    const handleCardClick = (e) => {
+      const card = e.currentTarget;
+      selectCard(card);
+    };
+
+    const handleConfirm = () => {
+      const selected = document.querySelector(".character-card.is-selected");
+      if (!selected) return;
+      const character = selected.dataset.character;
+      selectedCharacter = character;
+      localStorage.setItem(CHARACTER_STORAGE_KEY, character);
+      cleanup();
+      hideCharacterSelect();
+      updateCharacterAvatar();
+      resolve(character);
+    };
+
+    const cleanup = () => {
+      characterCards.forEach((c) => c.removeEventListener("click", handleCardClick));
+      characterConfirm?.removeEventListener("click", handleConfirm);
+    };
+
+    characterCards.forEach((card) => card.addEventListener("click", handleCardClick));
+    characterConfirm?.addEventListener("click", handleConfirm);
+  });
+
+const getStateCenter = (stateId) => {
+  const bounds = mapApi?.getStateBounds(stateId);
+  if (!bounds) return null;
+  return {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  };
+};
+
+const getMarkerRadius = () => {
+  if (!fullViewBox) return 3;
+  return Math.min(fullViewBox.width, fullViewBox.height) * 0.005;
+};
+
+const renderTrails = () => {
+  const layer = mapApi?.getTrailLayer();
+  if (!layer) return;
+  while (layer.firstChild) layer.removeChild(layer.firstChild);
+
+  const r = getMarkerRadius();
+
+  // Draw all existing trail lines
+  explorationTrails.forEach(({ from, to }) => {
+    const fromCenter = getStateCenter(from);
+    const toCenter = getStateCenter(to);
+    if (!fromCenter || !toCenter) return;
+
+    const mid = mapApi.getSharedBorderMidpoint(from, to);
+    let d;
+    if (mid) {
+      d = `M ${fromCenter.x} ${fromCenter.y} Q ${mid.x} ${mid.y} ${toCenter.x} ${toCenter.y}`;
+    } else {
+      const mx = (fromCenter.x + toCenter.x) / 2;
+      const my = (fromCenter.y + toCenter.y) / 2;
+      const dx = toCenter.x - fromCenter.x;
+      const dy = toCenter.y - fromCenter.y;
+      const offset = Math.sqrt(dx * dx + dy * dy) * 0.15;
+      d = `M ${fromCenter.x} ${fromCenter.y} Q ${mx + -dy * offset / Math.sqrt(dx * dx + dy * dy)} ${my + dx * offset / Math.sqrt(dx * dx + dy * dy)} ${toCenter.x} ${toCenter.y}`;
+    }
+
+    const path = document.createElementNS(svgNS, "path");
+    path.setAttribute("d", d);
+    path.classList.add("trail-line");
+    layer.appendChild(path);
+  });
+
+  // Draw markers for all discovered states
+  explorationOrder.forEach((stateId, i) => {
+    const center = getStateCenter(stateId);
+    if (!center) return;
+
+    const circle = document.createElementNS(svgNS, "circle");
+    circle.setAttribute("cx", center.x);
+    circle.setAttribute("cy", center.y);
+    circle.setAttribute("r", r);
+    circle.classList.add("trail-marker");
+    if (i === 0) circle.classList.add("trail-marker--origin");
+    layer.appendChild(circle);
+  });
+};
+
+const drawTrailSegment = (fromStateId, toStateId) => {
+  const layer = mapApi?.getTrailLayer();
+  if (!layer) return;
+
+  const fromCenter = getStateCenter(fromStateId);
+  const toCenter = getStateCenter(toStateId);
+  if (!fromCenter || !toCenter) return;
+
+  const r = getMarkerRadius();
+  const mid = mapApi.getSharedBorderMidpoint(fromStateId, toStateId);
+
+  let d;
+  if (mid) {
+    d = `M ${fromCenter.x} ${fromCenter.y} Q ${mid.x} ${mid.y} ${toCenter.x} ${toCenter.y}`;
+  } else {
+    const mx = (fromCenter.x + toCenter.x) / 2;
+    const my = (fromCenter.y + toCenter.y) / 2;
+    const dx = toCenter.x - fromCenter.x;
+    const dy = toCenter.y - fromCenter.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const offset = dist * 0.15;
+    d = `M ${fromCenter.x} ${fromCenter.y} Q ${mx + (-dy * offset) / dist} ${my + (dx * offset) / dist} ${toCenter.x} ${toCenter.y}`;
+  }
+
+  const path = document.createElementNS(svgNS, "path");
+  path.setAttribute("d", d);
+  path.classList.add("trail-line");
+  layer.appendChild(path);
+
+  // Animate the line drawing in
+  if (!prefersReducedMotion) {
+    const length = path.getTotalLength();
+    path.style.strokeDasharray = `${length}`;
+    path.style.strokeDashoffset = `${length}`;
+    path.classList.add("trail-line--animating");
+    requestAnimationFrame(() => {
+      path.style.transition = "stroke-dashoffset 600ms ease";
+      path.style.strokeDashoffset = "0";
+    });
+
+    // After line animation, switch to regular dash and add marker
+    setTimeout(() => {
+      path.style.transition = "";
+      path.style.strokeDasharray = "";
+      path.style.strokeDashoffset = "";
+      path.classList.remove("trail-line--animating");
+
+      const circle = document.createElementNS(svgNS, "circle");
+      circle.setAttribute("cx", toCenter.x);
+      circle.setAttribute("cy", toCenter.y);
+      circle.setAttribute("r", r);
+      circle.classList.add("trail-marker", "trail-marker--appear");
+      layer.appendChild(circle);
+    }, 620);
+  } else {
+    const circle = document.createElementNS(svgNS, "circle");
+    circle.setAttribute("cx", toCenter.x);
+    circle.setAttribute("cy", toCenter.y);
+    circle.setAttribute("r", r);
+    circle.classList.add("trail-marker");
+    layer.appendChild(circle);
+  }
+};
+
 const handleAnswer = (revealedStateId, currentStateId) => {
   // Reveal the selected state
   revealState(revealedStateId);
-  
+
   // Mark current state as questioned
   markAsQuestioned(currentStateId);
-  
+
+  // Record exploration trail
+  addTrail(currentStateId, revealedStateId);
+
   // Update fog on map
   if (mapApi?.applyFog) {
     mapApi.applyFog(revealedStates);
@@ -2146,11 +2406,11 @@ const handleAnswer = (revealedStateId, currentStateId) => {
     textureCanvas.syncWithSvg();
   }
 
-  // Remove question container without re-rendering (to keep audio playing)
-  const questionContainer = infoContent?.querySelector('.question-container');
-  if (questionContainer) {
-    questionContainer.remove();
-  }
+  // Trail drawing is deferred until "Continue exploring" click so user sees the animation
+
+  // Remove only the dismissed answer button, keep prompt + selected answer visible
+  const dismissed = infoContent?.querySelectorAll('.answer-btn--dismissed');
+  if (dismissed) dismissed.forEach((el) => el.remove());
 };
 
 const clearSelection = (options = {}) => {
@@ -2257,6 +2517,7 @@ const init = async () => {
       textureCanvas.render(revealedStates, fullViewBox);
     }
     
+    renderTrails();
     renderSigilLayer();
     renderInfo(null);
 
@@ -2265,6 +2526,15 @@ const init = async () => {
       await mapApi.preloadSnapshots({ onProgress: updateLoadingProgress });
     }
     setLoading(false);
+
+    // Character selection: check localStorage or prompt user
+    const storedCharacter = localStorage.getItem(CHARACTER_STORAGE_KEY);
+    if (storedCharacter && CHARACTER_SVG_MAP[storedCharacter]) {
+      selectedCharacter = storedCharacter;
+      updateCharacterAvatar();
+    } else {
+      await waitForCharacterSelection();
+    }
 
     const initialState = new URLSearchParams(window.location.search).get("state");
     if (initialState) {
@@ -2377,6 +2647,13 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && creditsModal?.getAttribute("aria-hidden") === "false") {
     hideCreditsModal();
   }
+});
+
+creditsChangeCharacter?.addEventListener("click", () => {
+  hideCreditsModal();
+  localStorage.removeItem(CHARACTER_STORAGE_KEY);
+  selectedCharacter = null;
+  waitForCharacterSelection();
 });
 
 init();

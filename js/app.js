@@ -1464,6 +1464,8 @@ const buildStateMesh = (stateId, THREE) => {
   // Easter egg: track info on the back face
   const trackId = trackByState.get(String(stateId));
   const track = trackId ? trackById.get(trackId) : null;
+  let versoBackPlane = null;
+  let versoLinks = [];
   if (track && scaledBounds) {
     const parts = track.title.split(" - ");
     const artist = parts[0] || "";
@@ -1475,12 +1477,82 @@ const buildStateMesh = (stateId, THREE) => {
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, cvs.width, cvs.height);
     ctx.textAlign = "center";
-    ctx.fillStyle = "#bdff00";
-    ctx.font = "bold 36px monospace";
+    ctx.fillStyle = "#e8ffb2";
+    ctx.font = '36px "Sinistre Regular", "Trebuchet MS", "Gill Sans", sans-serif';
+    ctx.letterSpacing = "4px";
     ctx.fillText(title, cvs.width / 2, 110, cvs.width - 40);
-    ctx.fillStyle = "rgba(189,255,0,0.5)";
-    ctx.font = "24px monospace";
-    ctx.fillText(artist, cvs.width / 2, 155, cvs.width - 40);
+    ctx.fillStyle = "rgba(189,255,0,0.55)";
+    ctx.font = '24px "Sinistre Regular", "Trebuchet MS", "Gill Sans", sans-serif';
+    ctx.letterSpacing = "6px";
+    ctx.fillText(artist.toUpperCase(), cvs.width / 2, 160, cvs.width - 40);
+    // Draw Bandcamp & Instagram icons below artist text
+    const iconSize = 32;
+    const iconY = 200;
+    const iconColor = "#e8ffb2";
+    const iconLinks = [];
+    if (track.bandcamp) {
+      const bx = cvs.width / 2 - 56;
+      ctx.save();
+      ctx.fillStyle = iconColor;
+      ctx.beginPath();
+      // Bandcamp parallelogram icon
+      ctx.moveTo(bx, iconY);
+      ctx.lineTo(bx + iconSize * 0.6, iconY);
+      ctx.lineTo(bx + iconSize, iconY + iconSize);
+      ctx.lineTo(bx + iconSize * 0.4, iconY + iconSize);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      iconLinks.push({
+        uMin: bx / cvs.width,
+        uMax: (bx + iconSize) / cvs.width,
+        vMin: 1 - (iconY + iconSize) / cvs.height,
+        vMax: 1 - iconY / cvs.height,
+        url: track.bandcamp,
+      });
+    }
+    if (track.instagram) {
+      const ix = cvs.width / 2 + 24;
+      ctx.save();
+      ctx.strokeStyle = iconColor;
+      ctx.fillStyle = iconColor;
+      const cx = ix + iconSize / 2;
+      const cy = iconY + iconSize / 2;
+      const s = iconSize;
+      // Outer rounded rectangle — generous radius like the real logo (~35% of size)
+      const outerR = s * 0.32;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(ix + outerR, iconY);
+      ctx.lineTo(ix + s - outerR, iconY);
+      ctx.arcTo(ix + s, iconY, ix + s, iconY + outerR, outerR);
+      ctx.lineTo(ix + s, iconY + s - outerR);
+      ctx.arcTo(ix + s, iconY + s, ix + s - outerR, iconY + s, outerR);
+      ctx.lineTo(ix + outerR, iconY + s);
+      ctx.arcTo(ix, iconY + s, ix, iconY + s - outerR, outerR);
+      ctx.lineTo(ix, iconY + outerR);
+      ctx.arcTo(ix, iconY, ix + outerR, iconY, outerR);
+      ctx.closePath();
+      ctx.stroke();
+      // Lens circle — radius ~33% of icon
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.28, 0, Math.PI * 2);
+      ctx.stroke();
+      // Flash dot — top-right, small filled circle
+      ctx.beginPath();
+      ctx.arc(ix + s * 0.76, iconY + s * 0.24, s * 0.065, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      iconLinks.push({
+        uMin: ix / cvs.width,
+        uMax: (ix + iconSize) / cvs.width,
+        vMin: 1 - (iconY + iconSize) / cvs.height,
+        vMax: 1 - iconY / cvs.height,
+        url: track.instagram,
+      });
+    }
+    versoLinks = iconLinks;
     const tex = new THREE.CanvasTexture(cvs);
     tex.colorSpace = THREE.SRGBColorSpace;
     const sX = scaledBounds.max.x - scaledBounds.min.x;
@@ -1494,6 +1566,7 @@ const buildStateMesh = (stateId, THREE) => {
     backPlane.rotation.y = Math.PI;
     backPlane.position.z = scaledBounds.min.z - 0.02;
     mesh.add(backPlane);
+    versoBackPlane = backPlane;
   }
 
   mesh.rotation.x = -0.85;
@@ -1512,6 +1585,8 @@ const buildStateMesh = (stateId, THREE) => {
     sideMaterial,
     baseScale: mesh.scale.clone(),
     depthRatio,
+    backPlane: versoBackPlane,
+    versoLinks,
   };
   return mesh;
 };
@@ -1688,12 +1763,40 @@ const hideSigil3D = () => {
   stopSigilRender();
 };
 
+let pointerStartX = 0;
+let pointerStartY = 0;
+let pointerTotalDisplacement = 0;
+
+const raycastVersoLinks = (event) => {
+  if (!threeApi?.mesh?.userData?.backPlane || !threeApi.mesh.userData.versoLinks?.length) return null;
+  const rect = stateCanvas.getBoundingClientRect();
+  const mouse = new threeApi.THREE.Vector2(
+    ((event.clientX - rect.left) / rect.width) * 2 - 1,
+    -((event.clientY - rect.top) / rect.height) * 2 + 1
+  );
+  const raycaster = new threeApi.THREE.Raycaster();
+  raycaster.setFromCamera(mouse, threeApi.camera);
+  const hits = raycaster.intersectObject(threeApi.mesh.userData.backPlane, false);
+  if (!hits.length || !hits[0].uv) return null;
+  const u = hits[0].uv.x;
+  const v = hits[0].uv.y;
+  for (const link of threeApi.mesh.userData.versoLinks) {
+    if (u >= link.uMin && u <= link.uMax && v >= link.vMin && v <= link.vMax) {
+      return link;
+    }
+  }
+  return null;
+};
+
 const handleThreePointerDown = (event) => {
   if (!stateCanvas || !mapPane?.classList.contains("is-3d")) return;
   if (activePointerId !== null) return;
   activePointerId = event.pointerId;
   lastPointerX = event.clientX;
   lastPointerY = event.clientY;
+  pointerStartX = event.clientX;
+  pointerStartY = event.clientY;
+  pointerTotalDisplacement = 0;
   isThreeDragging = true;
   stateInertiaX = 0;
   stateInertiaY = 0;
@@ -1702,9 +1805,16 @@ const handleThreePointerDown = (event) => {
 
 const handleThreePointerMove = (event) => {
   if (!threeApi?.mesh) return;
+  // Cursor feedback when not dragging
+  if (activePointerId === null && stateCanvas) {
+    const link = raycastVersoLinks(event);
+    stateCanvas.style.cursor = link ? "pointer" : "grab";
+    return;
+  }
   if (activePointerId !== event.pointerId) return;
   const deltaX = event.clientX - lastPointerX;
   const deltaY = event.clientY - lastPointerY;
+  pointerTotalDisplacement += Math.abs(deltaX) + Math.abs(deltaY);
   lastPointerX = event.clientX;
   lastPointerY = event.clientY;
   const speed = 0.004;
@@ -1718,9 +1828,16 @@ const handleThreePointerMove = (event) => {
 
 const handleThreePointerUp = (event) => {
   if (activePointerId !== event.pointerId) return;
+  const wasClick = pointerTotalDisplacement < 5;
   activePointerId = null;
   isThreeDragging = false;
   stateCanvas?.releasePointerCapture?.(event.pointerId);
+  if (wasClick && threeApi?.mesh) {
+    const link = raycastVersoLinks(event);
+    if (link) {
+      window.open(link.url, "_blank", "noopener,noreferrer");
+    }
+  }
 };
 
 const handleSigilPointerDown = (event) => {
@@ -1939,14 +2056,23 @@ const renderInfo = (stateId) => {
   const count = stateCounts.get(String(stateId)) ?? 0;
   const trackId = trackByState.get(String(stateId));
   const track = trackId ? trackById.get(trackId) : null;
-  const trackMarkup = track
-    ? `<div class="track-card">
-        <div class="track-label">Now playing</div>
-        <div class="track-title">${track.title}</div>
+  let trackMarkup;
+  if (track) {
+    const parts = track.title.split(" - ");
+    const artist = parts[0] || "";
+    const title = parts.slice(1).join(" - ") || track.title;
+    trackMarkup = `<div class="track-shrine">
+        <div class="shrine-glow"></div>
         <div class="hourglass-player" data-track-player></div>
         <audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>
-      </div>`
-    : '<div class="track-card is-empty">No track assigned.</div>';
+        <div class="shrine-meta">
+          <div class="shrine-title">${title}</div>
+          <div class="shrine-artist">${artist}</div>
+        </div>
+      </div>`;
+  } else {
+    trackMarkup = '<div class="track-shrine is-empty"><span class="shrine-artist">No track assigned.</span></div>';
+  }
   infoContent.innerHTML = trackMarkup;
   const audio = infoContent.querySelector(".track-audio");
   if (audio instanceof HTMLAudioElement) {
@@ -2352,31 +2478,18 @@ const drawTrailSegment = (fromStateId, toStateId) => {
   path.classList.add("trail-line");
   layer.appendChild(path);
 
-  // Animate the line drawing in
+  // Animate the line and marker appearing
   if (!prefersReducedMotion) {
-    const length = path.getTotalLength();
-    path.style.strokeDasharray = `${length}`;
-    path.style.strokeDashoffset = `${length}`;
-    path.classList.add("trail-line--animating");
-    requestAnimationFrame(() => {
-      path.style.transition = "stroke-dashoffset 600ms ease";
-      path.style.strokeDashoffset = "0";
-    });
+    path.classList.add("trail-line--appear");
 
-    // After line animation, switch to regular dash and add marker
     setTimeout(() => {
-      path.style.transition = "";
-      path.style.strokeDasharray = "";
-      path.style.strokeDashoffset = "";
-      path.classList.remove("trail-line--animating");
-
       const circle = document.createElementNS(svgNS, "circle");
       circle.setAttribute("cx", toCenter.x);
       circle.setAttribute("cy", toCenter.y);
       circle.setAttribute("r", r);
       circle.classList.add("trail-marker", "trail-marker--appear");
       layer.appendChild(circle);
-    }, 620);
+    }, 800);
   } else {
     const circle = document.createElementNS(svgNS, "circle");
     circle.setAttribute("cx", toCenter.x);

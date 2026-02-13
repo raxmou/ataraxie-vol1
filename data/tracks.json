@@ -3,57 +3,79 @@
     {
       "id": "anta-doma-shapes-premaster",
       "title": "Anta Doma - Shapes (Premaster)",
-      "file": "assets/music/Anta Doma - Shapes.mp3"
+      "file": "assets/music/Anta Doma - Shapes.mp3",
+      "bandcamp": "https://antadoma.bandcamp.com",
+      "instagram": "https://instagram.com/antadoma"
     },
     {
       "id": "aquacrypt-unknown",
       "title": "Aquacrypt - UNKNOWN",
-      "file": "assets/music/Aquacrypt - UNKNOWN.mp3"
+      "file": "assets/music/Aquacrypt - UNKNOWN.mp3",
+      "bandcamp": "https://aquacrypt.bandcamp.com",
+      "instagram": "https://instagram.com/aquacrypt"
     },
     {
       "id": "damna-3cso",
       "title": "Damna - 3CsO",
-      "file": "assets/music/Damna - 3CsO.mp3"
+      "file": "assets/music/Damna - 3CsO.mp3",
+      "bandcamp": "https://damna.bandcamp.com",
+      "instagram": "https://instagram.com/damna"
     },
     {
       "id": "drawbridge-khey-mysterio-psylmodie",
       "title": "Drawbridge & Khey Mysterio - Psylmodie",
-      "file": "assets/music/Drawbridge & Khey Mysterio - Psylmodie.mp3"
+      "file": "assets/music/Drawbridge & Khey Mysterio - Psylmodie.mp3",
+      "bandcamp": "https://drawbridge.bandcamp.com",
+      "instagram": "https://instagram.com/drawbridge"
     },
     {
       "id": "gustave-retour-le-pi-ge",
       "title": "Gustave Retour - Le pi\u00e8ge",
-      "file": "assets/music/Gustave Retour - Le Piège.mp3"
+      "file": "assets/music/Gustave Retour - Le Pi\u00e8ge.mp3",
+      "bandcamp": "https://gustaveretour.bandcamp.com",
+      "instagram": "https://instagram.com/gustaveretour"
     },
     {
       "id": "naeja-may-the-world-ends-with-you",
       "title": "Naeja - May The World Ends (With You)",
-      "file": "assets/music/Naeja - May the World End (With You).mp3"
+      "file": "assets/music/Naeja - May the World End (With You).mp3",
+      "bandcamp": "https://naeja.bandcamp.com",
+      "instagram": "https://instagram.com/naeja"
     },
     {
       "id": "nostromodamus-another-presence-master-reference-v2",
       "title": "Nostromodamus - Another Presence (MASTER REFERENCE V2)",
-      "file": "assets/music/Nostromodamus - Another Presence.mp3"
+      "file": "assets/music/Nostromodamus - Another Presence.mp3",
+      "bandcamp": "https://nostromodamus.bandcamp.com",
+      "instagram": "https://instagram.com/nostromodamus"
     },
     {
       "id": "smogo-obliteration-premaster-24bit-44-1khz",
       "title": "Smogo - Obliteration (Premaster - 24bit 44.1khz)",
-      "file": "assets/music/Smogo - Obliteration.mp3"
+      "file": "assets/music/Smogo - Obliteration.mp3",
+      "bandcamp": "https://smogo.bandcamp.com",
+      "instagram": "https://instagram.com/smogo"
     },
     {
       "id": "zero-crossing-point-half-past-six-mix-24b-v2",
       "title": "Zero Crossing Point - Half Past Six (Mix 24b V2)",
-      "file": "assets/music/Zero Crossing Point - Half Past Six.mp3"
+      "file": "assets/music/Zero Crossing Point - Half Past Six.mp3",
+      "bandcamp": "https://zerocrossingpoint.bandcamp.com",
+      "instagram": "https://instagram.com/zerocrossingpoint"
     },
     {
       "id": "acideplastique-vectorial-soil",
       "title": "acideplastique - Vectorial Soil",
-      "file": "assets/music/Acideplastique - Vectorial Soil.mp3"
+      "file": "assets/music/Acideplastique - Vectorial Soil.mp3",
+      "bandcamp": "https://acideplastique.bandcamp.com",
+      "instagram": "https://instagram.com/acideplastique"
     },
     {
       "id": "le-frit-streetview-belly-slide-mixdown",
       "title": "le frit - streetview belly slide (mixdown)",
-      "file": "assets/music/le frit - streetview belly slide.mp3"
+      "file": "assets/music/le frit - streetview belly slide.mp3",
+      "bandcamp": "https://lefrit.bandcamp.com",
+      "instagram": "https://instagram.com/lefrit"
     }
   ],
   "states": {

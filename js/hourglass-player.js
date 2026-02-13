@@ -401,8 +401,6 @@ export const createHourglassPlayer = (container, audio) => {
   canvas.className = "hourglass-canvas";
   canvas.width = WIDTH * 2; // 2x for retina
   canvas.height = HEIGHT * 2;
-  canvas.style.width = `${WIDTH}px`;
-  canvas.style.height = `${HEIGHT}px`;
 
   const ctx = canvas.getContext("2d");
 
@@ -1302,8 +1300,6 @@ export const createHourglassPlayer = (container, audio) => {
         const t = getReverseForwardTime();
         particleProgress = t;
         progress = t / duration;
-        // Update time display (timeupdate doesn't fire when HTML5 audio is paused)
-        if (currentLabel) currentLabel.textContent = formatTime(t);
       } else {
         // Forward: sync with HTML5 audio
         const currentTime = audio.currentTime || 0;
@@ -1353,55 +1349,15 @@ export const createHourglassPlayer = (container, audio) => {
   scrubZone.tabIndex = 0;
   wrapper.appendChild(scrubZone);
 
-  // Controls
-  const controls = document.createElement("div");
-  controls.className = "hourglass-controls";
-
-  const timeDisplay = document.createElement("div");
-  timeDisplay.className = "hourglass-time";
-  timeDisplay.innerHTML = `<span data-role="current">--:--</span> / <span data-role="total">--:--</span>`;
-
-  const infoBtn = document.createElement("button");
-  infoBtn.className = "hourglass-rune hourglass-info-btn";
-  infoBtn.type = "button";
-  infoBtn.setAttribute("aria-label", "Usage info");
-  infoBtn.innerHTML = '<span class="rune-icon">?</span>';
-
-  const infoTip = document.createElement("div");
-  infoTip.className = "hourglass-info-tip";
-  infoTip.innerHTML =
-    "<ul>" +
-    "<li>Click hourglass to play / pause</li>" +
-    "<li>Drag edge to rotate &mdash; controls speed &amp; direction</li>" +
-    "<li>Flip upside down for reverse playback</li>" +
-    "<li>Drag center to scrub</li>" +
-    "<li>Shake for 2&times; speed boost</li>" +
-    "</ul>";
-
-  const infoWrap = document.createElement("div");
-  infoWrap.className = "hourglass-info-wrap";
-  infoWrap.appendChild(infoBtn);
-  infoWrap.appendChild(infoTip);
-
-  controls.appendChild(timeDisplay);
-
   // Assemble
   container.appendChild(wrapper);
-  container.appendChild(controls);
-  container.appendChild(infoWrap);
-
-  // Element references
-  const currentLabel = timeDisplay.querySelector("[data-role='current']");
-  const totalLabel = timeDisplay.querySelector("[data-role='total']");
 
   // Event handlers
   const updateTime = () => {
-    if (currentLabel) currentLabel.textContent = formatTime(audio.currentTime);
     scrubZone.setAttribute("aria-valuenow", String(Math.round((audio.currentTime / audio.duration) * 100) || 0));
   };
 
   const updateDuration = () => {
-    if (totalLabel) totalLabel.textContent = formatTime(audio.duration);
     // Initialize particles when duration is known
     if (audio.duration && Number.isFinite(audio.duration) && particles.length === 0) {
       initParticles(audio.duration);
@@ -1621,9 +1577,6 @@ export const createHourglassPlayer = (container, audio) => {
 
       if (wrapper.parentNode) {
         wrapper.parentNode.removeChild(wrapper);
-      }
-      if (controls.parentNode) {
-        controls.parentNode.removeChild(controls);
       }
     },
   };

@@ -613,6 +613,8 @@ body::before {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
+  display: flex;
+  flex-direction: column;
 }
 
 .info-header {
@@ -620,8 +622,16 @@ body::before {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  margin-bottom: 18px;
-  padding-bottom: 18px;
+  margin-bottom: 0;
+  padding-bottom: 0;
+  flex-shrink: 0;
+}
+
+#state-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .panel-title {
@@ -634,9 +644,7 @@ body::before {
 
 .loading-title,
 .panel-title,
-.info-title,
-.track-label,
-.track-title {
+.info-title {
   font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
 }
 
@@ -906,14 +914,64 @@ body::before {
   }
 }
 
-.track-card {
+/* ── Track shrine (hourglass hero layout) ── */
+
+.track-shrine {
   position: relative;
-  margin-top: 18px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(189, 255, 0, 0.35);
-  background: rgba(8, 12, 6, 0.75);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   color: var(--text-color);
+}
+
+.track-shrine.is-empty {
+  color: var(--muted-text);
+}
+
+.shrine-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 400px;
+  height: 400px;
+  transform: translate(-50%, -55%);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(189, 255, 0, 0.06) 0%,
+    rgba(189, 255, 0, 0.03) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  animation: shrine-pulse 6s ease-in-out infinite;
+}
+
+@keyframes shrine-pulse {
+  0%, 100% { opacity: 0.7; transform: translate(-50%, -55%) scale(1); }
+  50%      { opacity: 1;   transform: translate(-50%, -55%) scale(1.08); }
+}
+
+.shrine-meta {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.shrine-title {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 1.1rem;
+  letter-spacing: 0.14em;
+  color: #e8ffb2;
+  margin-bottom: 6px;
+}
+
+.shrine-artist {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(189, 255, 0, 0.55);
 }
 
 .sigil-card {
@@ -933,23 +991,6 @@ body::before {
   filter: drop-shadow(0 10px 20px rgba(6, 8, 4, 0.55));
 }
 
-.track-card.is-empty {
-  color: var(--muted-text);
-  border-color: rgba(184, 217, 130, 0.2);
-}
-
-.track-label {
-  font-size: 0.72rem;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: #bdff00;
-  margin-bottom: 6px;
-}
-
-.track-title {
-  font-size: 1rem;
-  margin-bottom: 10px;
-}
 
 .track-player {
   display: grid;
@@ -1055,6 +1096,8 @@ body::before {
     height: 40vh;
     padding: 20px;
     transform: translateY(0);
+    display: flex;
+    flex-direction: column;
   }
 
   .character-dialog-avatar {
@@ -1127,41 +1170,51 @@ body::before {
 }
 
 .trail-line {
-  stroke: rgba(189, 255, 0, 0.5);
-  stroke-width: 3px;
-  stroke-dasharray: 8 5;
+  stroke: rgba(189, 255, 0, 0.7);
+  stroke-width: 4px;
+  stroke-dasharray: 10 6;
   stroke-linecap: round;
   fill: none;
   vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px rgba(189, 255, 0, 0.3));
 }
 
-.trail-line--animating {
-  stroke-dasharray: none;
+.trail-line--appear {
+  animation: trail-line-in 1000ms ease both;
+}
+
+@keyframes trail-line-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
 }
 
 .trail-marker {
   fill: #bdff00;
   stroke: rgba(8, 12, 6, 0.8);
-  stroke-width: 0.8px;
+  stroke-width: 1px;
   opacity: 0.9;
   vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 3px rgba(189, 255, 0, 0.4));
 }
 
 .trail-marker--origin {
   fill: #e8ffb2;
   stroke: #bdff00;
-  stroke-width: 1.2px;
-  filter: drop-shadow(0 0 3px rgba(189, 255, 0, 0.6));
+  stroke-width: 1.4px;
+  filter: drop-shadow(0 0 5px rgba(189, 255, 0, 0.7));
 }
 
 .trail-marker--appear {
-  animation: trail-marker-in 400ms ease both;
+  animation: trail-marker-in 700ms ease both;
 }
 
 @keyframes trail-marker-in {
   0% {
     opacity: 0;
     r: 0;
+  }
+  60% {
+    opacity: 1;
   }
   100% {
     opacity: 0.9;
@@ -1384,14 +1437,16 @@ body::before {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: 16px;
+  padding: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .hourglass-container {
   position: relative;
-  width: 100px;
-  height: 160px;
+  width: 240px;
+  height: 384px;
   cursor: pointer;
 }
 
@@ -1487,156 +1542,20 @@ body::before {
   border-radius: 4px;
 }
 
-.hourglass-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.hourglass-rune {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 2px solid rgba(189, 255, 0, 0.5);
-  background: rgba(8, 12, 6, 0.9);
-  color: #bdff00;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  font-size: 0.8rem;
-}
-
-.hourglass-rune:hover {
-  border-color: #bdff00;
-  box-shadow: 0 0 12px rgba(189, 255, 0, 0.4);
-  transform: scale(1.05);
-}
-
-.hourglass-rune:focus-visible {
-  outline: 2px solid rgba(189, 255, 0, 0.9);
-  outline-offset: 2px;
-}
-
-.hourglass-rune:active {
-  transform: scale(0.95);
-}
-
-.rune-icon {
-  font-family: "Segoe UI Symbol", "Apple Color Emoji", sans-serif;
-  line-height: 1;
-}
-
-.hourglass-time {
-  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
-  color: #e8ffb2;
-  min-width: 90px;
-  text-align: center;
-}
-
-.hourglass-info-wrap {
-  position: absolute;
-  top: 14px;
-  right: 16px;
-}
-
-.hourglass-info-btn {
-  width: auto;
-  height: auto;
-  padding: 0;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  border: none;
-  background: transparent;
-  box-shadow: none;
-}
-
-.hourglass-info-btn:hover {
-  border: none;
-  box-shadow: none;
-  background: transparent;
-}
-
-.hourglass-info-tip {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  width: max-content;
-  max-width: 240px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid rgba(189, 255, 0, 0.35);
-  background: rgba(8, 12, 6, 0.95);
-  color: #b8d982;
-  font-size: 0.72rem;
-  line-height: 1.55;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  z-index: 10;
-}
-
-.hourglass-info-tip ul {
-  margin: 0;
-  padding: 0 0 0 14px;
-  list-style: disc;
-}
-
-.hourglass-info-tip li {
-  margin-bottom: 3px;
-}
-
-.hourglass-info-tip li:last-child {
-  margin-bottom: 0;
-}
-
-.hourglass-info-wrap:hover .hourglass-info-tip {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
 
 @media (max-width: 900px) {
   .hourglass-container {
-    width: 80px;
-    height: 128px;
-  }
-
-  .hourglass-canvas {
-    width: 80px !important;
-    height: 128px !important;
+    width: 160px;
+    height: 256px;
   }
 
   .hourglass-3d {
-    width: 80px !important;
-    height: 128px !important;
+    width: 160px !important;
+    height: 256px !important;
   }
 
-  .hourglass-rune {
-    width: 32px;
-    height: 32px;
-    font-size: 0.7rem;
-  }
-
-  .hourglass-info-btn {
-    width: 20px;
-    height: 20px;
-    font-size: 0.55rem;
-  }
-
-  .hourglass-time {
-    font-size: 0.65rem;
-    min-width: 80px;
-  }
-
-  .hourglass-info-tip {
-    max-width: 200px;
-    font-size: 0.65rem;
+  .shrine-glow {
+    width: 280px;
+    height: 280px;
   }
 }

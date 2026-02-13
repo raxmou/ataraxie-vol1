@@ -89,6 +89,8 @@ let audioAnimationFrame = null;
 let audioSource = null;
 let audioElement = null;
 let audioTime = 0;
+let ambientAnimationFrame = null;
+let ambientTime = 0;
 let hourglassPlayer = null;
 let isThreeDragging = false;
 let activePointerId = null;
@@ -335,6 +337,7 @@ const resetMeshPulse = () => {
     terrainTopZ,
     terrainBaseHeight,
     terrainHeights,
+    terrainEnergy,
   } = threeApi.mesh.userData || {};
   if (edgeMaterial && edgeBaseColor) {
     edgeMaterial.color.copy(edgeBaseColor);
@@ -344,7 +347,7 @@ const resetMeshPulse = () => {
     edgePositionAttr.array.set(edgeBasePositions);
     edgePositionAttr.needsUpdate = true;
   }
-  if (Array.isArray(terrainData) && terrainBaseHeight !== null && terrainTopZ !== null) {
+  if (Array.isArray(terrainData) && terrainBaseHeight != null && terrainTopZ != null) {
     terrainData.forEach((cell) => {
       (cell.meshes || []).forEach((mesh) => {
         mesh.position.z = terrainTopZ;
@@ -352,6 +355,7 @@ const resetMeshPulse = () => {
       });
     });
     if (terrainHeights) terrainHeights.fill(terrainBaseHeight);
+    if (terrainEnergy) terrainEnergy.fill(0);
   }
 };
 
@@ -359,7 +363,52 @@ const stopAudioReactive = () => {
   if (audioAnimationFrame) cancelAnimationFrame(audioAnimationFrame);
   audioAnimationFrame = null;
   resetAudioVisuals();
-  resetMeshPulse();
+  startAmbientBreathing();
+};
+
+const startAmbientBreathing = () => {
+  if (ambientAnimationFrame) return;
+  const tick = () => {
+    ambientTime += 0.016;
+    const is3d = mapPane?.classList.contains("is-3d");
+    if (is3d && threeApi?.mesh) {
+      const {
+        terrainData, terrainTopZ, terrainBaseHeight,
+        terrainMaxHeight, terrainHeights, terrainNeighbors,
+      } = threeApi.mesh.userData || {};
+      if (Array.isArray(terrainData) && terrainBaseHeight != null) {
+        const rawHeights = new Float32Array(terrainData.length);
+        terrainData.forEach((cell, index) => {
+          rawHeights[index] = computeBreathingHeight(
+            cell, ambientTime, terrainBaseHeight, terrainMaxHeight
+          );
+        });
+        terrainData.forEach((cell, index) => {
+          const neighbors = terrainNeighbors ? terrainNeighbors[index] : null;
+          let nSum = 0, nCount = 0;
+          if (neighbors && neighbors.length) {
+            neighbors.forEach((ni) => { nSum += rawHeights[ni]; nCount++; });
+          }
+          const nAvg = nCount ? nSum / nCount : rawHeights[index];
+          const smoothed = rawHeights[index] * 0.7 + nAvg * 0.3;
+          const current = terrainHeights ? terrainHeights[index] : smoothed;
+          const blended = current + (smoothed - current) * 0.08;
+          if (terrainHeights) terrainHeights[index] = blended;
+          (cell.meshes || []).forEach((m) => {
+            m.position.z = terrainTopZ;
+            m.scale.z = blended;
+          });
+        });
+      }
+    }
+    ambientAnimationFrame = requestAnimationFrame(tick);
+  };
+  ambientAnimationFrame = requestAnimationFrame(tick);
+};
+
+const stopAmbientBreathing = () => {
+  if (ambientAnimationFrame) cancelAnimationFrame(ambientAnimationFrame);
+  ambientAnimationFrame = null;
 };
 
 const connectAudioAnalyser = (audio) => {
@@ -396,61 +445,77 @@ const startAudioReactive = (audio) => {
   connectAudioAnalyser(audio);
   if (!audioAnalyser || !audioData) return;
   audioTime = 0;
+  stopAmbientBreathing();
+
   const tick = () => {
     if (!audioAnalyser || !audioData) return;
     audioAnalyser.getByteFrequencyData(audioData);
     audioTime += 0.016;
+
     const totalBins = audioData.length;
     const lowEnd = Math.max(1, Math.floor(totalBins * 0.2));
     const highStart = Math.floor(totalBins * 0.7);
-    let lowSum = 0;
-    let highSum = 0;
-    for (let i = 0; i < lowEnd; i += 1) lowSum += audioData[i];
-    for (let i = highStart; i < totalBins; i += 1) highSum += audioData[i];
+    let lowSum = 0, highSum = 0;
+    for (let i = 0; i < lowEnd; i++) lowSum += audioData[i];
+    for (let i = highStart; i < totalBins; i++) highSum += audioData[i];
     const low = lowSum / (lowEnd * 255);
     const high = highSum / ((totalBins - highStart) * 255);
     const intensity = Math.min(1, (low + high) / 2);
     const stroke = 0.6 + intensity * 1.8;
     const glow = intensity * 10;
     const opacity = 0.45 + intensity * 0.5;
+
     const is3d = mapPane?.classList.contains("is-3d");
     if (is3d && threeApi?.mesh) {
       const {
-        terrainData,
-        terrainTopZ,
-        terrainBaseHeight,
-        terrainMaxHeight,
-        terrainNeighbors,
-        terrainHeights,
+        terrainData, terrainTopZ, terrainBaseHeight, terrainMaxHeight,
+        terrainNeighbors, terrainHeights, terrainEnergy,
       } = threeApi.mesh.userData || {};
-      if (Array.isArray(terrainData) && terrainBaseHeight !== null && terrainMaxHeight !== null) {
+
+      if (Array.isArray(terrainData) && terrainBaseHeight != null && terrainMaxHeight != null) {
         const maxBin = audioData.length - 1;
         const rawHeights = new Float32Array(terrainData.length);
-        const smoothFactor = 0.45;
+
+        // Pass 1: ambient breathing + Gaussian audio response per cell
         terrainData.forEach((cell, index) => {
-          const bin = Math.max(0, Math.min(maxBin, Math.floor(cell.xNorm * maxBin)));
-          const amp = audioData[bin] / 255;
-          const noise = 0.3 + 0.7 * (0.5 + 0.3 * Math.sin(cell.x * 2.2 + audioTime * 1.8) + 0.2 * Math.sin(cell.y * 1.7 + audioTime * 1.2));
-          rawHeights[index] = terrainBaseHeight + amp * terrainMaxHeight * cell.weight * noise;
+          const breathe = computeBreathingHeight(
+            cell, audioTime, terrainBaseHeight, terrainMaxHeight
+          );
+          const audioAmp = computeAudioResponse(cell, audioData, maxBin);
+          rawHeights[index] = breathe + audioAmp * terrainMaxHeight * cell.weight * 0.7;
         });
+
+        // Pass 2: wave propagation
+        if (terrainEnergy) {
+          terrainData.forEach((cell, index) => {
+            const e = rawHeights[index] - terrainBaseHeight;
+            terrainEnergy[index] = Math.max(terrainEnergy[index] * 0.85, e);
+          });
+          terrainData.forEach((cell, index) => {
+            const neighbors = terrainNeighbors ? terrainNeighbors[index] : null;
+            if (!neighbors || !neighbors.length) return;
+            let ne = 0;
+            neighbors.forEach((ni) => { ne += terrainEnergy[ni]; });
+            rawHeights[index] += (ne / neighbors.length) * 0.12;
+          });
+        }
+
+        // Pass 3: spatial smooth + per-cell attack/decay envelope
         terrainData.forEach((cell, index) => {
-          let neighborSum = 0;
-          let neighborCount = 0;
           const neighbors = terrainNeighbors ? terrainNeighbors[index] : null;
+          let nSum = 0, nCount = 0;
           if (neighbors && neighbors.length) {
-            neighbors.forEach((neighborIndex) => {
-              neighborSum += rawHeights[neighborIndex];
-              neighborCount += 1;
-            });
+            neighbors.forEach((ni) => { nSum += rawHeights[ni]; nCount++; });
           }
-          const neighborAvg = neighborCount ? neighborSum / neighborCount : rawHeights[index];
-          const smoothed = rawHeights[index] * 0.55 + neighborAvg * 0.45;
+          const nAvg = nCount ? nSum / nCount : rawHeights[index];
+          const smoothed = rawHeights[index] * 0.6 + nAvg * 0.4;
           const current = terrainHeights ? terrainHeights[index] : smoothed;
-          const blended = current + (smoothed - current) * smoothFactor;
+          const blend = smoothed > current ? cell.attackSpeed : cell.decaySpeed;
+          const blended = current + (smoothed - current) * blend;
           if (terrainHeights) terrainHeights[index] = blended;
-          (cell.meshes || []).forEach((mesh) => {
-            mesh.position.z = terrainTopZ;
-            mesh.scale.z = blended;
+          (cell.meshes || []).forEach((m) => {
+            m.position.z = terrainTopZ;
+            m.scale.z = blended;
           });
         });
       }
@@ -1281,6 +1346,70 @@ const hash2 = (x, y) => {
   return value - Math.floor(value);
 };
 
+const valueNoise2D = (x, y) => {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const fx = x - ix;
+  const fy = y - iy;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const v00 = hash2(ix, iy);
+  const v10 = hash2(ix + 1, iy);
+  const v01 = hash2(ix, iy + 1);
+  const v11 = hash2(ix + 1, iy + 1);
+  return (v00 + (v10 - v00) * sx) * (1 - sy)
+       + (v01 + (v11 - v01) * sx) * sy;
+};
+
+const fbmNoise2D = (x, y, octaves = 3) => {
+  let value = 0, amp = 0.5, freq = 1, max = 0;
+  for (let i = 0; i < octaves; i++) {
+    value += valueNoise2D(x * freq, y * freq) * amp;
+    max += amp;
+    amp *= 0.5;
+    freq *= 2.0;
+  }
+  return value / max;
+};
+
+const computeBreathingHeight = (cell, time, baseHeight, maxHeight) => {
+  const breath = fbmNoise2D(
+    cell.x * 0.8 + time * 0.12,
+    cell.y * 0.8 + time * 0.09,
+    2
+  );
+  const ripple = fbmNoise2D(
+    cell.x * 2.5 + time * 0.35,
+    cell.y * 2.5 - time * 0.28,
+    2
+  );
+  const shimmer = valueNoise2D(
+    cell.x * 6.0 + time * 0.8,
+    cell.y * 6.0 + time * 0.6
+  );
+  const envelope = 0.5 + 0.5 * Math.sin(time * 0.4 + cell.breathePhase);
+  const combined = breath * 0.6 + ripple * 0.25 + shimmer * 0.15;
+  const breatheAmp = maxHeight * 0.3 * cell.weight;
+  return baseHeight + combined * breatheAmp * (0.7 + envelope * 0.3);
+};
+
+const computeAudioResponse = (cell, audioData, maxBin) => {
+  const centerBin = cell.freqCenter * maxBin;
+  const sigma = cell.freqWidth * maxBin;
+  const sigmaSq2 = 2 * sigma * sigma;
+  const lo = Math.max(0, Math.floor(centerBin - sigma * 2));
+  const hi = Math.min(maxBin, Math.ceil(centerBin + sigma * 2));
+  let wSum = 0, wTotal = 0;
+  for (let b = lo; b <= hi; b++) {
+    const d = b - centerBin;
+    const g = Math.exp(-(d * d) / sigmaSq2);
+    wSum += (audioData[b] / 255) * g;
+    wTotal += g;
+  }
+  const amp = wTotal > 0 ? wSum / wTotal : 0;
+  return Math.pow(amp, 1.8) * cell.sensitivity;
+};
+
 const buildStateMesh = (stateId, THREE) => {
   if (!geojsonData) return null;
   const features = geojsonData.features.filter(
@@ -1382,9 +1511,11 @@ const buildStateMesh = (stateId, THREE) => {
   let terrainMaxHeight = null;
   let terrainTopZ = null;
   let terrainRangeX = null;
+  let terrainRangeY = null;
   let terrainSize = null;
   let terrainNeighbors = null;
   let terrainHeights = null;
+  let terrainEnergy = null;
   if (scaledBounds && cells.length) {
     const avgWidth = cells.reduce((sum, item) => sum + item.width, 0) / cells.length;
     const avgHeight = cells.reduce((sum, item) => sum + item.height, 0) / cells.length;
@@ -1398,7 +1529,9 @@ const buildStateMesh = (stateId, THREE) => {
     terrainGroup.frustumCulled = false;
     terrainGroup.renderOrder = 2;
     const minX = scaledBounds.min.x;
+    const minY = scaledBounds.min.y;
     terrainRangeX = scaledBounds.max.x - scaledBounds.min.x || 1;
+    terrainRangeY = scaledBounds.max.y - scaledBounds.min.y || 1;
     terrainTopZ = scaledBounds.max.z + 0.08;
     terrainBaseHeight = 0.04;
     terrainMaxHeight = 0.7;
@@ -1434,14 +1567,16 @@ const buildStateMesh = (stateId, THREE) => {
       });
       const cellIndex = terrainData.length;
       grid.get(key).push(cellIndex);
+      const freqCenter = xNorm * 0.93 + hash2(x * 3.1, y * 7.3) * 0.07;
+      const freqWidth = 0.05 + hash2(x * 5.7, y * 2.3) * 0.06;
+      const attackSpeed = 0.5 + hash2(x * 1.3, y * 4.7) * 0.4;
+      const decaySpeed = 0.08 + hash2(x * 6.1, y * 1.9) * 0.17;
+      const sensitivity = 0.8 + hash2(x * 8.3, y * 3.1) * 0.4;
+      const breathePhase = hash2(x * 2.7, y * 9.1) * Math.PI * 2;
       terrainData.push({
-        meshes,
-        x,
-        y,
-        xNorm,
-        weight,
-        gridX,
-        gridY,
+        meshes, x, y, xNorm, weight, gridX, gridY,
+        freqCenter, freqWidth,
+        attackSpeed, decaySpeed, sensitivity, breathePhase,
       });
     });
     terrainNeighbors = terrainData.map(() => []);
@@ -1459,6 +1594,7 @@ const buildStateMesh = (stateId, THREE) => {
       }
     });
     terrainHeights = new Float32Array(terrainData.length).fill(terrainBaseHeight);
+    terrainEnergy = new Float32Array(terrainData.length);
     mesh.add(terrainGroup);
   }
   // Easter egg: track info on the back face
@@ -1579,8 +1715,10 @@ const buildStateMesh = (stateId, THREE) => {
     terrainBaseHeight,
     terrainMaxHeight,
     terrainRangeX,
+    terrainRangeY,
     terrainNeighbors,
     terrainHeights,
+    terrainEnergy,
     faceMaterial,
     sideMaterial,
     baseScale: mesh.scale.clone(),
@@ -1678,6 +1816,7 @@ const showState3D = async (stateId) => {
     faceMat.needsUpdate = true;
   }
   mapPane.classList.add("is-3d");
+  startAmbientBreathing();
   threeStack?.setAttribute("aria-hidden", "false");
   threeToggle?.setAttribute("aria-hidden", "false");
   stateCanvas?.setAttribute("aria-hidden", "false");
@@ -1687,6 +1826,7 @@ const showState3D = async (stateId) => {
 
 const hideState3D = () => {
   if (!mapPane) return;
+  stopAmbientBreathing();
   mapPane.classList.remove("is-3d");
   mapPane.classList.remove("is-3d-state", "is-3d-sigil");
   threeStack?.setAttribute("aria-hidden", "true");

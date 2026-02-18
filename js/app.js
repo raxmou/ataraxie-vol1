@@ -3,6 +3,7 @@ import { createMap, createStateColor } from "./map.js";
 import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
 import { createTextureCanvas } from "./texture-canvas.js";
 import { createHourglassPlayer } from "./hourglass-player.js";
+import { createCharacterDancer } from "./character-dancer.js";
 import {
   revealedStates,
   questionedStates,
@@ -92,6 +93,8 @@ let audioTime = 0;
 let ambientAnimationFrame = null;
 let ambientTime = 0;
 let hourglassPlayer = null;
+let pendingTrail = null; // Stores {from, to} for deferred trail drawing
+let answeredQuestions = new Map(); // Stores stateId -> {option1, option2, chosen}
 let isThreeDragging = false;
 let activePointerId = null;
 let lastPointerX = 0;
@@ -108,6 +111,18 @@ let activeThreeView = "state";
 let questionTimeout = null;
 let bgTextureCache = new Map();
 let selectedCharacter = null;
+// Map view character (SVG image on trail layer)
+let mapCharacter = null;
+let mapCharacterFrameIdx = 0;
+let mapCharacterInterval = null;
+let mapCharacterStateId = null;
+// State view character (HTML img in info pane)
+let stateCharacter = null;
+let stateCharFrameIdx = 0;
+let stateCharInterval = null;
+let stateCharFloatRAF = null;
+let stateCharFloatStart = 0;
+let stateCharDragging = false;
 
 const stateTextureFiles = [
   "assets/textures/VISUALWORKS1 6.png",
@@ -364,6 +379,7 @@ const stopAudioReactive = () => {
   audioAnimationFrame = null;
   resetAudioVisuals();
   startAmbientBreathing();
+
 };
 
 const startAmbientBreathing = () => {
@@ -447,6 +463,8 @@ const startAudioReactive = (audio) => {
   audioTime = 0;
   stopAmbientBreathing();
 
+  // Initialize kick detector
+  // TODO: Get threshold/cooldown from track metadata if available
   const tick = () => {
     if (!audioAnalyser || !audioData) return;
     audioAnalyser.getByteFrequencyData(audioData);
@@ -2173,8 +2191,10 @@ const animateToViewBox = (targetBox, duration, options = {}) => {
   );
 };
 
-const renderInfo = (stateId) => {
+const renderInfo = (stateId, infoOptions = {}) => {
   if (!infoContent) return;
+  const narrativeBackBtn = document.getElementById("narrative-back");
+  if (narrativeBackBtn) narrativeBackBtn.hidden = true;
   if (!stateId) {
     infoContent.innerHTML =
       '<h2 class="info-title">Explore the map</h2><div class="info-body">Select a state to see it highlighted and focused here.</div>';
@@ -2196,42 +2216,210 @@ const renderInfo = (stateId) => {
   const count = stateCounts.get(String(stateId)) ?? 0;
   const trackId = trackByState.get(String(stateId));
   const track = trackId ? trackById.get(trackId) : null;
-  let trackMarkup;
-  if (track) {
-    const parts = track.title.split(" - ");
-    const artist = parts[0] || "";
-    const title = parts.slice(1).join(" - ") || track.title;
-    trackMarkup = `<div class="track-shrine">
-        <div class="shrine-glow"></div>
+
+  // Dispose previous player/audio before rendering new state
+  if (hourglassPlayer) {
+    hourglassPlayer.dispose();
+    hourglassPlayer = null;
+  }
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio = null;
+  }
+  stopAudioReactive();
+
+  if (!track) {
+    infoContent.innerHTML = '<div class="track-shrine is-empty"><span class="shrine-artist">No track assigned.</span></div>';
+    return;
+  }
+
+  const parts = track.title.split(" - ");
+  const artist = parts[0] || "";
+  const title = parts.slice(1).join(" - ") || track.title;
+  const narrativeLines = track.narrative || [];
+
+  // Revisit — skip narrative, go straight to hourglass with revealed tarot card
+  if (infoOptions.pendingResult) {
+    infoContent.innerHTML = `<audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>`;
+    showStateCharacter();
+    const audio = infoContent.querySelector(".track-audio");
+    if (audio instanceof HTMLAudioElement) activeAudio = audio;
+    showTrackShrine(title, artist, track, audio, infoOptions);
+    return;
+  }
+
+  // Phase A — Narrative text
+  const linesMarkup = narrativeLines.map((line, i) => {
+    const delay = (i + 1) * 1.2;
+    return `<p class="narrative-line" style="animation-delay: ${delay}s">${line}</p>`;
+  }).join("");
+  const playDelay = (narrativeLines.length + 1) * 1.2;
+  const narrativeMarkup = `
+    <div class="narrative-container">
+      ${linesMarkup}
+      <button class="narrative-play-btn" style="animation-delay: ${playDelay}s" type="button">Play</button>
+    </div>
+    <audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>
+  `;
+  infoContent.innerHTML = narrativeMarkup;
+
+  // Show floating character in state view
+  showStateCharacter();
+
+  // Prepare audio element (don't play yet)
+  const audio = infoContent.querySelector(".track-audio");
+  if (audio instanceof HTMLAudioElement) {
+    activeAudio = audio;
+  }
+
+  // Play button → transition to Phase B (hourglass)
+  const playBtn = infoContent.querySelector(".narrative-play-btn");
+  if (playBtn) {
+    playBtn.addEventListener("click", () => {
+      const narrativeEl = infoContent.querySelector(".narrative-container");
+      if (narrativeEl) {
+        narrativeEl.classList.add("is-fading");
+        narrativeEl.addEventListener("animationend", () => {
+          narrativeEl.remove();
+          showTrackShrine(title, artist, track, audio, infoOptions);
+        }, { once: true });
+      } else {
+        showTrackShrine(title, artist, track, audio, infoOptions);
+      }
+    });
+  }
+};
+
+const showTrackShrine = (title, artist, track, audio, infoOptions = {}) => {
+  if (!infoContent) return;
+  // Remove any leftover narrative
+  const oldNarrative = infoContent.querySelector(".narrative-container");
+  if (oldNarrative) oldNarrative.remove();
+
+  // Build question/result markup to show alongside hourglass
+  let questionMarkup = "";
+  const { pendingQuestion, pendingResult } = infoOptions;
+  if (pendingResult) {
+    const prev = pendingResult;
+    const chosenTrackId = trackByState.get(String(prev.chosen));
+    const chosenTrack = chosenTrackId ? trackById.get(chosenTrackId) : null;
+    const chosenLabel = chosenTrack?.choiceLabel || `Explore territory ${prev.chosen}`;
+    questionMarkup = `
+      <div class="question-container tarot-result">
+        <div class="question-prompt tarot-reading">
+          <p class="question-text">Et maintenant, quelle direction prends-tu ?</p>
+        </div>
+        <div class="tarot-spread">
+          <div class="tarot-card tarot-card--static answer-btn--selected">
+            <div class="tarot-card-inner">
+              <div class="tarot-card-back"><div class="tarot-card-back-pattern"></div></div>
+              <div class="tarot-card-front">
+                <div class="tarot-card-border">
+                  <div class="tarot-card-content">
+                    <span class="tarot-card-label">${chosenLabel}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  const shrineMarkup = `<div class="track-shrine is-entering">
+      <div class="shrine-glow"></div>
+      <div class="shrine-stack">
         <div class="hourglass-player" data-track-player></div>
-        <audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>
         <div class="shrine-meta">
           <div class="shrine-title">${title}</div>
           <div class="shrine-artist">${artist}</div>
         </div>
-      </div>`;
-  } else {
-    trackMarkup = '<div class="track-shrine is-empty"><span class="shrine-artist">No track assigned.</span></div>';
+      </div>
+      ${questionMarkup}
+    </div>`;
+  infoContent.insertAdjacentHTML("afterbegin", shrineMarkup);
+
+  // Trigger enter animation
+  requestAnimationFrame(() => {
+    const shrine = infoContent.querySelector(".track-shrine");
+    if (shrine) shrine.classList.remove("is-entering");
+  });
+
+  const player = infoContent.querySelector("[data-track-player]");
+  if (audio instanceof HTMLAudioElement) {
+    activeAudio = audio;
+    setupTrackPlayer(player, audio);
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {});
+    }
   }
-  infoContent.innerHTML = trackMarkup;
+
+  // Show question modal immediately if needed
+  if (pendingQuestion) {
+    requestAnimationFrame(() => showQuestionModal(pendingQuestion));
+  }
+
+  // Show back arrow in header
+  const narrativeBackBtn = document.getElementById("narrative-back");
+  if (narrativeBackBtn) {
+    narrativeBackBtn.hidden = false;
+    const handler = () => {
+      narrativeBackBtn.removeEventListener("click", handler);
+      narrativeBackBtn.hidden = true;
+      // Pause audio and dispose player
+      if (activeAudio) {
+        activeAudio.pause();
+        activeAudio.currentTime = 0;
+      }
+      if (hourglassPlayer) {
+        hourglassPlayer.dispose();
+        hourglassPlayer = null;
+      }
+      activeAudio = null;
+      stopAudioReactive();
+      // Re-render narrative (skip animations on revisit)
+      showNarrative(title, artist, track, infoOptions);
+    };
+    narrativeBackBtn.addEventListener("click", handler);
+  }
+};
+
+const showNarrative = (title, artist, track, infoOptions) => {
+  if (!infoContent) return;
+  const narrativeLines = track.narrative || [];
+  const linesMarkup = narrativeLines.map((line) => {
+    return `<p class="narrative-line is-visible">${line}</p>`;
+  }).join("");
+  const narrativeMarkup = `
+    <div class="narrative-container">
+      ${linesMarkup}
+      <button class="narrative-play-btn is-visible" type="button">Play</button>
+    </div>
+    <audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>
+  `;
+  infoContent.innerHTML = narrativeMarkup;
+
   const audio = infoContent.querySelector(".track-audio");
   if (audio instanceof HTMLAudioElement) {
-    if (activeAudio && activeAudio !== audio) {
-      activeAudio.pause();
-    }
     activeAudio = audio;
-    const player = infoContent.querySelector("[data-track-player]");
-    setupTrackPlayer(player, audio);
-  } else {
-    if (hourglassPlayer) {
-      hourglassPlayer.dispose();
-      hourglassPlayer = null;
-    }
-    if (activeAudio) {
-      activeAudio.pause();
-      activeAudio = null;
-    }
-    stopAudioReactive();
+  }
+
+  const playBtn = infoContent.querySelector(".narrative-play-btn");
+  if (playBtn) {
+    playBtn.addEventListener("click", () => {
+      const narrativeEl = infoContent.querySelector(".narrative-container");
+      if (narrativeEl) {
+        narrativeEl.classList.add("is-fading");
+        narrativeEl.addEventListener("animationend", () => {
+          narrativeEl.remove();
+          showTrackShrine(title, artist, track, audio, infoOptions);
+        }, { once: true });
+      } else {
+        showTrackShrine(title, artist, track, audio, infoOptions);
+      }
+    });
   }
 };
 
@@ -2291,23 +2479,15 @@ const selectState = (stateId, options = {}) => {
   renderFocusSigil(normalized);
   setCollapsed(true);
   activeStateId = normalized;
-  renderInfo(normalized);
-  
-  if (activeAudio) {
-    const playPromise = activeAudio.play();
-    if (playPromise && typeof playPromise.catch === "function") {
-      playPromise.catch(() => {});
-    }
-  }
-  
-  // Show question immediately if this is first visit
-  if (!skipQuestion) {
-    // Use requestAnimationFrame to ensure info is rendered first
-    requestAnimationFrame(() => {
-      showQuestionModal(normalized);
-    });
-  }
-  
+
+  // Determine what to show after hourglass appears
+  const pendingQuestion = !skipQuestion ? normalized : null;
+  const pendingResult = skipQuestion && answeredQuestions.has(normalized)
+    ? answeredQuestions.get(normalized)
+    : null;
+
+  renderInfo(normalized, { pendingQuestion, pendingResult });
+
   setSplitLayout(true);
   showState3D(normalized);
   showSigil3D(normalized);
@@ -2345,31 +2525,56 @@ const showQuestionModal = (stateId) => {
   const shuffled = unrevealedNeighbors.sort(() => Math.random() - 0.5);
   const option1 = shuffled[0];
   const option2 = shuffled[1] || shuffled[0]; // Duplicate if only 1 option
-  
+
+  // Look up narrative choice labels for each option
+  const getChoiceLabel = (stId) => {
+    const tId = trackByState.get(String(stId));
+    const t = tId ? trackById.get(tId) : null;
+    return t?.choiceLabel || `Explore territory ${stId}`;
+  };
+  const label1 = getChoiceLabel(option1);
+  const label2 = getChoiceLabel(option2);
+
   // Append question to existing info panel content
   if (!infoContent) return;
-  
-  const characterSrc = selectedCharacter ? CHARACTER_SVG_MAP[selectedCharacter] : "";
+
   const characterLabel = selectedCharacter ? selectedCharacter.replace("-", " ") : "";
   const questionMarkup = `
     <div class="question-container">
-      <div class="question-prompt">
-        <p class="question-text">Which direction do you explore?</p>
+      <div class="question-prompt tarot-reading">
+        <p class="question-text">Et maintenant, quelle direction prends-tu ?</p>
       </div>
-      <div class="character-dialog">
-        ${characterSrc ? `<img class="character-dialog-avatar" src="${characterSrc}" alt="${characterLabel}" />` : ""}
-        <div class="character-dialog-bubble">
-          <div class="question-answers">
-            <button class="answer-btn" data-answer="${option1}" type="button">Explore territory ${option1}</button>
-            <button class="answer-btn" data-answer="${option2}" type="button">Explore territory ${option2}</button>
+      <div class="tarot-spread">
+        <button class="tarot-card answer-btn" data-answer="${option1}" type="button">
+          <div class="tarot-card-inner">
+            <div class="tarot-card-back"><div class="tarot-card-back-pattern"></div></div>
+            <div class="tarot-card-front">
+              <div class="tarot-card-border">
+                <div class="tarot-card-content">
+                  <span class="tarot-card-label">${label1}</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </button>
+        <button class="tarot-card answer-btn" data-answer="${option2}" type="button">
+          <div class="tarot-card-inner">
+            <div class="tarot-card-back"><div class="tarot-card-back-pattern"></div></div>
+            <div class="tarot-card-front">
+              <div class="tarot-card-border">
+                <div class="tarot-card-content">
+                  <span class="tarot-card-label">${label2}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </button>
       </div>
     </div>
   `;
-  
+
   infoContent.insertAdjacentHTML('beforeend', questionMarkup);
-  
+
   // Add click handlers to answer buttons
   const answerButtons = infoContent.querySelectorAll(".answer-btn");
   answerButtons.forEach((btn) => {
@@ -2385,6 +2590,10 @@ const showQuestionModal = (stateId) => {
       });
       setTimeout(() => {
         handleAnswer(answer, stateId);
+        // Store answer for revisit rendering
+        answeredQuestions.set(stateId, { option1, option2, chosen: answer });
+        // Store pending trail for deferred drawing (when user clicks back or continue)
+        pendingTrail = { from: stateId, to: answer };
         const container = infoContent?.querySelector('.question-container');
         if (container) {
           const continueBtn = document.createElement('button');
@@ -2393,12 +2602,10 @@ const showQuestionModal = (stateId) => {
           continueBtn.textContent = 'Continue exploring';
           continueBtn.addEventListener('click', () => {
             clearSelection();
-            // Draw trail after map is visible so user sees the line animate
-            setTimeout(() => drawTrailSegment(stateId, answer), 300);
           });
           container.appendChild(continueBtn);
         }
-      }, 420);
+      }, 1100);
     });
   });
 };
@@ -2470,10 +2677,148 @@ const hideCreditsModal = () => {
 };
 
 const CHARACTER_STORAGE_KEY = "ataraxie-character";
-const CHARACTER_SVG_MAP = {
-  demon: "assets/characters/demon.svg",
-  succube: "assets/characters/succube.svg",
-  gargoyle: "assets/characters/gargoyle.svg",
+
+// Character move sets: maps character -> move type -> frame paths
+const CHARACTER_MOVE_MAP = {
+  demon: {
+    idle: [
+      "assets/characters/demon/idle/frame1.svg",
+      "assets/characters/demon/idle/frame2.svg",
+      "assets/characters/demon/idle/frame3.svg"
+    ],
+    stomp: [
+      "assets/characters/demon/stomp/frame1.svg",
+      "assets/characters/demon/stomp/frame2.svg",
+      "assets/characters/demon/stomp/frame3.svg"
+    ],
+    armwave: [
+      "assets/characters/demon/armwave/frame1.svg",
+      "assets/characters/demon/armwave/frame2.svg",
+      "assets/characters/demon/armwave/frame3.svg",
+      "assets/characters/demon/armwave/frame4.svg",
+      "assets/characters/demon/armwave/frame5.svg"
+    ],
+    turn: [
+      "assets/characters/demon/turn/frame1.svg",
+      "assets/characters/demon/turn/frame2.svg",
+      "assets/characters/demon/turn/frame3.svg",
+      "assets/characters/demon/turn/frame4.svg",
+      "assets/characters/demon/turn/frame5.svg",
+      "assets/characters/demon/turn/frame6.svg"
+    ],
+    hipshake: [
+      "assets/characters/demon/hipshake/frame1.svg",
+      "assets/characters/demon/hipshake/frame2.svg",
+      "assets/characters/demon/hipshake/frame3.svg",
+      "assets/characters/demon/hipshake/frame4.svg"
+    ],
+    jump: [
+      "assets/characters/demon/jump/frame1.svg",
+      "assets/characters/demon/jump/frame2.svg",
+      "assets/characters/demon/jump/frame3.svg",
+      "assets/characters/demon/jump/frame4.svg"
+    ],
+    headbang: [
+      "assets/characters/demon/headbang/frame1.svg",
+      "assets/characters/demon/headbang/frame2.svg",
+      "assets/characters/demon/headbang/frame3.svg"
+    ]
+  },
+  succube: {
+    idle: [
+      "assets/characters/succube/idle/frame1.svg",
+      "assets/characters/succube/idle/frame2.svg",
+      "assets/characters/succube/idle/frame3.svg"
+    ],
+    stomp: [
+      "assets/characters/succube/stomp/frame1.svg",
+      "assets/characters/succube/stomp/frame2.svg",
+      "assets/characters/succube/stomp/frame3.svg"
+    ],
+    armwave: [
+      "assets/characters/succube/armwave/frame1.svg",
+      "assets/characters/succube/armwave/frame2.svg",
+      "assets/characters/succube/armwave/frame3.svg",
+      "assets/characters/succube/armwave/frame4.svg",
+      "assets/characters/succube/armwave/frame5.svg"
+    ],
+    turn: [
+      "assets/characters/succube/turn/frame1.svg",
+      "assets/characters/succube/turn/frame2.svg",
+      "assets/characters/succube/turn/frame3.svg",
+      "assets/characters/succube/turn/frame4.svg",
+      "assets/characters/succube/turn/frame5.svg",
+      "assets/characters/succube/turn/frame6.svg"
+    ],
+    hipshake: [
+      "assets/characters/succube/hipshake/frame1.svg",
+      "assets/characters/succube/hipshake/frame2.svg",
+      "assets/characters/succube/hipshake/frame3.svg",
+      "assets/characters/succube/hipshake/frame4.svg"
+    ],
+    jump: [
+      "assets/characters/succube/jump/frame1.svg",
+      "assets/characters/succube/jump/frame2.svg",
+      "assets/characters/succube/jump/frame3.svg",
+      "assets/characters/succube/jump/frame4.svg"
+    ],
+    headbang: [
+      "assets/characters/succube/headbang/frame1.svg",
+      "assets/characters/succube/headbang/frame2.svg",
+      "assets/characters/succube/headbang/frame3.svg"
+    ]
+  },
+  gargoyle: {
+    idle: [
+      "assets/characters/gargoyle/idle/frame1.svg",
+      "assets/characters/gargoyle/idle/frame2.svg",
+      "assets/characters/gargoyle/idle/frame3.svg"
+    ],
+    stomp: [
+      "assets/characters/gargoyle/stomp/frame1.svg",
+      "assets/characters/gargoyle/stomp/frame2.svg",
+      "assets/characters/gargoyle/stomp/frame3.svg"
+    ],
+    armwave: [
+      "assets/characters/gargoyle/armwave/frame1.svg",
+      "assets/characters/gargoyle/armwave/frame2.svg",
+      "assets/characters/gargoyle/armwave/frame3.svg",
+      "assets/characters/gargoyle/armwave/frame4.svg",
+      "assets/characters/gargoyle/armwave/frame5.svg"
+    ],
+    turn: [
+      "assets/characters/gargoyle/turn/frame1.svg",
+      "assets/characters/gargoyle/turn/frame2.svg",
+      "assets/characters/gargoyle/turn/frame3.svg",
+      "assets/characters/gargoyle/turn/frame4.svg",
+      "assets/characters/gargoyle/turn/frame5.svg",
+      "assets/characters/gargoyle/turn/frame6.svg"
+    ],
+    hipshake: [
+      "assets/characters/gargoyle/hipshake/frame1.svg",
+      "assets/characters/gargoyle/hipshake/frame2.svg",
+      "assets/characters/gargoyle/hipshake/frame3.svg",
+      "assets/characters/gargoyle/hipshake/frame4.svg"
+    ],
+    jump: [
+      "assets/characters/gargoyle/jump/frame1.svg",
+      "assets/characters/gargoyle/jump/frame2.svg",
+      "assets/characters/gargoyle/jump/frame3.svg",
+      "assets/characters/gargoyle/jump/frame4.svg"
+    ],
+    headbang: [
+      "assets/characters/gargoyle/headbang/frame1.svg",
+      "assets/characters/gargoyle/headbang/frame2.svg",
+      "assets/characters/gargoyle/headbang/frame3.svg"
+    ]
+  }
+};
+
+// Helper for backward compatibility (question dialogs, character select use frame 1)
+const getCharacterFrame = (character, frameIndex = 0) => {
+  const moveSet = CHARACTER_MOVE_MAP[character];
+  if (!moveSet || !moveSet.idle) return "";
+  return moveSet.idle[frameIndex] || moveSet.idle[0];
 };
 
 const showCharacterSelect = () => {
@@ -2545,7 +2890,11 @@ const getMarkerRadius = () => {
 const renderTrails = () => {
   const layer = mapApi?.getTrailLayer();
   if (!layer) return;
+
+  const hadCharacter = !!mapCharacter;
+
   while (layer.firstChild) layer.removeChild(layer.firstChild);
+  if (hadCharacter) mapCharacter = null;
 
   const r = getMarkerRadius();
 
@@ -2587,6 +2936,10 @@ const renderTrails = () => {
     if (i === 0) circle.classList.add("trail-marker--origin");
     layer.appendChild(circle);
   });
+
+  if (hadCharacter && selectedCharacter) {
+    createMapCharacter();
+  }
 };
 
 const drawTrailSegment = (fromStateId, toStateId) => {
@@ -2629,6 +2982,7 @@ const drawTrailSegment = (fromStateId, toStateId) => {
       circle.setAttribute("r", r);
       circle.classList.add("trail-marker", "trail-marker--appear");
       layer.appendChild(circle);
+      if (mapCharacter) layer.appendChild(mapCharacter);
     }, 800);
   } else {
     const circle = document.createElementNS(svgNS, "circle");
@@ -2638,6 +2992,383 @@ const drawTrailSegment = (fromStateId, toStateId) => {
     circle.classList.add("trail-marker");
     layer.appendChild(circle);
   }
+
+  if (mapCharacter) layer.appendChild(mapCharacter);
+};
+
+// --- Map View Character (SVG on trail layer) ---
+
+const createMapCharacter = () => {
+  removeMapCharacter();
+  if (!selectedCharacter || !mapApi) return;
+  const moveSet = CHARACTER_MOVE_MAP[selectedCharacter];
+  if (!moveSet?.idle?.length) return;
+
+  const layer = mapApi.getTrailLayer();
+  if (!layer) return;
+
+  const targetState = explorationOrder.length > 0
+    ? explorationOrder[explorationOrder.length - 1]
+    : "1";
+  const center = getStateCenter(targetState);
+  if (!center) return;
+
+  const size = getMarkerRadius() * 8;
+  const img = document.createElementNS(svgNS, "image");
+  img.setAttribute("width", size);
+  img.setAttribute("height", size);
+  img.setAttribute("x", center.x - size / 2);
+  img.setAttribute("y", center.y - size / 2);
+  img.setAttribute("href", moveSet.idle[0]);
+  img.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", moveSet.idle[0]);
+  img.classList.add("map-character");
+  layer.appendChild(img);
+
+  mapCharacter = img;
+  mapCharacterFrameIdx = 0;
+  mapCharacterStateId = targetState;
+
+  mapCharacterInterval = setInterval(() => {
+    mapCharacterFrameIdx = (mapCharacterFrameIdx + 1) % moveSet.idle.length;
+    if (mapCharacter) {
+      const src = moveSet.idle[mapCharacterFrameIdx];
+      mapCharacter.setAttribute("href", src);
+      mapCharacter.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", src);
+    }
+  }, 350);
+};
+
+const removeMapCharacter = () => {
+  if (mapCharacterInterval) {
+    clearInterval(mapCharacterInterval);
+    mapCharacterInterval = null;
+  }
+  if (mapCharacter) {
+    mapCharacter.remove();
+    mapCharacter = null;
+  }
+  mapCharacterStateId = null;
+  mapCharacterFrameIdx = 0;
+};
+
+const updateMapCharacterPosition = (toStateId, fromStateId, animate = true) => {
+  if (!mapCharacter) return;
+  const toCenter = getStateCenter(toStateId);
+  if (!toCenter) return;
+
+  const size = parseFloat(mapCharacter.getAttribute("width"));
+
+  if (!animate || prefersReducedMotion || !fromStateId) {
+    mapCharacter.setAttribute("x", toCenter.x - size / 2);
+    mapCharacter.setAttribute("y", toCenter.y - size / 2);
+    mapCharacterStateId = toStateId;
+    return;
+  }
+
+  const fromCenter = getStateCenter(fromStateId);
+  if (!fromCenter) {
+    mapCharacter.setAttribute("x", toCenter.x - size / 2);
+    mapCharacter.setAttribute("y", toCenter.y - size / 2);
+    mapCharacterStateId = toStateId;
+    return;
+  }
+
+  let cp;
+  const mid = mapApi?.getSharedBorderMidpoint(fromStateId, toStateId);
+  if (mid) {
+    cp = mid;
+  } else {
+    const mx = (fromCenter.x + toCenter.x) / 2;
+    const my = (fromCenter.y + toCenter.y) / 2;
+    const dx = toCenter.x - fromCenter.x;
+    const dy = toCenter.y - fromCenter.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const offset = dist * 0.15;
+    cp = { x: mx + (-dy * offset) / dist, y: my + (dx * offset) / dist };
+  }
+
+  const duration = 1400;
+  const start = performance.now();
+
+  const step = (now) => {
+    const elapsed = now - start;
+    let t = Math.min(elapsed / duration, 1);
+    t = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+    const u = 1 - t;
+    const bx = u * u * fromCenter.x + 2 * u * t * cp.x + t * t * toCenter.x;
+    const by = u * u * fromCenter.y + 2 * u * t * cp.y + t * t * toCenter.y;
+
+    mapCharacter.setAttribute("x", bx - size / 2);
+    mapCharacter.setAttribute("y", by - size / 2);
+
+    if (elapsed < duration) {
+      requestAnimationFrame(step);
+    } else {
+      mapCharacterStateId = toStateId;
+      mapCharacter.classList.add("map-character--arriving");
+      setTimeout(() => mapCharacter?.classList.remove("map-character--arriving"), 500);
+    }
+  };
+
+  requestAnimationFrame(step);
+};
+
+// --- State View Character (floating + draggable in info pane) ---
+
+const startStateCharFloat = () => {
+  if (prefersReducedMotion || !stateCharacter) return;
+  stopStateCharFloat();
+  stateCharFloatStart = performance.now();
+  const loop = (now) => {
+    if (!stateCharacter || stateCharDragging) return;
+    const t = (now - stateCharFloatStart) / 1000;
+    const offsetY = Math.sin(t * 0.7) * 12 + Math.sin(t * 1.3) * 6;
+    const offsetX = Math.sin(t * 0.5) * 35 + Math.cos(t * 0.9) * 20;
+    stateCharacter.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+    if (stateCharacter._syncOverlays) stateCharacter._syncOverlays();
+    stateCharFloatRAF = requestAnimationFrame(loop);
+  };
+  stateCharFloatRAF = requestAnimationFrame(loop);
+};
+
+const stopStateCharFloat = () => {
+  if (stateCharFloatRAF) {
+    cancelAnimationFrame(stateCharFloatRAF);
+    stateCharFloatRAF = null;
+  }
+  if (stateCharacter) {
+    stateCharacter.style.transform = "translate(0, 0)";
+  }
+};
+
+const DRAG_PHRASES = [
+  "Aimes-tu l\u2019autorit\u00e9\u202f?",
+  "Habites-tu cet instant\u202f?",
+  "Si je cours assez vite, est-ce que j\u2019arrive \u00e0 hier\u202f?",
+  "Quelle heure il est pour une pierre\u202f?",
+  "Le pr\u00e9sent, c\u2019est \u00e0 gauche ou \u00e0 droite\u202f?",
+  "Un drapeau plant\u00e9 dans le sol, \u00e7a fait mal \u00e0 la terre\u202f?",
+  "Est-ce que la pluie demande un visa avant de tomber\u202f?",
+  "Combien de g\u00e9n\u00e9rations faut-il pour qu\u2019un envahisseur devienne un autochtone\u202f?",
+  "O\u00f9 dorment les lieux qu\u2019on a quitt\u00e9s\u202f?",
+  "Reste-t-il une odeur l\u00e0 o\u00f9 quelqu\u2019un a pleur\u00e9\u202f?",
+  "Le mardi existe-t-il aussi dans la for\u00eat\u202f?",
+  "Si on d\u00e9place une fronti\u00e8re, le sol s\u2019en aper\u00e7oit\u202f?",
+];
+
+const setupStateCharDrag = (img) => {
+  let grabOffsetX = 0;
+  let grabOffsetY = 0;
+  let dragTimer = null;
+  let bubble = null;
+  let menu = null;
+  let startX = 0;
+  let startY = 0;
+  let pointerIsDown = false;
+  let dragStarted = false;
+  const DRAG_THRESHOLD = 5;
+
+  const positionAboveChar = (el) => {
+    const imgRect = img.getBoundingClientRect();
+    const parentRect = (img.offsetParent || app).getBoundingClientRect();
+    el.style.left = `${imgRect.left - parentRect.left + imgRect.width / 2}px`;
+    el.style.top = `${imgRect.top - parentRect.top - 12}px`;
+  };
+
+  const syncOverlays = () => {
+    if (bubble) positionAboveChar(bubble);
+    if (menu) positionAboveChar(menu);
+  };
+  img._syncOverlays = syncOverlays;
+
+  const showBubble = () => {
+    if (bubble) return;
+    bubble = document.createElement("div");
+    bubble.className = "state-character-bubble";
+    bubble.textContent = DRAG_PHRASES[Math.floor(Math.random() * DRAG_PHRASES.length)];
+    img.parentElement.appendChild(bubble);
+    positionAboveChar(bubble);
+    bubble._updatePos = syncOverlays;
+  };
+
+  const hideBubble = () => {
+    if (bubble) { bubble.remove(); bubble = null; }
+  };
+
+  const closeMenu = () => {
+    if (menu) { menu.remove(); menu = null; }
+    document.removeEventListener("pointerdown", onOutsideClick, true);
+    document.removeEventListener("keydown", onEscapeKey);
+  };
+
+  const onOutsideClick = (e) => {
+    if (menu && !menu.contains(e.target) && e.target !== img) closeMenu();
+  };
+
+  const onEscapeKey = (e) => {
+    if (e.key === "Escape") closeMenu();
+  };
+
+  const showGestureHelp = () => {
+    closeMenu();
+    hideBubble();
+    bubble = document.createElement("div");
+    bubble.className = "state-character-bubble";
+    bubble.style.whiteSpace = "pre-line";
+    bubble.textContent = "Tourner \u2192 vitesse\nSecouer \u2192 2x\nGlisser \u2192 chercher";
+    img.parentElement.appendChild(bubble);
+    positionAboveChar(bubble);
+    setTimeout(hideBubble, 5000);
+  };
+
+  const toggleMenu = () => {
+    if (menu) { closeMenu(); return; }
+    hideBubble();
+
+    menu = document.createElement("div");
+    menu.className = "state-character-menu";
+
+    const isPlaying = hourglassPlayer ? hourglassPlayer.playing : (activeAudio && !activeAudio.paused);
+    const playLabel = isPlaying ? "Pause" : "Jouer";
+    const askMeaning = () => {
+      closeMenu();
+      hideBubble();
+      bubble = document.createElement("div");
+      bubble.className = "state-character-bubble";
+      bubble.textContent = DRAG_PHRASES[Math.floor(Math.random() * DRAG_PHRASES.length)];
+      img.parentElement.appendChild(bubble);
+      positionAboveChar(bubble);
+      setTimeout(hideBubble, 5000);
+    };
+
+    const items = [
+      { label: playLabel, action: () => { if (hourglassPlayer) { hourglassPlayer.togglePlay(); } else if (activeAudio) { activeAudio.paused ? activeAudio.play() : activeAudio.pause(); } }},
+      { label: "Quel est le sens de la vie\u202f?", action: askMeaning },
+      { label: "Gestes sablier", action: showGestureHelp },
+      { label: "\u00c0 propos", action: () => { creditsModal?.setAttribute("aria-hidden", "false"); }},
+    ];
+
+    for (const item of items) {
+      const btn = document.createElement("button");
+      btn.className = "state-character-menu-item";
+      btn.textContent = item.label;
+      btn.addEventListener("click", (e) => { e.stopPropagation(); closeMenu(); item.action(); });
+      menu.appendChild(btn);
+    }
+
+    img.parentElement.appendChild(menu);
+    positionAboveChar(menu);
+
+    setTimeout(() => {
+      document.addEventListener("pointerdown", onOutsideClick, true);
+      document.addEventListener("keydown", onEscapeKey);
+    }, 0);
+  };
+
+  const onPointerDown = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    img.setPointerCapture(e.pointerId);
+    startX = e.clientX;
+    startY = e.clientY;
+    pointerIsDown = true;
+    dragStarted = false;
+
+    const rect = img.getBoundingClientRect();
+    grabOffsetX = e.clientX - rect.left - rect.width / 2;
+    grabOffsetY = e.clientY - rect.top - rect.height / 2;
+  };
+
+  const beginDrag = () => {
+    dragStarted = true;
+    stateCharDragging = true;
+    img.classList.add("state-character--dragging");
+    stopStateCharFloat();
+    closeMenu();
+    dragTimer = setTimeout(showBubble, 1000);
+  };
+
+  const onPointerMove = (e) => {
+    if (!pointerIsDown) return;
+    if (dragStarted) {
+      e.preventDefault();
+      const parent = img.offsetParent || app;
+      const parentRect = parent.getBoundingClientRect();
+      const x = e.clientX - parentRect.left - grabOffsetX - img.offsetWidth / 2;
+      const y = e.clientY - parentRect.top - grabOffsetY - img.offsetHeight / 2;
+      img.style.left = `${x}px`;
+      img.style.top = `${y}px`;
+      syncOverlays();
+      return;
+    }
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) beginDrag();
+  };
+
+  const onPointerEnd = (e) => {
+    img.releasePointerCapture(e.pointerId);
+    if (!pointerIsDown) return;
+    pointerIsDown = false;
+    if (!dragStarted) {
+      toggleMenu();
+      return;
+    }
+    stateCharDragging = false;
+    dragStarted = false;
+    img.classList.remove("state-character--dragging");
+    clearTimeout(dragTimer);
+    dragTimer = null;
+    hideBubble();
+    startStateCharFloat();
+  };
+
+  img.addEventListener("pointerdown", onPointerDown);
+  img.addEventListener("pointermove", onPointerMove);
+  img.addEventListener("pointerup", onPointerEnd);
+  img.addEventListener("pointercancel", onPointerEnd);
+};
+
+const showStateCharacter = () => {
+  hideStateCharacter();
+  if (!selectedCharacter || !infoPane) return;
+  const moveSet = CHARACTER_MOVE_MAP[selectedCharacter];
+  if (!moveSet?.idle?.length) return;
+
+  const img = document.createElement("img");
+  img.src = moveSet.idle[0];
+  img.alt = selectedCharacter;
+  img.className = "state-character";
+  img.draggable = false;
+  app.appendChild(img);
+
+  stateCharacter = img;
+  stateCharFrameIdx = 0;
+
+  stateCharInterval = setInterval(() => {
+    stateCharFrameIdx = (stateCharFrameIdx + 1) % moveSet.idle.length;
+    if (stateCharacter) {
+      stateCharacter.src = moveSet.idle[stateCharFrameIdx];
+    }
+  }, 350);
+
+  setupStateCharDrag(img);
+  startStateCharFloat();
+};
+
+const hideStateCharacter = () => {
+  stopStateCharFloat();
+  stateCharDragging = false;
+  if (stateCharInterval) {
+    clearInterval(stateCharInterval);
+    stateCharInterval = null;
+  }
+  if (stateCharacter) {
+    stateCharacter.remove();
+    stateCharacter = null;
+  }
+  stateCharFrameIdx = 0;
 };
 
 const handleAnswer = (revealedStateId, currentStateId) => {
@@ -2660,16 +3391,23 @@ const handleAnswer = (revealedStateId, currentStateId) => {
   }
 
   // Trail drawing is deferred until "Continue exploring" click so user sees the animation
-
-  // Remove only the dismissed answer button, keep prompt + selected answer visible
-  const dismissed = infoContent?.querySelectorAll('.answer-btn--dismissed');
-  if (dismissed) dismissed.forEach((el) => el.remove());
+  // Dismissed tarot cards fade to opacity:0 via CSS animation — no DOM removal needed
 };
 
 const clearSelection = (options = {}) => {
   const stateId = activeStateId;
   const previousBox = lastSelectedViewBox;
-  
+
+  // Draw pending trail if exists (from answered question)
+  if (pendingTrail) {
+    const { from, to } = pendingTrail;
+    setTimeout(() => {
+      drawTrailSegment(from, to);
+      updateMapCharacterPosition(to, from, true);
+    }, 300);
+    pendingTrail = null; // Clear after drawing
+  }
+
   // Clear question timeout and hide modal
   if (questionTimeout) {
     clearTimeout(questionTimeout);
@@ -2683,6 +3421,7 @@ const clearSelection = (options = {}) => {
   clearFocusSigilLayer();
   stopAudioReactive();
   hideState3D();
+  hideStateCharacter();
   activeStateId = null;
   renderInfo(null);
   setSplitLayout(false);
@@ -2782,12 +3521,14 @@ const init = async () => {
 
     // Character selection: check localStorage or prompt user
     const storedCharacter = localStorage.getItem(CHARACTER_STORAGE_KEY);
-    if (storedCharacter && CHARACTER_SVG_MAP[storedCharacter]) {
+    if (storedCharacter && CHARACTER_MOVE_MAP[storedCharacter]) {
       selectedCharacter = storedCharacter;
       updateCharacterAvatar();
     } else {
       await waitForCharacterSelection();
     }
+
+    createMapCharacter();
 
     const initialState = new URLSearchParams(window.location.search).get("state");
     if (initialState) {
@@ -2904,9 +3645,10 @@ document.addEventListener("keydown", (event) => {
 
 creditsChangeCharacter?.addEventListener("click", () => {
   hideCreditsModal();
+  removeMapCharacter();
   localStorage.removeItem(CHARACTER_STORAGE_KEY);
   selectedCharacter = null;
-  waitForCharacterSelection();
+  waitForCharacterSelection().then(() => createMapCharacter());
 });
 
 init();

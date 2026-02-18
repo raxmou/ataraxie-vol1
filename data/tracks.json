@@ -4,82 +4,156 @@
       "id": "anta-doma-shapes-premaster",
       "title": "Anta Doma - Shapes (Premaster)",
       "file": "assets/music/Anta Doma - Shapes.mp3",
+      "bpm": 128,
       "bandcamp": "https://antadoma.bandcamp.com",
-      "instagram": "https://instagram.com/antadoma"
+      "instagram": "https://instagram.com/antadoma",
+      "narrative": [
+        "Arriv\u00e9 aux falaises, tu descends un petit sentier envahi de broussailles jusqu'\u00e0 la plage, qui s'\u00e9tend \u00e0 perte de vue. Le sol crisse sous tes pas\u00a0: elle n'est pas faite de sable mais de millions de coquillages blanchis par le sel et l'\u00e9cume.",
+        "Alors que tu marches au hasard entre ces dunes faites de minuscules ossements, tu remarques des formes \u00e9tranges qui semblent jaillir du sol\u00a0: certaines ont l'aspect de formes g\u00e9om\u00e9triques, d'autres de tours et de fl\u00e8ches lanc\u00e9es vers le ciel \u2013 d'autres, encore, prennent la forme de visages humains, \u00e0 moiti\u00e9 enterr\u00e9s dans le sol.",
+        "Au terme d'une longue errance, tu d\u00e9couvres une ar\u00e8ne min\u00e9rale dissimul\u00e9e entre les dunes, au centre de laquelle se trouve une myst\u00e9rieuse sculpture, pareille \u00e0 un r\u00e9cif de corail perc\u00e9 de milliers de petits trous."
+      ],
+      "choiceLabel": "Des falaises d\u00e9chirent l'horizon, leurs c\u00f4tes battues par les vagues sombres."
     },
     {
       "id": "aquacrypt-unknown",
       "title": "Aquacrypt - UNKNOWN",
       "file": "assets/music/Aquacrypt - UNKNOWN.mp3",
+      "bpm": 130,
       "bandcamp": "https://aquacrypt.bandcamp.com",
-      "instagram": "https://instagram.com/aquacrypt"
+      "instagram": "https://instagram.com/aquacrypt",
+      "narrative": [
+        "Le terrain s'aplanit et l'air se charge d'une humidit\u00e9 \u00e9paisse. Des nappes de brume rampent au ras du sol, dissimulant des flaques d'eau noire o\u00f9 se refl\u00e8tent des lumi\u00e8res impossibles.",
+        "Tu avances prudemment, guid\u00e9 par un signal r\u00e9p\u00e9titif qui semble \u00e9maner du sous-sol lui-m\u00eame, comme un battement de c\u0153ur enfoui sous la terre."
+      ],
+      "choiceLabel": "Une brume \u00e9paisse rampe au ras du sol, dissimulant des flaques d'eau noire o\u00f9 se refl\u00e8tent des lumi\u00e8res impossibles."
     },
     {
       "id": "damna-3cso",
       "title": "Damna - 3CsO",
       "file": "assets/music/Damna - 3CsO.mp3",
+      "bpm": 125,
       "bandcamp": "https://damna.bandcamp.com",
-      "instagram": "https://instagram.com/damna"
+      "instagram": "https://instagram.com/damna",
+      "narrative": [
+        "Un r\u00e9seau de tunnels s'ouvre devant toi, creus\u00e9 dans une roche noire et luisante. L'air vibre d'une fr\u00e9quence basse, presque imperceptible, qui fait trembler tes os.",
+        "Plus tu t'enfonces, plus les parois se couvrent de cristaux phosphorescents, dessinant des diagrammes que tu ne comprends pas \u2013 mais qui semblent te comprendre.",
+        "Au d\u00e9tour d'une galerie, une vaste caverne s'ouvre, baign\u00e9e d'une lumi\u00e8re violette et parcourue d'\u00e9chos m\u00e9talliques."
+      ],
+      "choiceLabel": "Un souffle d'air froid s'\u00e9chappe d'une fissure dans la roche noire, portant avec lui une vibration sourde et profonde."
     },
     {
       "id": "drawbridge-khey-mysterio-psylmodie",
       "title": "Drawbridge & Khey Mysterio - Psylmodie",
       "file": "assets/music/Drawbridge & Khey Mysterio - Psylmodie.mp3",
+      "bpm": 135,
       "bandcamp": "https://drawbridge.bandcamp.com",
-      "instagram": "https://instagram.com/drawbridge"
+      "instagram": "https://instagram.com/drawbridge",
+      "narrative": [
+        "Tu per\u00e7ois un brouhaha lointain, caract\u00e9ristique d'une m\u00e9galopole en activit\u00e9. Quand tu arrives dans la ville, il fait nuit noire. Hormis les n\u00e9ons qui \u00e9clairent ton chemin, seules les lumi\u00e8res froides des gigantesques b\u00e2timents luisent au loin. Longeant les hauts murs de b\u00e9ton, tu t'aventures avec pr\u00e9caution de rues en ruelles, t'\u00e9loignant petit \u00e0 petit du vrombissement constant des grandes routes enchev\u00eatr\u00e9es."
+      ],
+      "choiceLabel": "Tu t'engages sur une longue route qui m\u00e8ne \u00e0 de hauts b\u00e2timents noirs, qui s'illuminent un \u00e0 un alors que le soir tombe."
     },
     {
       "id": "gustave-retour-le-pi-ge",
       "title": "Gustave Retour - Le pi\u00e8ge",
       "file": "assets/music/Gustave Retour - Le Pi\u00e8ge.mp3",
+      "bpm": 120,
       "bandcamp": "https://gustaveretour.bandcamp.com",
-      "instagram": "https://instagram.com/gustaveretour"
+      "instagram": "https://instagram.com/gustaveretour",
+      "narrative": [
+        "Le chemin s'enfonce dans une for\u00eat dense et silencieuse. Les arbres se resserrent, leurs branches entrelac\u00e9es formant une vo\u00fbte opaque qui \u00e9touffe la lumi\u00e8re.",
+        "Quelque chose te pousse \u00e0 continuer malgr\u00e9 l'obscurit\u00e9 grandissante. Tu sens une pr\u00e9sence, ou plut\u00f4t l'absence de quelque chose \u2013 comme si le silence lui-m\u00eame avait une forme.",
+        "Au centre d'une clairi\u00e8re, tu d\u00e9couvres un m\u00e9canisme ancien, fait de cordes et de poulies, qui semble attendre qu'on le d\u00e9clenche."
+      ],
+      "choiceLabel": "Un sentier s'enfonce dans une for\u00eat silencieuse. Les arbres semblent se resserrer \u00e0 mesure que tu t'approches."
     },
     {
       "id": "naeja-may-the-world-ends-with-you",
       "title": "Naeja - May The World Ends (With You)",
       "file": "assets/music/Naeja - May the World End (With You).mp3",
+      "bpm": 132,
       "bandcamp": "https://naeja.bandcamp.com",
-      "instagram": "https://instagram.com/naeja"
+      "instagram": "https://instagram.com/naeja",
+      "narrative": [
+        "Tu roules tranquillement le long d'une petite route qui serpente \u00e0 travers la campagne. Le jour est tomb\u00e9, il fait bon et un vent frais te caresse les joues. Quelques kilom\u00e8tres plus loin, tu aper\u00e7ois l'enseigne d'un magasin au bord d'un petit canal, ses n\u00e9ons multicolores luisant dans le soir couchant.",
+        "La clochette tinte quand tu passes la porte. C'est une petite \u00e9picerie de nuit, les rayons sont parfaitement rang\u00e9s et un gros chat te suis des yeux, assis sur une \u00e9tag\u00e8re. Tu attrapes ta boisson pr\u00e9f\u00e9r\u00e9e dans un des frigos et cherche le propri\u00e9taire pour payer, mais il n'y a personne \u2013 il n'y a m\u00eame pas de comptoir.",
+        "Tu ressors. Un petit poste radio semble abandonn\u00e9 sur le bitume \u00e0 c\u00f4t\u00e9 du petit pont qui enjambe le canal. Tu t'assoies sur son rebord en b\u00e9ton, ouvre ta canette et allume la radio."
+      ],
+      "choiceLabel": "Tu trouves un v\u00e9lo abandonn\u00e9, appuy\u00e9 contre un arbre. On dirait qu'il t'attendait."
     },
     {
       "id": "nostromodamus-another-presence-master-reference-v2",
       "title": "Nostromodamus - Another Presence (MASTER REFERENCE V2)",
       "file": "assets/music/Nostromodamus - Another Presence.mp3",
+      "bpm": 128,
       "bandcamp": "https://nostromodamus.bandcamp.com",
-      "instagram": "https://instagram.com/nostromodamus"
+      "instagram": "https://instagram.com/nostromodamus",
+      "narrative": [
+        "Le c\u0153ur charg\u00e9 d'appr\u00e9hension, tu te mets en route vers l'ombre colossale.",
+        "Bient\u00f4t, tu t'avances dans l'ombre d'une gigantesque structure d'acier, pos\u00e9e comme en \u00e9quilibre pr\u00e9caire sur des dunes de sable rouge, pareille \u00e0 un bateau cargo h\u00e9riss\u00e9 d'antennes, de ponts et de cabines.",
+        "Une br\u00e8che s'ouvre dans son ventre de g\u00e9ant. Tu p\u00e9n\u00e8tres dans ses entrailles. L'air est froid et humide, des rigoles s'\u00e9coulent le long des parois d'acier et des c\u00e2bles \u00e9lectriques semblent s'agiter dans l'air immobile.",
+        "Dans les tr\u00e9fonds de la gigantesque machine, une seule fresque color\u00e9e appara\u00eet soudain, peinte par une main anonyme sur les parois du c\u0153ur du vaisseau.",
+        "Alors que tu la d\u00e9chiffres \u00e0 la lumi\u00e8re de ton portable, la musique des mots r\u00e9sonne dans ton esprit."
+      ],
+      "choiceLabel": "Une silhouette gigantesque se d\u00e9coupe \u00e0 l'horizon, ac\u00e9r\u00e9e et bard\u00e9e de tours et de fl\u00e8ches, comme une blessure dans le ciel rougeoyant."
     },
     {
       "id": "smogo-obliteration-premaster-24bit-44-1khz",
       "title": "Smogo - Obliteration (Premaster - 24bit 44.1khz)",
       "file": "assets/music/Smogo - Obliteration.mp3",
+      "bpm": 140,
       "bandcamp": "https://smogo.bandcamp.com",
-      "instagram": "https://instagram.com/smogo"
+      "instagram": "https://instagram.com/smogo",
+      "narrative": [
+        "Le paysage se transforme en un d\u00e9sert industriel. Des carcasses de machines \u00e9normes jonchent le sol, \u00e0 demi englouties par une poussi\u00e8re rouge\u00e2tre.",
+        "Un grondement sourd monte du sol, r\u00e9gulier comme une respiration. Tu t'approches d'un crat\u00e8re d'o\u00f9 s'\u00e9chappe une lumi\u00e8re pulsante et une chaleur intense."
+      ],
+      "choiceLabel": "Un grondement sourd monte de l'horizon, o\u00f9 la terre semble rougeoyer comme une braise mal \u00e9teinte."
     },
     {
       "id": "zero-crossing-point-half-past-six-mix-24b-v2",
       "title": "Zero Crossing Point - Half Past Six (Mix 24b V2)",
       "file": "assets/music/Zero Crossing Point - Half Past Six.mp3",
+      "bpm": 126,
       "bandcamp": "https://zerocrossingpoint.bandcamp.com",
-      "instagram": "https://instagram.com/zerocrossingpoint"
+      "instagram": "https://instagram.com/zerocrossingpoint",
+      "narrative": [
+        "L'horloge marque six heures et demie. Le ciel h\u00e9site entre le jour et la nuit, baign\u00e9 d'une lumi\u00e8re ambre qui fige tout dans une immobilit\u00e9 irr\u00e9elle.",
+        "Tu d\u00e9couvres un observatoire abandonn\u00e9, ses fen\u00eatres bris\u00e9es ouvertes sur l'horizon. \u00c0 l'int\u00e9rieur, des instruments de mesure continuent de tourner, enregistrant des donn\u00e9es que plus personne ne lit.",
+        "Sur un mur, une inscription\u00a0: \u00ab\u00a0Le temps ne passe pas. C'est nous qui passons.\u00a0\u00bb"
+      ],
+      "choiceLabel": "Une tour se dresse au loin, baign\u00e9e d'une lumi\u00e8re ambre qui semble figer le temps autour d'elle."
     },
     {
       "id": "acideplastique-vectorial-soil",
       "title": "acideplastique - Vectorial Soil",
       "file": "assets/music/Acideplastique - Vectorial Soil.mp3",
+      "bpm": 133,
       "bandcamp": "https://acideplastique.bandcamp.com",
-      "instagram": "https://instagram.com/acideplastique"
+      "instagram": "https://instagram.com/acideplastique",
+      "narrative": [
+        "Le sol sous tes pieds change de texture \u2013 organique, presque vivant. Des motifs g\u00e9om\u00e9triques se dessinent \u00e0 la surface, comme des circuits imprim\u00e9s faits de mousse et de lichen.",
+        "Tu t'agenouilles pour observer de plus pr\u00e8s. Les lignes pulsent doucement, suivant un rythme que tu reconnais sans pouvoir le nommer."
+      ],
+      "choiceLabel": "Le sol change de texture sous tes pieds. Des motifs g\u00e9om\u00e9triques pulsent doucement \u00e0 la surface, comme des circuits vivants."
     },
     {
       "id": "le-frit-streetview-belly-slide-mixdown",
       "title": "le frit - streetview belly slide (mixdown)",
       "file": "assets/music/le frit - streetview belly slide.mp3",
+      "bpm": 138,
       "bandcamp": "https://lefrit.bandcamp.com",
-      "instagram": "https://instagram.com/lefrit"
+      "instagram": "https://instagram.com/lefrit",
+      "narrative": [
+        "Tu glisses le long d'une avenue d\u00e9serte, bord\u00e9e d'\u00e9crans publicitaires \u00e9teints. Le bitume est lisse comme du verre et refl\u00e8te un ciel que tu ne reconnais pas.",
+        "Au bout de la rue, une borne interactive clignote faiblement. Tu t'approches et poses ta main sur l'\u00e9cran. Une vue a\u00e9rienne du monde s'affiche, mais les continents ont chang\u00e9 de forme.",
+        "Tu zoomes. L'image se pixellise, puis se recompose en quelque chose d'autre \u2013 une partition, peut-\u00eatre, ou une carte au tr\u00e9sor."
+      ],
+      "choiceLabel": "Une avenue d\u00e9serte s'\u00e9tire devant toi, bord\u00e9e d'\u00e9crans publicitaires \u00e9teints qui refl\u00e8tent un ciel inconnu."
     }
   ],
   "states": {
-    "1": "anta-doma-shapes-premaster",
+    "1": "nostromodamus-another-presence-master-reference-v2",
     "2": "aquacrypt-unknown",
     "3": "damna-3cso",
     "4": "drawbridge-khey-mysterio-psylmodie",

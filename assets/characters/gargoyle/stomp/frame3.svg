@@ -1,0 +1,35 @@
+<svg width="500" height="500" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- Gargoyle stomp frame 3: Massive impact, both feet wide, ground shake effect -->
+<path d="M185 85 L165 50 L150 30 L148 40 L158 60 L175 83 Z" fill="#bdff00"/>
+<path d="M315 85 L335 50 L350 30 L352 40 L342 60 L325 83 Z" fill="#bdff00"/>
+<path d="M250 60 C210 60 180 80 175 110 L172 135 C170 155 178 173 192 185 L200 191 C215 200 235 205 250 205 C265 205 285 200 300 191 L308 185 C322 173 330 155 328 135 L325 110 C320 80 290 60 250 60 Z" fill="#bdff00"/>
+<path d="M190 105 L210 100 L250 97 L290 100 L310 105 L305 113 L290 110 L250 107 L210 110 L195 113 Z" fill="#0b0e07"/>
+<path d="M210 123 C205 123 200 128 200 135 C200 142 205 147 210 147 C218 147 225 142 225 135 C225 128 218 123 210 123 Z M210 130 C214 130 218 132 218 135 C218 139 214 141 210 141 C207 141 204 139 204 135 C204 132 207 130 210 130 Z" fill="#0b0e07"/>
+<path d="M290 123 C285 123 280 128 280 135 C280 142 285 147 290 147 C298 147 305 142 305 135 C305 128 298 123 290 123 Z M290 130 C294 130 298 132 298 135 C298 139 294 141 290 141 C287 141 284 139 284 135 C284 132 287 130 290 130 Z" fill="#0b0e07"/>
+<path d="M235 160 L240 153 L250 150 L260 153 L265 160 L260 170 L250 175 L240 170 Z" fill="#0b0e07"/>
+<path d="M242 160 L248 157 L252 157 L258 160 L255 165 L250 167 L245 165 Z" fill="#bdff00" opacity="0.5"/>
+<path d="M235 175 L238 185 L242 177 Z" fill="#0b0e07"/>
+<path d="M265 175 L262 185 L258 177 Z" fill="#0b0e07"/>
+<path d="M220 200 L210 215 L208 240 L215 245 L292 245 L285 240 L290 215 L280 200 Z" fill="#bdff00"/>
+<!-- Body — impact stance, wide -->
+<path d="M215 245 L145 268 L105 300 L85 345 L75 395 L82 445 L100 480 L125 497 L160 500 L195 500 L235 498 L250 497 L265 498 L305 500 L340 500 L375 497 L400 480 L418 445 L425 395 L415 345 L395 300 L355 268 L285 245 Z" fill="#bdff00"/>
+<path d="M185 280 L155 302 L135 340 L128 385 L132 430 L148 465 L168 485 L190 495 L218 498 L250 499 L282 498 L310 495 L332 485 L352 465 L368 430 L372 385 L365 340 L345 302 L315 280 L285 268 L250 263 L215 268 Z" fill="#0b0e07" opacity="0.3"/>
+<path d="M250 295 L275 325 L250 355 L225 325 Z" stroke="#bdff00" stroke-width="3" fill="none"/>
+<path d="M250 310 L262 325 L250 340 L238 325 Z" fill="#bdff00" opacity="0.25"/>
+<path d="M185 345 Q250 330 315 345" stroke="#bdff00" stroke-width="2" fill="none" opacity="0.3"/>
+<path d="M180 375 Q250 360 320 375" stroke="#bdff00" stroke-width="2" fill="none" opacity="0.25"/>
+<path d="M182 405 Q250 390 318 405" stroke="#bdff00" stroke-width="2" fill="none" opacity="0.2"/>
+<!-- Wings — wide impact spread -->
+<path d="M105 300 L75 268 L40 235 L12 215 L0 210 L0 225 L10 242 L0 262 L16 268 L8 292 L28 283 L23 310 L42 298 L42 325 L65 308 L72 335 L92 318 Z" fill="#bdff00"/>
+<path d="M395 300 L425 268 L460 235 L488 215 L500 210 L500 225 L490 242 L500 262 L484 268 L492 292 L472 283 L477 310 L458 298 L458 325 L435 308 L428 335 L408 318 Z" fill="#bdff00"/>
+<!-- Clawed feet — wide impact stance -->
+<path d="M160 500 L148 497 L135 500 L142 502 L155 500 L168 497 Z" fill="#bdff00"/>
+<path d="M135 500 L122 497 L110 502 L118 504 L132 502 Z" fill="#bdff00"/>
+<path d="M340 500 L352 497 L365 500 L358 502 L345 500 L332 497 Z" fill="#bdff00"/>
+<path d="M365 500 L378 497 L390 502 L382 504 L368 502 Z" fill="#bdff00"/>
+<!-- Ground shake lines (impact effect) -->
+<path d="M50 500 L100 495" stroke="#0b0e07" stroke-width="2" opacity="0.3"/>
+<path d="M450 500 L400 495" stroke="#0b0e07" stroke-width="2" opacity="0.3"/>
+<path d="M20 498 L80 492" stroke="#0b0e07" stroke-width="1.5" opacity="0.2"/>
+<path d="M480 498 L420 492" stroke="#0b0e07" stroke-width="1.5" opacity="0.2"/>
+</svg>

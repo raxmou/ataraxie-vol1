@@ -1,0 +1,40 @@
+<svg width="500" height="500" viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- Gargoyle: hunched stone figure with folded wings -->
+<!-- Ear ridges — perked -->
+<path d="M185 75 L160 35 L142 12 L142 22 L155 45 L175 73 Z" fill="#bdff00"/>
+<path d="M315 75 L340 35 L358 12 L358 22 L345 45 L325 73 Z" fill="#bdff00"/>
+<!-- Head — blocky angular -->
+<path d="M250 55 C210 55 180 75 175 105 L172 130 C170 150 178 168 192 180 L200 186 C215 195 235 200 250 200 C265 200 285 195 300 186 L308 180 C322 168 330 150 328 130 L325 105 C320 75 290 55 250 55 Z" fill="#bdff00"/>
+<!-- Brow ridge -->
+<path d="M190 100 L210 95 L250 92 L290 95 L310 100 L305 108 L290 105 L250 102 L210 105 L195 108 Z" fill="#0b0e07"/>
+<!-- Eyes — deep set -->
+<path d="M210 118 C205 118 200 123 200 130 C200 137 205 142 210 142 C218 142 225 137 225 130 C225 123 218 118 210 118 Z M210 125 C214 125 218 127 218 130 C218 134 214 136 210 136 C207 136 204 134 204 130 C204 127 207 125 210 125 Z" fill="#0b0e07"/>
+<path d="M290 118 C285 118 280 123 280 130 C280 137 285 142 290 142 C298 142 305 137 305 130 C305 123 298 118 290 118 Z M290 125 C294 125 298 127 298 130 C298 134 294 136 290 136 C287 136 284 134 284 130 C284 127 287 125 290 125 Z" fill="#0b0e07"/>
+<!-- Snout / muzzle -->
+<path d="M235 155 L240 148 L250 145 L260 148 L265 155 L260 165 L250 170 L240 165 Z" fill="#0b0e07"/>
+<path d="M242 155 L248 152 L252 152 L258 155 L255 160 L250 162 L245 160 Z" fill="#bdff00" opacity="0.5"/>
+<!-- Fangs -->
+<path d="M235 170 L238 180 L242 172 Z" fill="#0b0e07"/>
+<path d="M265 170 L262 180 L258 172 Z" fill="#0b0e07"/>
+<!-- Neck — thick -->
+<path d="M220 195 L210 210 L208 235 L215 240 L292 240 L285 235 L290 210 L280 195 Z" fill="#bdff00"/>
+<!-- Shoulders + torso — massive hunched -->
+<path d="M215 240 L155 260 L120 290 L105 330 L100 375 L108 420 L125 455 L150 475 L180 488 L210 495 L250 498 L290 495 L320 488 L350 475 L375 455 L392 420 L400 375 L395 330 L380 290 L345 260 L285 240 Z" fill="#bdff00"/>
+<!-- Torso inner -->
+<path d="M195 275 L165 295 L145 330 L138 370 L142 410 L158 442 L178 462 L200 475 L225 482 L250 484 L275 482 L300 475 L322 462 L342 442 L358 410 L362 370 L355 330 L335 295 L305 275 L280 265 L250 260 L220 265 Z" fill="#0b0e07" opacity="0.3"/>
+<!-- Chest crest -->
+<path d="M250 290 L275 320 L250 350 L225 320 Z" stroke="#bdff00" stroke-width="3" fill="none"/>
+<path d="M250 305 L262 320 L250 335 L238 320 Z" fill="#bdff00" opacity="0.25"/>
+<!-- Ribs -->
+<path d="M195 340 Q250 325 305 340" stroke="#bdff00" stroke-width="2" fill="none" opacity="0.3"/>
+<path d="M190 370 Q250 355 310 370" stroke="#bdff00" stroke-width="2" fill="none" opacity="0.25"/>
+<path d="M192 400 Q250 385 308 400" stroke="#bdff00" stroke-width="2" fill="none" opacity="0.2"/>
+<!-- Wings — folded, angular stone-like, mid-spread -->
+<path d="M120 290 L85 255 L55 220 L32 200 L18 192 L10 202 L22 220 L18 238 L32 245 L28 265 L45 260 L44 282 L62 272 L65 292 L80 280 L88 300 L100 288 Z" fill="#bdff00"/>
+<path d="M380 290 L415 255 L445 220 L468 200 L482 192 L490 202 L478 220 L482 238 L468 245 L472 265 L455 260 L456 282 L438 272 L435 292 L420 280 L412 300 L400 288 Z" fill="#bdff00"/>
+<!-- Clawed feet -->
+<path d="M180 488 L168 492 L155 498 L162 500 L175 496 L185 492 Z" fill="#bdff00"/>
+<path d="M155 498 L142 496 L132 500 L140 502 L152 500 Z" fill="#bdff00"/>
+<path d="M320 488 L332 492 L345 498 L338 500 L325 496 L315 492 Z" fill="#bdff00"/>
+<path d="M345 498 L358 496 L368 500 L360 502 L348 500 Z" fill="#bdff00"/>
+</svg>

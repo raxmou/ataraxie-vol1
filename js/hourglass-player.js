@@ -265,7 +265,7 @@ class Particle {
     this.inBottom = false;
     this.falling = false; // Currently falling through the gap
     this.onFloor = false; // Touching floor or resting on another particle
-    this.nearWall = false; // Near triangle wall (for bottom triangle)
+    this.restFrames = 0; // Consecutive near-rest frames for settling
   }
 
   reset(x, y, inBottom) {
@@ -277,7 +277,7 @@ class Particle {
     this.inBottom = inBottom;
     this.falling = false;
     this.onFloor = false;
-    this.nearWall = false;
+    this.restFrames = 0;
   }
 }
 
@@ -694,6 +694,7 @@ export const createHourglassPlayer = (container, audio) => {
       p.vx += gravityX;
       p.vy += gravityY;
       p.vx *= friction;
+      p.vy *= friction;
       p.x += p.vx * dt * 60;
       p.y += p.vy * dt * 60;
     });
@@ -791,11 +792,17 @@ export const createHourglassPlayer = (container, audio) => {
             p.inBottom = true;
             p.settled = false;
 
-            // Wake up particles in bottom triangle
+            // Wake up nearby particles in bottom triangle (not all)
+            const wakeRadius = p.size * 6;
             particles.forEach((other) => {
               if (other !== p && other.inBottom && other.settled) {
-                other.settled = false;
-                other.onFloor = false;
+                const dx = other.x - p.x;
+                const dy = other.y - p.y;
+                if (dx * dx + dy * dy < wakeRadius * wakeRadius) {
+                  other.settled = false;
+                  other.onFloor = false;
+                  other.restFrames = 0;
+                }
               }
             });
           }
@@ -806,11 +813,17 @@ export const createHourglassPlayer = (container, audio) => {
             p.inBottom = false;
             p.settled = false;
 
-            // Wake up particles in top triangle
+            // Wake up nearby particles in top triangle (not all)
+            const wakeRadius = p.size * 6;
             particles.forEach((other) => {
               if (other !== p && !other.inBottom && other.settled) {
-                other.settled = false;
-                other.onFloor = false;
+                const dx = other.x - p.x;
+                const dy = other.y - p.y;
+                if (dx * dx + dy * dy < wakeRadius * wakeRadius) {
+                  other.settled = false;
+                  other.onFloor = false;
+                  other.restFrames = 0;
+                }
               }
             });
           }
@@ -825,19 +838,25 @@ export const createHourglassPlayer = (container, audio) => {
         // Top triangle
         const bounds = getTriangleBounds(p.y, true, holeHalfWidth);
         if (bounds) {
-          // Wall collisions with extra damping (matches bottom triangle)
+          // Wall collisions with sliding force
           if (p.x < bounds.left + p.size) {
             p.x = bounds.left + p.size;
-            p.vx = Math.abs(p.vx) * bounceDamping * 0.5;
-            p.vy *= 0.8;
+            p.vx = Math.abs(p.vx) * bounceDamping * 0.3;
+            // Apply wall-sliding force from gravity
+            const normal = getWallNormal(true, true);
+            const gravDotN = gravityX * normal.nx + gravityY * normal.ny;
+            p.vx += (gravityX - gravDotN * normal.nx) * 0.5;
+            p.vy += (gravityY - gravDotN * normal.ny) * 0.5;
           }
           if (p.x > bounds.right - p.size) {
             p.x = bounds.right - p.size;
-            p.vx = -Math.abs(p.vx) * bounceDamping * 0.5;
-            p.vy *= 0.8;
+            p.vx = -Math.abs(p.vx) * bounceDamping * 0.3;
+            // Apply wall-sliding force from gravity
+            const normal = getWallNormal(true, false);
+            const gravDotN = gravityX * normal.nx + gravityY * normal.ny;
+            p.vx += (gravityX - gravDotN * normal.nx) * 0.5;
+            p.vy += (gravityY - gravDotN * normal.ny) * 0.5;
           }
-          // Track if near wall (for settling when tilted)
-          p.nearWall = (p.x < bounds.left + p.size * 3) || (p.x > bounds.right - p.size * 3);
         }
 
         // Floor/ceiling collision depends on gravity direction
@@ -867,18 +886,24 @@ export const createHourglassPlayer = (container, audio) => {
         if (bounds) {
           if (p.x < bounds.left + p.size) {
             p.x = bounds.left + p.size;
-            p.vx = Math.abs(p.vx) * bounceDamping * 0.5; // Extra damping at walls
-            p.vy *= 0.8;
+            p.vx = Math.abs(p.vx) * bounceDamping * 0.3;
             hitWall = true;
+            // Apply wall-sliding force from gravity
+            const normal = getWallNormal(false, true);
+            const gravDotN = gravityX * normal.nx + gravityY * normal.ny;
+            p.vx += (gravityX - gravDotN * normal.nx) * 0.5;
+            p.vy += (gravityY - gravDotN * normal.ny) * 0.5;
           }
           if (p.x > bounds.right - p.size) {
             p.x = bounds.right - p.size;
-            p.vx = -Math.abs(p.vx) * bounceDamping * 0.5;
-            p.vy *= 0.8;
+            p.vx = -Math.abs(p.vx) * bounceDamping * 0.3;
             hitWall = true;
+            // Apply wall-sliding force from gravity
+            const normal = getWallNormal(false, false);
+            const gravDotN = gravityX * normal.nx + gravityY * normal.ny;
+            p.vx += (gravityX - gravDotN * normal.nx) * 0.5;
+            p.vy += (gravityY - gravDotN * normal.ny) * 0.5;
           }
-          // Track if near wall (for collision logic)
-          p.nearWall = (p.x < bounds.left + p.size * 3) || (p.x > bounds.right - p.size * 3);
         }
 
         // Floor/ceiling collision depends on gravity direction
@@ -971,11 +996,9 @@ export const createHourglassPlayer = (container, audio) => {
               p1.x -= nx * overlap;
               p1.y -= ny * overlap;
               if (inBottom) {
-                // Only add slide velocity if not near wall
-                if (!p1.nearWall) {
-                  const slideDir = p1.x < CENTER_X ? -1 : 1;
-                  p1.vx += slideDir * 0.2;
-                }
+                // Nudge toward center to prevent stacking against walls
+                const slideDir = p1.x < CENTER_X ? 1 : -1;
+                p1.vx += slideDir * 0.03;
                 p1.vy *= 0.5;
                 // Propagate support only if p2 is SETTLED (not just onFloor)
                 // This ensures p1 falls if p2 moves during recompute
@@ -991,10 +1014,9 @@ export const createHourglassPlayer = (container, audio) => {
               p2.x += nx * overlap;
               p2.y += ny * overlap;
               if (inBottom) {
-                if (!p2.nearWall) {
-                  const slideDir = p2.x < CENTER_X ? -1 : 1;
-                  p2.vx += slideDir * 0.2;
-                }
+                // Nudge toward center to prevent stacking against walls
+                const slideDir = p2.x < CENTER_X ? 1 : -1;
+                p2.vx += slideDir * 0.03;
                 p2.vy *= 0.5;
                 // Propagate support only if p1 is SETTLED (not just onFloor)
                 if (p2.y < p1.y && p1.settled) {
@@ -1025,36 +1047,22 @@ export const createHourglassPlayer = (container, audio) => {
       }
     }
 
-    // Fourth pass: settle particles
+    // Fourth pass: settle particles (rest-frame counter tolerates onFloor flicker)
     particles.forEach((p) => {
       if (p.settled || p.falling) return;
 
       const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+      const threshold = p.inBottom ? 0.8 : 0.6;
 
-      if (p.inBottom) {
-        // Bottom triangle: settle on floor, or if near wall and very slow
-        if (p.onFloor && speed < 0.6) {
-          p.settled = true;
-          p.vx = 0;
-          p.vy = 0;
-        } else if (p.nearWall && speed < 0.3) {
-          // Near wall and very slow - settle to prevent corner jitter
+      if (p.onFloor && speed < threshold) {
+        p.restFrames++;
+        if (p.restFrames >= 4) {
           p.settled = true;
           p.vx = 0;
           p.vy = 0;
         }
       } else {
-        // Top triangle: settle when on floor or resting on particles, and slow
-        if (p.onFloor && speed < 0.5) {
-          p.settled = true;
-          p.vx = 0;
-          p.vy = 0;
-        } else if (p.nearWall && speed < 0.3) {
-          // Near wall and very slow - settle to prevent jitter when tilted
-          p.settled = true;
-          p.vx = 0;
-          p.vy = 0;
-        }
+        p.restFrames = 0;
       }
     });
 
@@ -1550,6 +1558,22 @@ export const createHourglassPlayer = (container, audio) => {
   return {
     /** Current effective playback speed (-2 … 2). */
     get speed() { return userPaused ? 0 : playbackSpeed; },
+
+    /** Toggle play/pause, matching the hourglass click behavior. */
+    togglePlay() {
+      const playing = !audio.paused || isPlayingReversed;
+      if (playing) {
+        userPaused = true;
+        audio.pause();
+        stopReversePlayback();
+      } else {
+        userPaused = false;
+        audio.play().catch(() => {});
+      }
+    },
+
+    /** Whether audio is currently playing (forward or reverse). */
+    get playing() { return !audio.paused || isPlayingReversed; },
 
     /**
      * Dispose of the player and clean up resources.

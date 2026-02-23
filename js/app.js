@@ -2838,9 +2838,101 @@ const showCharacterSelect = () => {
 
 const hideCharacterSelect = () => {
   if (characterSelect) {
+    characterSelect.style.transition = "none";
     characterSelect.setAttribute("aria-hidden", "true");
+    characterSelect.classList.remove("is-flying-out", "is-bg-fading");
+    // Re-enable transitions after the hide is painted
+    requestAnimationFrame(() => { characterSelect.style.transition = ""; });
   }
 };
+
+const flyCharacterToMap = (character) => new Promise((resolve) => {
+  const selectedCard = document.querySelector(".character-card.is-selected");
+  const cardImg = selectedCard?.querySelector(".character-card-img");
+  if (!cardImg || !characterSelect || !svg) { hideCharacterSelect(); return resolve(); }
+
+  const stateCenter = getStateCenter("1");
+  const ctm = svg.getScreenCTM();
+  if (!stateCenter || !ctm) { hideCharacterSelect(); return resolve(); }
+
+  const targetScreenX = stateCenter.x * ctm.a + ctm.e;
+  const targetScreenY = stateCenter.y * ctm.d + ctm.f;
+  const targetSize = Math.max(16, getMarkerRadius() * 8 * ctm.a);
+
+  const srcRect = cardImg.getBoundingClientRect();
+  const startX = srcRect.left;
+  const startY = srcRect.top;
+  const startW = srcRect.width;
+  const startH = srcRect.height;
+
+  const flyer = document.createElement("img");
+  flyer.className = "character-flyer";
+  flyer.src = cardImg.src;
+  flyer.style.left = startX + "px";
+  flyer.style.top = startY + "px";
+  flyer.style.width = startW + "px";
+  flyer.style.height = startH + "px";
+  document.body.appendChild(flyer);
+
+  const frames = CHARACTER_MOVE_MAP[character]?.hipshake || [];
+  let frameIdx = 0;
+  const hipshakeInterval = frames.length > 0
+    ? setInterval(() => { frameIdx = (frameIdx + 1) % frames.length; flyer.src = frames[frameIdx]; }, 125)
+    : null;
+
+  characterSelect.classList.add("is-flying-out");
+
+  setTimeout(() => characterSelect.classList.add("is-bg-fading"), 250);
+
+  const flightDelay = 300;
+  const flightDuration = 800;
+
+  const easeInOutCubic = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+  const endX = targetScreenX - targetSize / 2;
+  const endY = targetScreenY - targetSize / 2;
+
+  const cpx = (startX + endX) / 2;
+  const arcHeight = Math.abs(endX - startX) * 0.3;
+  const cpy = Math.min(startY, endY) - arcHeight;
+
+  setTimeout(() => {
+    const t0 = performance.now();
+    const step = (now) => {
+      const elapsed = now - t0;
+      const raw = Math.min(elapsed / flightDuration, 1);
+      const t = easeInOutCubic(raw);
+      const u = 1 - t;
+
+      const bx = u * u * startX + 2 * u * t * cpx + t * t * endX;
+      const by = u * u * startY + 2 * u * t * cpy + t * t * endY;
+      const w = startW + (targetSize - startW) * t;
+      const h = startH + (targetSize - startH) * t;
+      const glowSize = 6 + 18 * t;
+      const glowAlpha = 0.4 + 0.5 * t;
+
+      flyer.style.left = bx + "px";
+      flyer.style.top = by + "px";
+      flyer.style.width = w + "px";
+      flyer.style.height = h + "px";
+      flyer.style.filter = `drop-shadow(0 0 ${glowSize}px rgba(189,255,0,${glowAlpha}))`;
+
+      if (raw < 1) {
+        requestAnimationFrame(step);
+      } else {
+        if (hipshakeInterval) clearInterval(hipshakeInterval);
+        flyer.classList.add("character-flyer--landed");
+        hideCharacterSelect();
+
+        setTimeout(() => {
+          flyer.remove();
+          resolve();
+        }, 300);
+      }
+    };
+    requestAnimationFrame(step);
+  }, flightDelay);
+});
 
 const updateCharacterAvatar = () => {};
 
@@ -2899,9 +2991,16 @@ const waitForCharacterSelection = () =>
       selectedCharacter = character;
       localStorage.setItem(CHARACTER_STORAGE_KEY, character);
       cleanup();
-      hideCharacterSelect();
       updateCharacterAvatar();
-      resolve(character);
+      if (prefersReducedMotion) {
+        hideCharacterSelect();
+        resolve(character);
+      } else {
+        const hipFrames = CHARACTER_MOVE_MAP[character]?.hipshake || [];
+        Promise.all(hipFrames.map(src => new Promise(r => {
+          const i = new Image(); i.onload = i.onerror = r; i.src = src;
+        }))).then(() => flyCharacterToMap(character).then(() => resolve(character)));
+      }
     };
 
     const cleanup = () => {
@@ -3047,7 +3146,7 @@ const drawTrailSegment = (fromStateId, toStateId) => {
 
 // --- Map View Character (SVG on trail layer) ---
 
-const createMapCharacter = () => {
+const createMapCharacter = (arriving = false) => {
   removeMapCharacter();
   if (!selectedCharacter || !mapApi) return;
   const moveSet = CHARACTER_MOVE_MAP[selectedCharacter];
@@ -3076,6 +3175,11 @@ const createMapCharacter = () => {
   mapCharacter = img;
   mapCharacterFrameIdx = 0;
   mapCharacterStateId = targetState;
+
+  if (arriving && !prefersReducedMotion) {
+    mapCharacter.classList.add("map-character--arriving");
+    setTimeout(() => mapCharacter?.classList.remove("map-character--arriving"), 500);
+  }
 
   mapCharacterInterval = setInterval(() => {
     mapCharacterFrameIdx = (mapCharacterFrameIdx + 1) % moveSet.idle.length;
@@ -3600,7 +3704,7 @@ const init = async () => {
       await waitForCharacterSelection();
     }
 
-    createMapCharacter();
+    createMapCharacter(true);
 
     const initialState = new URLSearchParams(window.location.search).get("state");
     if (initialState) {
@@ -3721,7 +3825,7 @@ aboutChangeCharacter?.addEventListener("click", () => {
   removeMapCharacter();
   localStorage.removeItem(CHARACTER_STORAGE_KEY);
   selectedCharacter = null;
-  waitForCharacterSelection().then(() => createMapCharacter());
+  waitForCharacterSelection().then(() => createMapCharacter(true));
 });
 
 init();

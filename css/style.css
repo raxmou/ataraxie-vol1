@@ -281,6 +281,52 @@ body::before {
   pointer-events: none;
 }
 
+/* Flying character transition */
+.character-flyer {
+  position: fixed;
+  z-index: 13;
+  pointer-events: none;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px rgba(189, 255, 0, 0.4));
+  will-change: left, top, width, height, filter;
+}
+
+.character-flyer--landed {
+  filter: drop-shadow(0 0 32px rgba(189, 255, 0, 1)) !important;
+  transition: filter 0.3s ease;
+}
+
+/* Exit transition: fade non-selected elements */
+.character-select.is-flying-out .character-select-title,
+.character-select.is-flying-out .character-confirm,
+.character-select.is-flying-out .splash-logo,
+.character-select.is-flying-out .character-card:not(.is-selected) {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.character-select.is-flying-out .character-card.is-selected {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  transition: border-color 0.3s ease 0.2s, background 0.3s ease 0.2s, box-shadow 0.3s ease 0.2s;
+}
+
+.character-select.is-flying-out .character-card.is-selected .character-card-img {
+  opacity: 0;
+  transition: opacity 0.05s ease 0.05s;
+}
+
+/* Background fade to transparent */
+.character-select.is-bg-fading {
+  background: transparent;
+  transition: background 0.5s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .character-flyer { display: none; }
+}
+
 .character-select-title {
   font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
   font-size: 1.6rem;

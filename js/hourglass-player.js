@@ -437,6 +437,14 @@ export const createHourglassPlayer = (container, audio) => {
   const SHAKE_MIN_CHANGES = 2;        // Min direction reversals needed
   const SHAKE_BOOST_DURATION = 2000;  // How long x2 lasts (ms)
 
+  // Snap-on-release
+  let isSnapping = false;
+  let snapStartAngle = 0;
+  let snapTargetAngle = 0;
+  let snapStartTime = 0;
+  const SNAP_DURATION = 200;            // ms
+  const SNAP_RELEASE_THRESHOLD = 20;    // degrees from detent to trigger snap
+
   // Particle size and hole width (calculated when duration is known)
   let particleRadius = 3;
   let holeHalfWidth = 4; // Minimum hole half-width to fit one particle
@@ -540,6 +548,30 @@ export const createHourglassPlayer = (container, audio) => {
    * Get playback speed from rotation angle using linear interpolation.
    * 0° → 1 (forward), 90° → 0 (paused), 180° → -1 (reverse), 270° → 0 (paused)
    */
+  const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+
+  /**
+   * Find snap target preserving winding direction.
+   * Returns target angle (accounting for multi-revolution) or null if too far.
+   */
+  const findSnapTarget = (angle) => {
+    const normalized = ((angle % 360) + 360) % 360;
+    const base = angle - normalized; // winding offset
+    const detents = [0, 90, 180, 270, 360]; // 360 to handle wrap from ~350°
+    let bestDetent = null;
+    let bestDist = Infinity;
+    for (const d of detents) {
+      const dist = Math.abs(normalized - d);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestDetent = d;
+      }
+    }
+    if (bestDist > SNAP_RELEASE_THRESHOLD) return null;
+    // 360 detent means snap to next revolution's 0
+    return base + bestDetent;
+  };
+
   const getSpeedFromRotation = (angle) => {
     const normalized = ((angle % 360) + 360) % 360;
 
@@ -1297,6 +1329,19 @@ export const createHourglassPlayer = (container, audio) => {
     const dt = Math.min((now - lastTime) / 1000, 0.1);
     lastTime = now;
 
+    // Snap-on-release animation
+    if (isSnapping) {
+      const elapsed = now - snapStartTime;
+      if (prefersReducedMotion || elapsed >= SNAP_DURATION) {
+        rotationAngle = snapTargetAngle;
+        isSnapping = false;
+      } else {
+        const t = easeOutCubic(elapsed / SNAP_DURATION);
+        rotationAngle = snapStartAngle + (snapTargetAngle - snapStartAngle) * t;
+      }
+      wrapper.style.transform = `rotate(${rotationAngle}deg)`;
+    }
+
     // Apply playback speed (skip during scrub drag)
     if (!isDragging) applyPlaybackSpeed();
 
@@ -1427,6 +1472,9 @@ export const createHourglassPlayer = (container, audio) => {
 
   // Rotation interaction (circular drag)
   const handleRotationStart = (e) => {
+    // Interrupt any in-progress snap
+    isSnapping = false;
+
     // Only start rotation from outer area (not scrub zone)
     if (e.target === scrubZone) return;
 
@@ -1505,8 +1553,14 @@ export const createHourglassPlayer = (container, audio) => {
     // Reset direction tracking
     lastRotationDirection = 0;
 
-    // No snapping - hourglass stays where released
-    // Speed continues to be calculated from rotation angle
+    // Snap to nearest detent if close enough
+    const target = findSnapTarget(rotationAngle);
+    if (target !== null) {
+      snapStartAngle = rotationAngle;
+      snapTargetAngle = target;
+      snapStartTime = performance.now();
+      isSnapping = true;
+    }
   };
 
   wrapper.addEventListener("mousedown", handleRotationStart);
@@ -1574,6 +1628,17 @@ export const createHourglassPlayer = (container, audio) => {
 
     /** Whether audio is currently playing (forward or reverse). */
     get playing() { return !audio.paused || isPlayingReversed; },
+
+    /** Reset track to beginning with full hourglass. */
+    restart() {
+      stopReversePlayback();
+      audio.currentTime = 0;
+      particleProgress = 0;
+      playbackSpeed = 1;
+      userPaused = false;
+      redistributeParticles(0);
+      audio.play().catch(() => {});
+    },
 
     /**
      * Dispose of the player and clean up resources.

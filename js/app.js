@@ -33,13 +33,12 @@ const questionModal = document.getElementById("question-modal");
 const questionText = document.getElementById("question-text");
 const answerBtn1 = document.getElementById("answer-btn-1");
 const answerBtn2 = document.getElementById("answer-btn-2");
-const infoButton = document.getElementById("info-button");
-const creditsModal = document.getElementById("credits-modal");
-const creditsClose = document.getElementById("credits-close");
+const aboutModal = document.getElementById("about-modal");
+const aboutClose = document.getElementById("about-close");
 const characterSelect = document.getElementById("character-select");
 const characterConfirm = document.getElementById("character-confirm");
 const characterCards = document.querySelectorAll(".character-card[data-character]");
-const creditsChangeCharacter = document.getElementById("credits-change-character");
+const aboutChangeCharacter = document.getElementById("about-change-character");
 const stateCanvas = document.getElementById("state-3d-canvas");
 const sigilCanvas = document.getElementById("sigil-3d-canvas");
 const threeStack = document.getElementById("state-3d-stack");
@@ -116,6 +115,8 @@ let mapCharacter = null;
 let mapCharacterFrameIdx = 0;
 let mapCharacterInterval = null;
 let mapCharacterStateId = null;
+let mapCharacterBarkTimers = [];
+let mapCharacterBark = null;
 // State view character (HTML img in info pane)
 let stateCharacter = null;
 let stateCharFrameIdx = 0;
@@ -2470,9 +2471,11 @@ const selectState = (stateId, options = {}) => {
   if (!stateId) return;
   const normalized = String(stateId);
   if (normalized === "0" || normalized === activeStateId) return;
-  
+
+  hideMapCharacterBark();
+
   const skipQuestion = options.skipQuestion || hasBeenQuestioned(normalized);
-  
+
   activeThreeView = "state";
   mapApi?.setActiveState(normalized);
   mapApi?.focusState(normalized);
@@ -2657,22 +2660,17 @@ const celebrateMapCompletion = () => {
     }, 250);
   }
 
-  // Show the info button
-  if (infoButton) {
-    infoButton.classList.add("is-visible");
-  }
 };
-window.celebrateMapCompletion = celebrateMapCompletion; // dev testing
 
-const showCreditsModal = () => {
-  if (creditsModal) {
-    creditsModal.setAttribute("aria-hidden", "false");
+const showAboutModal = () => {
+  if (aboutModal) {
+    aboutModal.setAttribute("aria-hidden", "false");
   }
 };
 
-const hideCreditsModal = () => {
-  if (creditsModal) {
-    creditsModal.setAttribute("aria-hidden", "true");
+const hideAboutModal = () => {
+  if (aboutModal) {
+    aboutModal.setAttribute("aria-hidden", "true");
   }
 };
 
@@ -2823,9 +2821,18 @@ const getCharacterFrame = (character, frameIndex = 0) => {
 
 const showCharacterSelect = () => {
   if (characterSelect) {
+    const card = characterSelect.querySelector(".character-select-card");
     characterCards.forEach((c) => c.classList.remove("is-selected"));
     if (characterConfirm) characterConfirm.hidden = true;
+    if (card) card.classList.remove("is-card-visible");
+    characterSelect.classList.add("is-logo-intro");
     characterSelect.setAttribute("aria-hidden", "false");
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const delay = prefersReducedMotion ? 0 : 4800;
+    setTimeout(() => {
+      characterSelect.classList.remove("is-logo-intro");
+      if (card) card.classList.add("is-card-visible");
+    }, delay);
   }
 };
 
@@ -2840,6 +2847,39 @@ const updateCharacterAvatar = () => {};
 const waitForCharacterSelection = () =>
   new Promise((resolve) => {
     showCharacterSelect();
+
+    // Hipshake frame cycling on hover
+    const hoverIntervals = new Map();
+    const HIPSHAKE_FPS = 8;
+
+    const startHipshake = (card) => {
+      const character = card.dataset.character;
+      const frames = CHARACTER_MOVE_MAP[character]?.hipshake;
+      if (!frames || frames.length === 0) return;
+      const img = card.querySelector(".character-card-img");
+      if (!img) return;
+      let frameIdx = 0;
+      img.src = frames[0];
+      const interval = setInterval(() => {
+        frameIdx = (frameIdx + 1) % frames.length;
+        img.src = frames[frameIdx];
+      }, 1000 / HIPSHAKE_FPS);
+      hoverIntervals.set(card, interval);
+    };
+
+    const stopHipshake = (card) => {
+      const character = card.dataset.character;
+      const interval = hoverIntervals.get(card);
+      if (interval != null) {
+        clearInterval(interval);
+        hoverIntervals.delete(card);
+      }
+      const img = card.querySelector(".character-card-img");
+      if (img) img.src = getCharacterFrame(character, 0);
+    };
+
+    const handleMouseEnter = (e) => startHipshake(e.currentTarget);
+    const handleMouseLeave = (e) => stopHipshake(e.currentTarget);
 
     const selectCard = (card) => {
       characterCards.forEach((c) => c.classList.remove("is-selected"));
@@ -2865,11 +2905,20 @@ const waitForCharacterSelection = () =>
     };
 
     const cleanup = () => {
-      characterCards.forEach((c) => c.removeEventListener("click", handleCardClick));
+      characterCards.forEach((c) => {
+        c.removeEventListener("click", handleCardClick);
+        c.removeEventListener("mouseenter", handleMouseEnter);
+        c.removeEventListener("mouseleave", handleMouseLeave);
+        stopHipshake(c);
+      });
       characterConfirm?.removeEventListener("click", handleConfirm);
     };
 
-    characterCards.forEach((card) => card.addEventListener("click", handleCardClick));
+    characterCards.forEach((card) => {
+      card.addEventListener("click", handleCardClick);
+      card.addEventListener("mouseenter", handleMouseEnter);
+      card.addEventListener("mouseleave", handleMouseLeave);
+    });
     characterConfirm?.addEventListener("click", handleConfirm);
   });
 
@@ -3038,7 +3087,29 @@ const createMapCharacter = () => {
   }, 350);
 };
 
+const hideMapCharacterBark = () => {
+  mapCharacterBarkTimers.forEach(t => clearTimeout(t));
+  mapCharacterBarkTimers = [];
+  if (mapCharacterBark) { mapCharacterBark.remove(); mapCharacterBark = null; }
+};
+
+const showMapCharacterBark = (text, duration = 4000) => {
+  if (mapCharacterBark) { mapCharacterBark.remove(); mapCharacterBark = null; }
+  if (!mapCharacter || !svg) return;
+  const rect = mapCharacter.getBoundingClientRect();
+  const parentRect = mapPane.getBoundingClientRect();
+  const bubble = document.createElement("div");
+  bubble.className = "state-character-bubble";
+  bubble.textContent = text;
+  bubble.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
+  bubble.style.top = `${rect.top - parentRect.top - 8}px`;
+  mapPane.appendChild(bubble);
+  mapCharacterBark = bubble;
+  mapCharacterBarkTimers.push(setTimeout(() => { if (mapCharacterBark === bubble) { bubble.remove(); mapCharacterBark = null; } }, duration));
+};
+
 const removeMapCharacter = () => {
+  hideMapCharacterBark();
   if (mapCharacterInterval) {
     clearInterval(mapCharacterInterval);
     mapCharacterInterval = null;
@@ -3244,9 +3315,10 @@ const setupStateCharDrag = (img) => {
 
     const items = [
       { label: playLabel, action: () => { if (hourglassPlayer) { hourglassPlayer.togglePlay(); } else if (activeAudio) { activeAudio.paused ? activeAudio.play() : activeAudio.pause(); } }},
+      { label: "Redémarrer le temps", action: () => { if (hourglassPlayer) { hourglassPlayer.restart(); } else if (activeAudio) { activeAudio.currentTime = 0; activeAudio.play().catch(() => {}); } }},
       { label: "Quel est le sens de la vie\u202f?", action: askMeaning },
       { label: "Gestes sablier", action: showGestureHelp },
-      { label: "\u00c0 propos", action: () => { creditsModal?.setAttribute("aria-hidden", "false"); }},
+      { label: "\u00c0 propos", action: () => { aboutModal?.setAttribute("aria-hidden", "false"); }},
     ];
 
     for (const item of items) {
@@ -3533,6 +3605,11 @@ const init = async () => {
     const initialState = new URLSearchParams(window.location.search).get("state");
     if (initialState) {
       selectState(initialState, { pushState: false });
+    } else {
+      mapCharacterBarkTimers.push(
+        setTimeout(() => showMapCharacterBark("Où ai-je donc atterri ?"), 2000),
+        setTimeout(() => showMapCharacterBark("Ne devrait-on pas essayer de découvrir ce territoire ?"), 10000),
+      );
     }
   } catch (error) {
     console.error(error);
@@ -3621,30 +3698,26 @@ window.addEventListener("popstate", () => {
   }
 });
 
-// Info button and credits modal event listeners
-infoButton?.addEventListener("click", () => {
-  showCreditsModal();
+// About modal event listeners
+aboutClose?.addEventListener("click", () => {
+  hideAboutModal();
 });
 
-creditsClose?.addEventListener("click", () => {
-  hideCreditsModal();
-});
-
-creditsModal?.addEventListener("click", (event) => {
+aboutModal?.addEventListener("click", (event) => {
   // Close on backdrop click
-  if (event.target === creditsModal) {
-    hideCreditsModal();
+  if (event.target === aboutModal) {
+    hideAboutModal();
   }
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && creditsModal?.getAttribute("aria-hidden") === "false") {
-    hideCreditsModal();
+  if (event.key === "Escape" && aboutModal?.getAttribute("aria-hidden") === "false") {
+    hideAboutModal();
   }
 });
 
-creditsChangeCharacter?.addEventListener("click", () => {
-  hideCreditsModal();
+aboutChangeCharacter?.addEventListener("click", () => {
+  hideAboutModal();
   removeMapCharacter();
   localStorage.removeItem(CHARACTER_STORAGE_KEY);
   selectedCharacter = null;

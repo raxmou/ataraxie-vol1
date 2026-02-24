@@ -1,3 +1,5 @@
+import { getLang, setLang, t, applyStaticTranslations } from "./i18n.js";
+
 const app = document.getElementById("state-app");
 const svg = document.getElementById("state-svg");
 const infoPane = document.getElementById("state-info");
@@ -60,14 +62,14 @@ const colorForState = (stateId) => {
 
 const render = (geojson, stateId) => {
   if (!stateId) {
-    content.innerHTML = `<h2 class="info-title">No state specified</h2><div class="info-body">Provide ?state=<id> in the URL.</div>`;
+    content.innerHTML = `<h2 class="info-title">${t("state.noState")}</h2><div class="info-body">${t("state.noStateBody")}</div>`;
     infoPane.removeAttribute("aria-hidden");
     return;
   }
 
   const features = geojson.features.filter((f) => String((f.properties||{}).state ?? "0") === String(stateId));
   if (!features.length) {
-    content.innerHTML = `<div class="info-body">No geometry found for this state.</div>`;
+    content.innerHTML = `<div class="info-body">${t("state.noGeometry")}</div>`;
     infoPane.removeAttribute("aria-hidden");
     return;
   }
@@ -147,6 +149,19 @@ const render = (geojson, stateId) => {
 };
 
 const init = async () => {
+  // i18n: wire language toggle and apply static translations
+  const langToggle = document.getElementById("lang-toggle");
+  if (langToggle) {
+    const currentLang = getLang();
+    langToggle.querySelectorAll("[data-lang]").forEach((btn) => {
+      btn.setAttribute("aria-pressed", btn.dataset.lang === currentLang ? "true" : "false");
+      btn.addEventListener("click", () => {
+        if (btn.dataset.lang !== currentLang) setLang(btn.dataset.lang);
+      });
+    });
+  }
+  applyStaticTranslations();
+
   try {
     // Try to rehydrate a shared overlay created during the transition
     const sharedSvg = sessionStorage.getItem('sharedOverlay');
@@ -173,7 +188,7 @@ const init = async () => {
     // here so the component appears continuous between pages.
   } catch (err) {
     console.error(err);
-    content.innerHTML = `<h2 class="info-title">Error</h2><div class="info-body">Could not load data.</div>`;
+    content.innerHTML = `<h2 class="info-title">${t("error.title")}</h2><div class="info-body">${t("error.body")}</div>`;
     infoPane.removeAttribute("aria-hidden");
   }
 };

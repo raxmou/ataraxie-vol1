@@ -7,14 +7,19 @@ const goldenAngle = 137.508;
 const textureFiles = [
   "assets/textures/VISUALWORKS1 6.png",
   "assets/textures/VISUALWORKS14 1.png",
+  "assets/textures/VISUALWORKS23.png",
+  "assets/textures/VISUALWORKS25 2.png",
+  "assets/textures/VISUALWORKS32 2.png",
   "assets/textures/VISUALWORKS33 1.png",
+  "assets/textures/VISUALWORKS36 1.png",
   "assets/textures/VISUALWORKS41 1.png",
   "assets/textures/VISUALWORKS54 1.png",
   "assets/textures/VISUALWORKS57 1.png",
+  "assets/textures/VISUALWORKS58 1.png",
 ];
 
 const getTextureIndexForState = (stateId) =>
-  Math.abs(Number(stateId)) % textureFiles.length;
+  Number(stateId) - 1;
 
 export const createStateColor = (options = {}) => {
   const oceanColor = options.oceanColor || "#1b2212";
@@ -75,6 +80,13 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     pattern.appendChild(image);
     defs.appendChild(pattern);
   });
+
+  const puffFilter = document.createElementNS(svgNS, "filter");
+  puffFilter.setAttribute("id", "puff-blur");
+  const feBlur = document.createElementNS(svgNS, "feGaussianBlur");
+  feBlur.setAttribute("stdDeviation", "2");
+  puffFilter.appendChild(feBlur);
+  defs.appendChild(puffFilter);
 
   const cellGroup = document.createElementNS(svgNS, "g");
   cellGroup.setAttribute("id", "map-cells");

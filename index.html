@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -7,6 +7,11 @@
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
+    <div class="lang-toggle" id="lang-toggle">
+      <button class="toggle-button" type="button" data-lang="fr" aria-pressed="true"><span>FR</span></button>
+      <span class="toggle-divider"></span>
+      <button class="toggle-button" type="button" data-lang="en" aria-pressed="false"><span>EN</span></button>
+    </div>
     <!-- Set the data file here (URL-encode spaces when necessary) -->
     <main
       id="app"
@@ -17,7 +22,7 @@
       data-tracks="data/tracks.json"
     >
       <section class="map-pane" aria-label="Map view">
-        <img class="arc-title" src="assets/backgrounds/GroupId.svg" alt="" aria-hidden="true" />
+
         <div class="state-3d-stack" id="state-3d-stack" aria-hidden="true">
           <div class="state-3d-slot">
             <canvas id="state-3d-canvas" aria-hidden="true"></canvas>
@@ -33,7 +38,7 @@
               <path d="M2 17l10 5 10-5"/>
               <path d="M2 12l10 5 10-5"/>
             </svg>
-            <span>State</span>
+            <span data-i18n="toggle.territory">Territoire</span>
           </button>
           <span class="toggle-divider"></span>
           <button class="toggle-button" type="button" data-3d-target="sigil" aria-pressed="false">
@@ -45,7 +50,7 @@
               <line x1="2" y1="12" x2="8" y2="12"/>
               <line x1="16" y1="12" x2="22" y2="12"/>
             </svg>
-            <span>Sigil</span>
+            <span data-i18n="toggle.sigil">Sigle</span>
           </button>
         </div>
         <svg
@@ -89,7 +94,7 @@
         </g>
       </svg>
       <div class="character-select-card">
-        <h2 class="character-select-title">Qui es-tu ?</h2>
+        <h2 class="character-select-title" data-i18n="character.title">Qui es-tu ?</h2>
         <div class="character-grid">
           <button class="character-card" type="button" data-character="demon">
             <img class="character-card-img" src="assets/characters/demon/idle/frame1.svg" alt="Demon" />
@@ -101,7 +106,7 @@
             <img class="character-card-img" src="assets/characters/gargoyle/idle/frame1.svg" alt="Gargoyle" />
           </button>
         </div>
-        <button class="character-confirm" id="character-confirm" type="button" hidden>Confirm</button>
+        <button class="character-confirm" id="character-confirm" type="button" hidden data-i18n="character.confirm">Confirm</button>
       </div>
     </div>
 
@@ -118,7 +123,7 @@
     <!-- About Modal -->
     <div class="about-modal" id="about-modal" aria-hidden="true">
       <div class="about-content">
-        <button class="about-close" id="about-close" type="button" aria-label="Fermer">
+        <button class="about-close" id="about-close" type="button" aria-label="Fermer" data-i18n-aria="about.close">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -127,7 +132,7 @@
         <h2 class="about-title">Ataraxie Vol 1</h2>
         <p class="about-subtitle">My Land is Eating my Territory</p>
         <hr class="about-divider" />
-        <p class="about-text">Ce projet appuie la sortie de la compilation du n&eacute;o-label parisien Ataraxie&nbsp;: <em>My Land is Eating my Territory</em>.</p>
+        <p class="about-text" data-i18n="about.text">Ce projet appuie la sortie de la compilation du n&eacute;o-label parisien Ataraxie&nbsp;: <em>My Land is Eating my Territory</em>.</p>
         <div class="about-links">
           <a class="about-link" href="https://ataraxie.bandcamp.com" target="_blank" rel="noopener noreferrer" title="Bandcamp">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -136,7 +141,7 @@
             <span>Bandcamp</span>
           </a>
           <a class="about-link" href="https://soundcloud.com/ataraxie" target="_blank" rel="noopener noreferrer" title="SoundCloud">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="20" height="20" viewBox="-1 10.5 26 7.5" fill="currentColor">
               <path d="M1.175 12.225c-.051 0-.094.046-.101.1l-.233 2.154.233 2.105c.007.058.05.098.101.098.05 0 .09-.04.099-.098l.255-2.105-.27-2.154c-.009-.06-.052-.1-.099-.1zm-.899.828c-.06 0-.091.037-.104.094L0 14.479l.172 1.286c.013.055.045.094.104.094.057 0 .09-.039.104-.096l.205-1.284-.205-1.33c-.014-.057-.047-.096-.104-.096zm1.839-1.225c-.062 0-.107.051-.112.115l-.208 2.537.208 2.437c.005.064.05.113.112.113.06 0 .107-.049.111-.113l.239-2.437-.239-2.537c-.004-.064-.051-.115-.111-.115zm.947-.098c-.072 0-.121.058-.129.13l-.19 2.665.19 2.587c.008.07.057.129.129.129.07 0 .12-.059.127-.129l.217-2.587-.217-2.665c-.007-.072-.057-.13-.127-.13zm1.035-.23c-.081 0-.138.063-.145.143l-.174 2.894.174 2.717c.007.08.064.143.145.143.08 0 .137-.063.144-.143l.198-2.717-.198-2.893c-.007-.08-.064-.144-.144-.144zm1.073-.115c-.088 0-.153.07-.16.158l-.159 3.008.159 2.829c.007.088.072.157.16.157.087 0 .152-.069.16-.157l.18-2.829-.18-3.008c-.008-.088-.073-.158-.16-.158zm1.107-.158c-.097 0-.168.074-.175.171l-.144 3.166.144 2.916c.007.098.078.171.175.171.096 0 .168-.073.175-.171l.164-2.916-.164-3.166c-.007-.097-.079-.171-.175-.171zm1.142-.134c-.104 0-.181.082-.188.186l-.128 3.3.128 2.989c.007.104.084.186.188.186.104 0 .18-.082.188-.186l.146-2.989-.146-3.3c-.008-.104-.084-.186-.188-.186zm1.172-.127c-.113 0-.196.088-.201.2l-.114 3.428.114 3.046c.005.112.088.199.201.199.113 0 .195-.087.201-.199l.128-3.046-.128-3.427c-.006-.113-.088-.2-.201-.2zm1.21-.147c-.12 0-.208.093-.214.212l-.099 3.574.099 3.089c.006.119.094.212.214.212.12 0 .208-.093.213-.212l.113-3.089-.113-3.574c-.005-.119-.093-.212-.213-.212zm1.247-.144c-.128 0-.22.099-.225.227l-.085 3.718.085 3.121c.005.128.097.227.225.227.127 0 .22-.099.224-.227l.096-3.121-.096-3.718c-.004-.128-.097-.227-.224-.227zm1.287-.127c-.136 0-.235.106-.24.241l-.07 3.845.07 3.155c.005.136.104.241.24.241.137 0 .235-.105.24-.241l.08-3.155-.08-3.845c-.005-.135-.103-.241-.24-.241zm1.324-.126c-.143 0-.248.112-.253.255l-.055 3.971.055 3.187c.005.143.11.255.253.255.144 0 .248-.112.253-.255l.063-3.187-.063-3.971c-.005-.143-.109-.255-.253-.255zm1.364-.139c-.152 0-.261.119-.266.27l-.04 4.11.04 3.207c.005.152.114.269.266.269.15 0 .26-.117.265-.27l.046-3.206-.046-4.11c-.005-.152-.115-.27-.265-.27zm2.756 1.32c-.161 0-.291.13-.291.291v6.854c0 .161.13.291.291.291h9.454c2.104 0 3.811-1.706 3.811-3.811 0-2.104-1.706-3.811-3.811-3.811-.68 0-1.326.178-1.883.49-.364-2.087-2.184-3.674-4.381-3.674-1.047 0-2.004.368-2.756.977v3.393c-.003 0-.265-.001-.434 0z"/>
             </svg>
             <span>SoundCloud</span>
@@ -150,8 +155,9 @@
             <span>Instagram</span>
           </a>
         </div>
-        <button class="about-change-character" id="about-change-character" type="button">Changer de personnage</button>
-        <p class="about-footer">&copy; 2025 Ataraxie</p>
+        <button class="about-change-character" id="about-change-character" type="button" data-i18n="about.changeCharacter">Changer de personnage</button>
+        <p class="about-footer" data-i18n="about.madeBy"></p>
+        <p class="about-footer" data-i18n="about.noAi"></p>
       </div>
     </div>
 

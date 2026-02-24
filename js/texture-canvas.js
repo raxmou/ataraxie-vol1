@@ -6,14 +6,19 @@
 const textureFiles = [
   "assets/textures/VISUALWORKS1 6.png",
   "assets/textures/VISUALWORKS14 1.png",
+  "assets/textures/VISUALWORKS23.png",
+  "assets/textures/VISUALWORKS25 2.png",
+  "assets/textures/VISUALWORKS32 2.png",
   "assets/textures/VISUALWORKS33 1.png",
+  "assets/textures/VISUALWORKS36 1.png",
   "assets/textures/VISUALWORKS41 1.png",
   "assets/textures/VISUALWORKS54 1.png",
   "assets/textures/VISUALWORKS57 1.png",
+  "assets/textures/VISUALWORKS58 1.png",
 ];
 
 const getTextureIndexForState = (stateId) =>
-  Math.abs(Number(stateId)) % textureFiles.length;
+  Number(stateId) - 1;
 
 /**
  * Create a texture canvas renderer.
@@ -132,7 +137,7 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
     ctx.setTransform(scaleX, 0, 0, scaleY, -x * scaleX, -y * scaleY);
 
     // Draw faint textures for fogged (unrevealed) states
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.15;
     for (const [stateId, path] of statePaths) {
       if (stateId === "0" || revealedStates.has(stateId)) continue;
 
@@ -166,6 +171,22 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
       ctx.restore();
     }
     ctx.globalAlpha = 1;
+
+    // Drop shadow behind revealed states to lift them off the background
+    const shadowBlur = 24 / Math.max(scaleX, scaleY);
+    ctx.save();
+    ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
+    ctx.shadowBlur = shadowBlur;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fillStyle = "rgba(0, 0, 0, 1)";
+    for (const stateId of revealedStates) {
+      if (stateId === "0") continue;
+      const path = statePaths.get(stateId);
+      if (!path) continue;
+      ctx.fill(path);
+    }
+    ctx.restore();
 
     // Draw textures for revealed states
     for (const stateId of revealedStates) {

@@ -1,0 +1,149 @@
+{
+  "tracks": [
+    {
+      "id": "anta-doma-shapes-premaster",
+      "title": "Anta Doma - Shapes (Premaster)",
+      "file": "assets/music/Anta Doma - Shapes.mp3",
+      "bpm": 128,
+      "bandcamp": "https://antadoma.bandcamp.com",
+      "instagram": "https://instagram.com/antadoma",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    },
+    {
+      "id": "aquacrypt-unknown",
+      "title": "Aquacrypt - UNKNOWN",
+      "file": "assets/music/Aquacrypt - UNKNOWN.mp3",
+      "bpm": 130,
+      "bandcamp": "https://aquacrypt.bandcamp.com",
+      "instagram": "https://instagram.com/aquacrypt",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    },
+    {
+      "id": "damna-3cso",
+      "title": "Damna - 3CsO",
+      "file": "assets/music/Damna - 3CsO.mp3",
+      "bpm": 125,
+      "bandcamp": "https://damna.bandcamp.com",
+      "instagram": "https://instagram.com/damna",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    },
+    {
+      "id": "drawbridge-khey-mysterio-psylmodie",
+      "title": "Drawbridge & Khey Mysterio - Psylmodie",
+      "file": "assets/music/Drawbridge & Khey Mysterio - Psylmodie.mp3",
+      "bpm": 135,
+      "bandcamp": "https://drawbridge.bandcamp.com",
+      "instagram": "https://instagram.com/drawbridge",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    },
+    {
+      "id": "gustave-retour-le-pi-ge",
+      "title": "Gustave Retour - Le piège",
+      "file": "assets/music/Gustave Retour - Le Piège.mp3",
+      "bpm": 120,
+      "bandcamp": "https://gustaveretour.bandcamp.com",
+      "instagram": "https://instagram.com/gustaveretour",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    },
+    {
+      "id": "naeja-may-the-world-ends-with-you",
+      "title": "Naeja - May The World Ends (With You)",
+      "file": "assets/music/Naeja - May the World End (With You).mp3",
+      "bpm": 132,
+      "bandcamp": "https://naeja.bandcamp.com",
+      "instagram": "https://instagram.com/naeja",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    },
+    {
+      "id": "nostromodamus-another-presence-master-reference-v2",
+      "title": "Nostromodamus - Another Presence (MASTER REFERENCE V2)",
+      "file": "assets/music/Nostromodamus - Another Presence.mp3",
+      "bpm": 128,
+      "bandcamp": "https://nostromodamus.bandcamp.com",
+      "instagram": "https://instagram.com/nostromodamus",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    },
+    {
+      "id": "smogo-obliteration-premaster-24bit-44-1khz",
+      "title": "Smogo - Obliteration (Premaster - 24bit 44.1khz)",
+      "file": "assets/music/Smogo - Obliteration.mp3",
+      "bpm": 140,
+      "bandcamp": "https://smogo.bandcamp.com",
+      "instagram": "https://instagram.com/smogo",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    },
+    {
+      "id": "acideplastique-vectorial-soil",
+      "title": "acideplastique - Vectorial Soil",
+      "file": "assets/music/Acideplastique - Vectorial Soil.mp3",
+      "bpm": 133,
+      "bandcamp": "https://acideplastique.bandcamp.com",
+      "instagram": "https://instagram.com/acideplastique",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    },
+    {
+      "id": "le-frit-streetview-belly-slide-mixdown",
+      "title": "le frit - streetview belly slide (mixdown)",
+      "file": "assets/music/le frit - streetview belly slide.mp3",
+      "bpm": 138,
+      "bandcamp": "https://lefrit.bandcamp.com",
+      "instagram": "https://instagram.com/lefrit",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    },
+    {
+      "id": "zero-crossing-point-half-past-six-mix-24b-v2",
+      "title": "Zero Crossing Point - Half Past Six (Mix 24b V2)",
+      "file": "assets/music/Zero Crossing Point - Half Past Six.mp3",
+      "bpm": 126,
+      "bandcamp": "https://zerocrossingpoint.bandcamp.com",
+      "instagram": "https://instagram.com/zerocrossingpoint",
+      "narrative": [],
+      "playLabel": "",
+      "hourglassText": "",
+      "choices": []
+    }
+  ],
+  "states": {
+    "1": "drawbridge-khey-mysterio-psylmodie",
+    "2": "anta-doma-shapes-premaster",
+    "3": "naeja-may-the-world-ends-with-you",
+    "4": "acideplastique-vectorial-soil",
+    "5": "le-frit-streetview-belly-slide-mixdown",
+    "6": "nostromodamus-another-presence-master-reference-v2",
+    "7": "gustave-retour-le-pi-ge",
+    "8": "aquacrypt-unknown",
+    "9": "smogo-obliteration-premaster-24bit-44-1khz",
+    "10": "damna-3cso",
+    "11": "zero-crossing-point-half-past-six-mix-24b-v2"
+  }
+}

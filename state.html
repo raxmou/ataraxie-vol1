@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -7,6 +7,11 @@
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
+    <div class="lang-toggle" id="lang-toggle">
+      <button class="toggle-button" type="button" data-lang="fr" aria-pressed="true"><span>FR</span></button>
+      <span class="toggle-divider"></span>
+      <button class="toggle-button" type="button" data-lang="en" aria-pressed="false"><span>EN</span></button>
+    </div>
     <main id="state-app">
       <div class="map-pane">
         <svg
@@ -18,7 +23,7 @@
         ></svg>
       </div>
       <aside class="info-pane" id="state-info" aria-hidden="true">
-        <a href="index.html" class="back-link">← Back to full map</a>
+        <a href="index.html" class="back-link" data-i18n="state.backToMap">← Back to full map</a>
         <div id="state-content"></div>
       </aside>
     </main>

@@ -554,6 +554,15 @@ body::before {
   isolation: isolate;
 }
 
+.map-pane::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(6, 8, 4, 0.55);
+  pointer-events: none;
+  z-index: 0;
+}
+
 
 .arc-title {
   position: absolute;
@@ -566,6 +575,7 @@ body::before {
   transform: translateX(-50%);
   pointer-events: none;
   z-index: 2;
+  transition: opacity var(--transition-fast);
 }
 
 #app.is-split .arc-title {
@@ -583,7 +593,8 @@ body::before {
   pointer-events: none;
 }
 
-#map-svg {
+#map-svg,
+#state-svg {
   width: 100%;
   height: 100%;
   display: block;
@@ -656,7 +667,6 @@ body::before {
   opacity: 0;
   pointer-events: none;
   z-index: 1;
-  transition: opacity var(--transition-fast);
 }
 
 .state-3d-slot,
@@ -666,7 +676,6 @@ body::before {
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--transition-fast);
 }
 
 #state-3d-canvas,
@@ -713,6 +722,20 @@ body::before {
 
 .map-pane.is-3d-sigil #sigil-3d-canvas {
   pointer-events: auto;
+}
+
+.lang-toggle {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(189, 255, 0, 0.45);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(20, 26, 14, 0.92), rgba(10, 14, 7, 0.96));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
 }
 
 .three-toggle {
@@ -815,6 +838,8 @@ body::before {
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
   background: rgba(14, 18, 10, 0.85);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
@@ -838,8 +863,6 @@ body::before {
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
-  display: flex;
-  flex-direction: column;
 }
 
 .info-header {
@@ -857,6 +880,7 @@ body::before {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  padding-bottom: 24px;
 }
 
 .panel-title {
@@ -959,19 +983,19 @@ body::before {
 .question-container {
   display: flex;
   flex-direction: column;
-  gap: 60px;
+  gap: 32px;
   margin-top: 0;
-  animation: question-appear 600ms ease both;
+  animation: question-appear 800ms ease both;
 }
 
 @keyframes question-appear {
   0% {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(8px) scale(0.98);
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -1061,6 +1085,8 @@ body::before {
   line-height: 1.5;
   color: var(--text-color);
   margin: 0;
+  max-height: 30vh;
+  overflow-y: auto;
 }
 
 .question-answers {
@@ -1170,18 +1196,22 @@ body::before {
 
 .tarot-reading {
   text-align: center;
-  padding: 8px 16px;
-  border-radius: 12px;
-  background: rgba(8, 12, 6, 0.5);
-  border: 1px solid rgba(189, 255, 0, 0.2);
+  padding: 12px 20px;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  max-width: 400px;
+  margin: 0 auto;
 }
 
 .tarot-reading .question-text {
   font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
+  text-transform: none;
+  letter-spacing: 0.02em;
   font-size: 0.88rem;
-  color: rgba(189, 255, 0, 0.7);
+  font-style: italic;
+  line-height: 1.7;
+  color: rgba(232, 255, 178, 0.7);
 }
 
 .tarot-oracle {
@@ -1199,6 +1229,7 @@ body::before {
   display: flex;
   justify-content: center;
   gap: 16px;
+  padding-bottom: 24px;
 }
 
 /* Card button reset + dimensions */
@@ -1876,8 +1907,6 @@ body::before {
   #app.is-split .info-pane {
     padding: 20px;
     transform: translateY(0);
-    display: flex;
-    flex-direction: column;
   }
 
   .character-dialog-avatar {
@@ -2011,6 +2040,10 @@ body::before {
   .trail-marker--appear {
     animation: none;
   }
+  .map-character--arriving,
+  .state-character--arriving {
+    animation: none;
+  }
 }
 
 /* Map View Character (SVG on trail layer) */
@@ -2018,10 +2051,39 @@ body::before {
   pointer-events: none;
   filter: drop-shadow(0 0 6px rgba(189, 255, 0, 0.4));
   transition: filter 0.3s ease;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 .map-character--arriving {
-  filter: drop-shadow(0 0 12px rgba(189, 255, 0, 0.7));
+  animation: puff-materialize 800ms ease-out both;
+}
+
+@keyframes puff-materialize {
+  0% {
+    opacity: 0;
+    scale: 0.3;
+    filter: blur(4px) drop-shadow(0 0 20px rgba(189, 255, 0, 0.9));
+  }
+  40% {
+    opacity: 0.7;
+    scale: 1.15;
+    filter: blur(1.5px) drop-shadow(0 0 14px rgba(189, 255, 0, 0.6));
+  }
+  70% {
+    opacity: 1;
+    scale: 0.95;
+    filter: blur(0) drop-shadow(0 0 8px rgba(189, 255, 0, 0.5));
+  }
+  100% {
+    scale: 1;
+    filter: drop-shadow(0 0 6px rgba(189, 255, 0, 0.4));
+  }
+}
+
+.puff-wisp {
+  pointer-events: none;
+  opacity: 0;
 }
 
 /* State View Character (floating + draggable in info pane) */
@@ -2039,6 +2101,10 @@ body::before {
   touch-action: none;
   z-index: 9999;
   user-select: none;
+}
+
+.state-character--arriving {
+  animation: puff-materialize 800ms ease-out both;
 }
 
 .state-character--dragging {
@@ -2281,6 +2347,14 @@ body::before {
   color: rgba(111, 120, 102, 0.7);
   margin: 0;
   letter-spacing: 0.04em;
+}
+.about-footer a {
+  color: inherit;
+  text-decoration: none;
+}
+.about-footer a:hover {
+  text-decoration: underline;
+  color: #bdff00;
 }
 
 @media (max-width: 900px) {

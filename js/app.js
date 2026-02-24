@@ -1,3 +1,4 @@
+import { getLang, setLang, t, getDragPhrases, getTracksUrl, applyStaticTranslations } from "./i18n.js";
 import { loadGeoJSON, loadSigils, loadTracks } from "./data.js";
 import { createMap, createStateColor } from "./map.js";
 import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
@@ -107,6 +108,7 @@ let stateInertiaY = 0;
 let sigilInertiaX = 0;
 let sigilInertiaY = 0;
 let activeThreeView = "state";
+let isMorphing = false;
 let questionTimeout = null;
 let bgTextureCache = new Map();
 let selectedCharacter = null;
@@ -128,14 +130,19 @@ let stateCharDragging = false;
 const stateTextureFiles = [
   "assets/textures/VISUALWORKS1 6.png",
   "assets/textures/VISUALWORKS14 1.png",
+  "assets/textures/VISUALWORKS23.png",
+  "assets/textures/VISUALWORKS25 2.png",
+  "assets/textures/VISUALWORKS32 2.png",
   "assets/textures/VISUALWORKS33 1.png",
+  "assets/textures/VISUALWORKS36 1.png",
   "assets/textures/VISUALWORKS41 1.png",
   "assets/textures/VISUALWORKS54 1.png",
   "assets/textures/VISUALWORKS57 1.png",
+  "assets/textures/VISUALWORKS58 1.png",
 ];
 
 const getTextureIndexForState = (stateId) =>
-  Math.abs(Number(stateId)) % stateTextureFiles.length;
+  Number(stateId) - 1;
 
 const formatTime = (value) => {
   if (!Number.isFinite(value)) return "--:--";
@@ -629,7 +636,7 @@ const initThree = async () => {
     renderer.setClearColor(0x000000, 0);
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-    camera.position.set(0, 0.3, 4.2);
+    camera.position.set(0, 0, 4.5);
     camera.lookAt(0, 0, 0);
     const hemi = new THREE.HemisphereLight(0xe8ffb2, 0x0b0e07, 0.7);
     scene.add(hemi);
@@ -1726,6 +1733,7 @@ const buildStateMesh = (stateId, THREE) => {
 
   mesh.rotation.x = -0.85;
   mesh.rotation.y = 0.55;
+  const halfDepthZ = scaledBounds ? (scaledBounds.max.z - scaledBounds.min.z) / 2 : 0;
   mesh.userData = {
     terrainGroup,
     terrainData,
@@ -1742,6 +1750,7 @@ const buildStateMesh = (stateId, THREE) => {
     sideMaterial,
     baseScale: mesh.scale.clone(),
     depthRatio,
+    halfDepthZ,
     backPlane: versoBackPlane,
     versoLinks,
   };
@@ -1752,7 +1761,7 @@ const startThreeRender = () => {
   if (!threeApi) return;
   const renderLoop = () => {
     if (!threeApi) return;
-    if (threeApi.mesh && !isThreeDragging) {
+    if (threeApi.mesh && !isThreeDragging && !isMorphing) {
       const speed = hourglassPlayer ? hourglassPlayer.speed : 1;
       threeApi.mesh.rotation.z += 0.002 * speed;
       const inertia = applyInertiaRotation(
@@ -1821,26 +1830,158 @@ const showState3D = async (stateId) => {
   stateInertiaY = 0;
   const mesh = buildStateMesh(stateId, api.THREE);
   if (!mesh) return;
+
+  // Prepare flat & face-on for morph transition
+  const halfDepthZ = mesh.userData.halfDepthZ || 0;
+  mesh.scale.z = 0.01;
+  mesh.position.z = halfDepthZ * 0.99;
+  mesh.rotation.x = 0;
+  mesh.rotation.y = 0;
+
+  // Reset camera to overhead
+  api.camera.position.set(0, 0, 4.5);
+  api.camera.lookAt(0, 0, 0);
+
   api.scene.add(mesh);
   api.mesh = mesh;
-  // Apply texture to the face material (top surface beneath grid)
-  const bgTexture = await loadBgTexture(stateId, api.THREE);
-  if (bgTexture && Array.isArray(mesh.material) && mesh.material[0]) {
-    const faceMat = mesh.material[0];
-    bgTexture.repeat.set(2, 2);
-    faceMat.map = bgTexture;
-    faceMat.color.setHex(0xffffff);
-    faceMat.emissive.setHex(0x000000);
-    faceMat.emissiveIntensity = 0;
-    faceMat.needsUpdate = true;
-  }
-  mapPane.classList.add("is-3d");
-  startAmbientBreathing();
-  threeStack?.setAttribute("aria-hidden", "false");
-  threeToggle?.setAttribute("aria-hidden", "false");
-  stateCanvas?.setAttribute("aria-hidden", "false");
+
+  // Start render loop so the flat frame is in the buffer, but don't show yet
   resizeThree();
-  setThreeView(activeThreeView);
+  startThreeRender();
+
+  // Render one frame so the canvas has content for the crossfade
+  api.renderer.render(api.scene, api.camera);
+
+  // Load texture in background — don't block the morph
+  loadBgTexture(stateId, api.THREE).then((bgTexture) => {
+    if (bgTexture && api.mesh === mesh && Array.isArray(mesh.material) && mesh.material[0]) {
+      const faceMat = mesh.material[0];
+      bgTexture.repeat.set(2, 2);
+      faceMat.map = bgTexture;
+      faceMat.color.setHex(0xffffff);
+      faceMat.emissive.setHex(0x000000);
+      faceMat.emissiveIntensity = 0;
+      faceMat.needsUpdate = true;
+    }
+  });
+};
+
+const easeInOutCubic = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+const morphTo3D = (duration = 500) => {
+  return new Promise((resolve) => {
+    if (!threeApi?.mesh || !mapPane) {
+      resolve();
+      return;
+    }
+    const mesh = threeApi.mesh;
+    const halfDepthZ = mesh.userData.halfDepthZ || 0;
+    const camera = threeApi.camera;
+
+    mapPane.classList.add("is-3d");
+    setThreeView(activeThreeView);
+    threeStack?.setAttribute("aria-hidden", "false");
+    threeToggle?.setAttribute("aria-hidden", "false");
+    stateCanvas?.setAttribute("aria-hidden", "false");
+    setSplitLayout(true);
+
+    if (prefersReducedMotion) {
+      mesh.scale.z = 1;
+      mesh.position.z = 0;
+      mesh.rotation.x = -0.85;
+      mesh.rotation.y = 0.55;
+      camera.position.set(0, 0.3, 4.2);
+      camera.lookAt(0, 0, 0);
+      isMorphing = false;
+      startAmbientBreathing();
+      setAnimating(false);
+      resolve();
+      return;
+    }
+
+    isMorphing = true;
+    const startTime = performance.now();
+
+    const animate = (now) => {
+      const elapsed = now - startTime;
+      const raw = Math.min(elapsed / duration, 1);
+      const t = easeInOutCubic(raw);
+
+      mesh.scale.z = 0.01 + (1 - 0.01) * t;
+      mesh.position.z = halfDepthZ * (1 - mesh.scale.z);
+      mesh.rotation.x = -0.85 * t;
+      mesh.rotation.y = 0.55 * t;
+      camera.position.y = 0.3 * t;
+      camera.position.z = 4.5 + (4.2 - 4.5) * t;
+      camera.lookAt(0, 0, 0);
+
+      if (raw < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        isMorphing = false;
+        startAmbientBreathing();
+        setAnimating(false);
+        resolve();
+      }
+    };
+    requestAnimationFrame(animate);
+  });
+};
+
+const morphFrom3D = (duration = 400) => {
+  return new Promise((resolve) => {
+    if (!threeApi?.mesh || !mapPane) {
+      mapPane?.classList.remove("is-3d", "is-3d-state", "is-3d-sigil");
+      resolve();
+      return;
+    }
+    const mesh = threeApi.mesh;
+    const halfDepthZ = mesh.userData.halfDepthZ || 0;
+    const camera = threeApi.camera;
+
+    stopAmbientBreathing();
+
+    if (prefersReducedMotion) {
+      mapPane.classList.remove("is-3d", "is-3d-state", "is-3d-sigil");
+      isMorphing = false;
+      resolve();
+      return;
+    }
+
+    isMorphing = true;
+    const startRotX = mesh.rotation.x;
+    const startRotY = mesh.rotation.y;
+    const startScaleZ = mesh.scale.z;
+    const startCamY = camera.position.y;
+    const startCamZ = camera.position.z;
+    const startTime = performance.now();
+
+    const animate = (now) => {
+      const elapsed = now - startTime;
+      const raw = Math.min(elapsed / duration, 1);
+      const t = easeInOutCubic(raw);
+
+      mesh.scale.z = startScaleZ + (0.01 - startScaleZ) * t;
+      mesh.position.z = halfDepthZ * (1 - mesh.scale.z);
+      mesh.rotation.x = startRotX * (1 - t);
+      mesh.rotation.y = startRotY * (1 - t);
+      camera.position.y = startCamY * (1 - t);
+      camera.position.z = startCamZ + (4.5 - startCamZ) * t;
+      camera.lookAt(0, 0, 0);
+
+      if (raw < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        isMorphing = false;
+        mapPane.classList.remove("is-3d", "is-3d-state", "is-3d-sigil");
+        threeStack?.setAttribute("aria-hidden", "true");
+        threeToggle?.setAttribute("aria-hidden", "true");
+        stateCanvas?.setAttribute("aria-hidden", "true");
+        resolve();
+      }
+    };
+    requestAnimationFrame(animate);
+  });
 };
 
 const hideState3D = () => {
@@ -1899,12 +2040,9 @@ const showSigil3D = async (stateId) => {
   if (!mesh || token !== sigilLoadToken) return;
   api.scene.add(mesh);
   api.mesh = mesh;
-  mapPane.classList.add("is-3d");
-  threeStack?.setAttribute("aria-hidden", "false");
-  threeToggle?.setAttribute("aria-hidden", "false");
+  // Don't add is-3d here — morphTo3D handles the crossfade timing
   sigilCanvas?.setAttribute("aria-hidden", "false");
   resizeSigilThree();
-  setThreeView(activeThreeView);
 };
 
 const hideSigil3D = () => {
@@ -2129,7 +2267,7 @@ const setLoading = (isLoading, message) => {
 
 const updateLoadingProgress = (current, total) => {
   if (!loadingProgress) return;
-  loadingProgress.textContent = `Preparing state views ${current}/${total}...`;
+  loadingProgress.textContent = t("loading.stateViews", { current, total });
 };
 
 const getViewportScale = (box, viewport) =>
@@ -2158,7 +2296,7 @@ const animateToViewBox = (targetBox, duration, options = {}) => {
     if (targetBox) viewbox.set(targetBox);
     transformAnimator?.set({ x: 0, y: 0, scale: 1 });
     if (options.useSnapshot) mapApi?.clearSnapshot();
-    setAnimating(false);
+    if (!options.onComplete) setAnimating(false);
     if (options.onComplete) options.onComplete();
   };
 
@@ -2198,7 +2336,7 @@ const renderInfo = (stateId, infoOptions = {}) => {
   if (narrativeBackBtn) narrativeBackBtn.hidden = true;
   if (!stateId) {
     infoContent.innerHTML =
-      '<h2 class="info-title">Explore the map</h2><div class="info-body">Select a state to see it highlighted and focused here.</div>';
+      `<h2 class="info-title">${t("info.explore")}</h2><div class="info-body">${t("info.selectState")}</div>`;
     if (hourglassPlayer) {
       hourglassPlayer.dispose();
       hourglassPlayer = null;
@@ -2211,7 +2349,7 @@ const renderInfo = (stateId, infoOptions = {}) => {
     return;
   }
   if (!geojsonData) {
-    infoContent.innerHTML = `<div class="info-body">Loading details...</div>`;
+    infoContent.innerHTML = `<div class="info-body">${t("info.loading")}</div>`;
     return;
   }
   const count = stateCounts.get(String(stateId)) ?? 0;
@@ -2230,7 +2368,7 @@ const renderInfo = (stateId, infoOptions = {}) => {
   stopAudioReactive();
 
   if (!track) {
-    infoContent.innerHTML = '<div class="track-shrine is-empty"><span class="shrine-artist">No track assigned.</span></div>';
+    infoContent.innerHTML = `<div class="track-shrine is-empty"><span class="shrine-artist">${t("info.noTrack")}</span></div>`;
     return;
   }
 
@@ -2242,7 +2380,6 @@ const renderInfo = (stateId, infoOptions = {}) => {
   // Revisit — skip narrative, go straight to hourglass with revealed tarot card
   if (infoOptions.pendingResult) {
     infoContent.innerHTML = `<audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>`;
-    showStateCharacter();
     const audio = infoContent.querySelector(".track-audio");
     if (audio instanceof HTMLAudioElement) activeAudio = audio;
     showTrackShrine(title, artist, track, audio, infoOptions);
@@ -2258,14 +2395,11 @@ const renderInfo = (stateId, infoOptions = {}) => {
   const narrativeMarkup = `
     <div class="narrative-container">
       ${linesMarkup}
-      <button class="narrative-play-btn" style="animation-delay: ${playDelay}s" type="button">Play</button>
+      <button class="narrative-play-btn" style="animation-delay: ${playDelay}s" type="button">${track.playLabel || "Play"}</button>
     </div>
     <audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>
   `;
   infoContent.innerHTML = narrativeMarkup;
-
-  // Show floating character in state view
-  showStateCharacter();
 
   // Prepare audio element (don't play yet)
   const audio = infoContent.querySelector(".track-audio");
@@ -2302,13 +2436,14 @@ const showTrackShrine = (title, artist, track, audio, infoOptions = {}) => {
   const { pendingQuestion, pendingResult } = infoOptions;
   if (pendingResult) {
     const prev = pendingResult;
-    const chosenTrackId = trackByState.get(String(prev.chosen));
-    const chosenTrack = chosenTrackId ? trackById.get(chosenTrackId) : null;
-    const chosenLabel = chosenTrack?.choiceLabel || `Explore territory ${prev.chosen}`;
+    const chosenLabel = prev.chosenLabel || t("fallback.explore", { id: prev.chosen });
+    const hourglassQuestion = track.hourglassText
+      ? track.hourglassText.replace(/\n/g, "<br>")
+      : t("fallback.direction");
     questionMarkup = `
       <div class="question-container tarot-result">
         <div class="question-prompt tarot-reading">
-          <p class="question-text">Et maintenant, quelle direction prends-tu ?</p>
+          <p class="question-text">${hourglassQuestion}</p>
         </div>
         <div class="tarot-spread">
           <div class="tarot-card tarot-card--static answer-btn--selected">
@@ -2355,6 +2490,21 @@ const showTrackShrine = (title, artist, track, audio, infoOptions = {}) => {
     if (playPromise && typeof playPromise.catch === "function") {
       playPromise.catch(() => {});
     }
+    if (String(activeStateId) === "11") {
+      const tryBark = () => {
+        if (!stateCharacter) return setTimeout(tryBark, 300);
+        const bubble = document.createElement("div");
+        bubble.className = "state-character-bubble";
+        bubble.textContent = t("bark.finale");
+        stateCharacter.parentElement.appendChild(bubble);
+        const rect = stateCharacter.getBoundingClientRect();
+        const parentRect = (stateCharacter.offsetParent || app).getBoundingClientRect();
+        bubble.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
+        bubble.style.top = `${rect.top - parentRect.top - 12}px`;
+        setTimeout(() => bubble.remove(), 8000);
+      };
+      setTimeout(tryBark, 1500);
+    }
   }
 
   // Show question modal immediately if needed
@@ -2396,7 +2546,7 @@ const showNarrative = (title, artist, track, infoOptions) => {
   const narrativeMarkup = `
     <div class="narrative-container">
       ${linesMarkup}
-      <button class="narrative-play-btn is-visible" type="button">Play</button>
+      <button class="narrative-play-btn is-visible" type="button">${track.playLabel || "Play"}</button>
     </div>
     <audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>
   `;
@@ -2491,8 +2641,18 @@ const selectState = (stateId, options = {}) => {
 
   renderInfo(normalized, { pendingQuestion, pendingResult });
 
-  setSplitLayout(true);
-  showState3D(normalized);
+  // Start 3D mesh prep in background (builds mesh flat, loads texture)
+  // Start 3D mesh prep concurrently with zoom
+  let meshIsReady = false;
+  let zoomDone = false;
+  const tryMorph = () => {
+    if (!meshIsReady || !zoomDone) return;
+    morphTo3D(500).then(() => showStateCharacter());
+  };
+  showState3D(normalized).then(() => {
+    meshIsReady = true;
+    tryMorph();
+  });
   showSigil3D(normalized);
   if (options.pushState !== false) updateUrlState(normalized);
   requestAnimationFrame(() => {
@@ -2502,76 +2662,157 @@ const selectState = (stateId, options = {}) => {
       return;
     }
     lastSelectedViewBox = target;
-    animateToViewBox(target, 700, { stateId: normalized, useSnapshot: true });
+    animateToViewBox(target, 200, {
+      stateId: normalized,
+      useSnapshot: true,
+      onComplete: () => {
+        zoomDone = true;
+        tryMorph();
+      },
+    });
   });
 };
 
 const showQuestionModal = (stateId) => {
-  const neighbors = getNeighbors(stateId);
-  let unrevealedNeighbors = neighbors.filter((n) => !isStateRevealed(n));
-  
-  // If no unrevealed neighbors, find any unrevealed state from all states
-  if (unrevealedNeighbors.length === 0) {
-    // Get all states from stateCounts
-    const allStates = Array.from(stateCounts.keys());
-    unrevealedNeighbors = allStates.filter((s) => s !== "0" && !isStateRevealed(s));
-    
-    // If all states are revealed, mark as questioned, celebrate, and return
-    if (unrevealedNeighbors.length === 0) {
-      markAsQuestioned(stateId);
-      celebrateMapCompletion();
-      return;
-    }
-  }
-  
-  // Pick up to 2 random unrevealed states
-  const shuffled = unrevealedNeighbors.sort(() => Math.random() - 0.5);
-  const option1 = shuffled[0];
-  const option2 = shuffled[1] || shuffled[0]; // Duplicate if only 1 option
+  // Look up current state's track for hourglassText and choices
+  const sourceTrackId = trackByState.get(String(stateId));
+  const sourceTrack = sourceTrackId ? trackById.get(sourceTrackId) : null;
+  const choices = sourceTrack?.choices || [];
 
-  // Look up narrative choice labels for each option
-  const getChoiceLabel = (stId) => {
-    const tId = trackByState.get(String(stId));
-    const t = tId ? trackById.get(tId) : null;
-    return t?.choiceLabel || `Explore territory ${stId}`;
-  };
-  const label1 = getChoiceLabel(option1);
-  const label2 = getChoiceLabel(option2);
+  // Final state (zero crossing point) — no choices, celebrate
+  const FINAL_STATE = "11";
+  if (String(stateId) === FINAL_STATE || choices.length === 0) {
+    markAsQuestioned(stateId);
+    celebrateMapCompletion();
+    return;
+  }
+
+  // Gather all unrevealed states (excluding ocean)
+  const allStates = Array.from(stateCounts.keys());
+  const allUnrevealed = allStates.filter((s) => s !== "0" && !isStateRevealed(s));
+
+  // If nothing left to reveal, celebrate
+  if (allUnrevealed.length === 0) {
+    markAsQuestioned(stateId);
+    celebrateMapCompletion();
+    return;
+  }
+
+  // State 11 (Zero Crossing Point) is always the last to be discovered
+  const nonFinal = allUnrevealed.filter((s) => s !== FINAL_STATE);
+
+  // If only state 11 remains, offer it as the sole destination
+  if (nonFinal.length === 0) {
+    // Final state is the only one left
+    const option1 = FINAL_STATE;
+    const option2 = FINAL_STATE;
+    const label1 = choices[0];
+    const label2 = choices[1] || choices[0];
+    const hourglassQuestion = sourceTrack?.hourglassText
+      ? sourceTrack.hourglassText.replace(/\n/g, "<br>")
+      : t("fallback.direction");
+    if (!infoContent) return;
+    const cardMarkup = (answer, label) => `
+          <button class="tarot-card answer-btn" data-answer="${answer}" type="button">
+            <div class="tarot-card-inner">
+              <div class="tarot-card-back"><div class="tarot-card-back-pattern"></div></div>
+              <div class="tarot-card-front">
+                <div class="tarot-card-border">
+                  <div class="tarot-card-content">
+                    <span class="tarot-card-label">${label}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </button>`;
+    const questionMarkup = `
+      <div class="question-container">
+        <div class="question-prompt tarot-reading">
+          <p class="question-text">${hourglassQuestion}</p>
+        </div>
+        <div class="tarot-spread">
+          ${cardMarkup(option1, label1)}
+          ${label2 !== label1 ? cardMarkup(option2, label2) : ""}
+        </div>
+      </div>
+    `;
+    infoContent.insertAdjacentHTML('beforeend', questionMarkup);
+    const answerButtons = infoContent.querySelectorAll(".answer-btn");
+    answerButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        answerButtons.forEach((b) => { b.disabled = true; });
+        btn.classList.add("answer-btn--selected");
+        answerButtons.forEach((b) => {
+          if (b !== btn) b.classList.add("answer-btn--dismissed");
+        });
+        setTimeout(() => {
+          handleAnswer(FINAL_STATE, stateId);
+          const chosenLabel = btn.querySelector(".tarot-card-label")?.textContent || "";
+          answeredQuestions.set(stateId, { option1, option2, chosen: FINAL_STATE, chosenLabel });
+          pendingTrail = { from: stateId, to: FINAL_STATE };
+          const container = infoContent?.querySelector('.question-container');
+          if (container) {
+            const continueBtn = document.createElement('button');
+            continueBtn.className = 'answer-btn answer-btn--continue';
+            continueBtn.type = 'button';
+            continueBtn.textContent = t("continue.exploring");
+            continueBtn.addEventListener('click', () => { clearSelection(); });
+            container.appendChild(continueBtn);
+          }
+        }, 1100);
+      });
+    });
+    return;
+  }
+
+  // Prefer direct neighbors, but exclude state 11 — it's reserved for last
+  const neighbors = getNeighbors(stateId);
+  let candidates = neighbors.filter((n) => n !== FINAL_STATE && !isStateRevealed(n));
+
+  // If no unrevealed non-final neighbors, use any non-final unrevealed state
+  if (candidates.length === 0) {
+    candidates = nonFinal;
+  }
+
+  // Always pick exactly 2 distinct unrevealed states
+  const shuffled = candidates.sort(() => Math.random() - 0.5);
+  const option1 = shuffled[0];
+  const option2 = shuffled[1] || option1;
+
+  // Always 2 cards with distinct labels from track choices
+  const label1 = choices[0];
+  const label2 = choices[1];
+
+  // Hourglass text from source track
+  const hourglassQuestion = sourceTrack?.hourglassText
+    ? sourceTrack.hourglassText.replace(/\n/g, "<br>")
+    : t("fallback.direction");
 
   // Append question to existing info panel content
   if (!infoContent) return;
 
-  const characterLabel = selectedCharacter ? selectedCharacter.replace("-", " ") : "";
+  const cardMarkup = (answer, label) => `
+        <button class="tarot-card answer-btn" data-answer="${answer}" type="button">
+          <div class="tarot-card-inner">
+            <div class="tarot-card-back"><div class="tarot-card-back-pattern"></div></div>
+            <div class="tarot-card-front">
+              <div class="tarot-card-border">
+                <div class="tarot-card-content">
+                  <span class="tarot-card-label">${label}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </button>`;
+
   const questionMarkup = `
     <div class="question-container">
       <div class="question-prompt tarot-reading">
-        <p class="question-text">Et maintenant, quelle direction prends-tu ?</p>
+        <p class="question-text">${hourglassQuestion}</p>
       </div>
       <div class="tarot-spread">
-        <button class="tarot-card answer-btn" data-answer="${option1}" type="button">
-          <div class="tarot-card-inner">
-            <div class="tarot-card-back"><div class="tarot-card-back-pattern"></div></div>
-            <div class="tarot-card-front">
-              <div class="tarot-card-border">
-                <div class="tarot-card-content">
-                  <span class="tarot-card-label">${label1}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </button>
-        <button class="tarot-card answer-btn" data-answer="${option2}" type="button">
-          <div class="tarot-card-inner">
-            <div class="tarot-card-back"><div class="tarot-card-back-pattern"></div></div>
-            <div class="tarot-card-front">
-              <div class="tarot-card-border">
-                <div class="tarot-card-content">
-                  <span class="tarot-card-label">${label2}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </button>
+        ${cardMarkup(option1, label1)}
+        ${cardMarkup(option2, label2)}
       </div>
     </div>
   `;
@@ -2593,8 +2834,9 @@ const showQuestionModal = (stateId) => {
       });
       setTimeout(() => {
         handleAnswer(answer, stateId);
-        // Store answer for revisit rendering
-        answeredQuestions.set(stateId, { option1, option2, chosen: answer });
+        // Store answer for revisit rendering (include chosenLabel for revisit display)
+        const chosenLabel = btn.querySelector(".tarot-card-label")?.textContent || "";
+        answeredQuestions.set(stateId, { option1, option2: option2 || option1, chosen: answer, chosenLabel });
         // Store pending trail for deferred drawing (when user clicks back or continue)
         pendingTrail = { from: stateId, to: answer };
         const container = infoContent?.querySelector('.question-container');
@@ -2602,7 +2844,7 @@ const showQuestionModal = (stateId) => {
           const continueBtn = document.createElement('button');
           continueBtn.className = 'answer-btn answer-btn--continue';
           continueBtn.type = 'button';
-          continueBtn.textContent = 'Continue exploring';
+          continueBtn.textContent = t("continue.exploring");
           continueBtn.addEventListener('click', () => {
             clearSelection();
           });
@@ -3146,6 +3388,52 @@ const drawTrailSegment = (fromStateId, toStateId) => {
 
 // --- Map View Character (SVG on trail layer) ---
 
+const spawnPuffParticles = (cx, cy, size, layer) => {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const count = 7;
+  const drift = size * 0.6;
+  const dur = "700ms";
+  const wisps = [];
+
+  for (let i = 0; i < count; i++) {
+    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+    const dx = Math.cos(angle) * drift * (0.6 + Math.random() * 0.4);
+    const dy = Math.sin(angle) * drift * (0.6 + Math.random() * 0.4);
+    const baseR = size * (0.08 + Math.random() * 0.06);
+    const stagger = `${i * 30}ms`;
+
+    const el = document.createElementNS(svgNS, "ellipse");
+    el.setAttribute("cx", cx);
+    el.setAttribute("cy", cy);
+    el.setAttribute("rx", baseR);
+    el.setAttribute("ry", baseR * 0.7);
+    el.setAttribute("fill", "rgba(189,255,0,0.35)");
+    el.setAttribute("filter", "url(#puff-blur)");
+    el.classList.add("puff-wisp");
+
+    const attrs = [
+      ["cx", `${cx}`, `${cx + dx}`],
+      ["cy", `${cy}`, `${cy + dy}`],
+      ["rx", `${baseR}`, `${baseR * 2.5}`],
+      ["ry", `${baseR * 0.7}`, `${baseR * 1.8}`],
+      ["opacity", "0.6", "0"],
+    ];
+    for (const [attr, from, to] of attrs) {
+      const anim = document.createElementNS(svgNS, "animate");
+      anim.setAttribute("attributeName", attr);
+      anim.setAttribute("from", from);
+      anim.setAttribute("to", to);
+      anim.setAttribute("dur", dur);
+      anim.setAttribute("begin", stagger);
+      anim.setAttribute("fill", "freeze");
+      el.appendChild(anim);
+    }
+    layer.appendChild(el);
+    wisps.push(el);
+  }
+  setTimeout(() => wisps.forEach(w => w.remove()), 900);
+};
+
 const createMapCharacter = (arriving = false) => {
   removeMapCharacter();
   if (!selectedCharacter || !mapApi) return;
@@ -3170,15 +3458,21 @@ const createMapCharacter = (arriving = false) => {
   img.setAttribute("href", moveSet.idle[0]);
   img.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", moveSet.idle[0]);
   img.classList.add("map-character");
+
+  const isFirstArrival = arriving && explorationOrder.length <= 1;
+  if (isFirstArrival && !prefersReducedMotion) {
+    spawnPuffParticles(center.x, center.y, size, layer);
+    img.classList.add("map-character--arriving");
+  }
+
   layer.appendChild(img);
 
   mapCharacter = img;
   mapCharacterFrameIdx = 0;
   mapCharacterStateId = targetState;
 
-  if (arriving && !prefersReducedMotion) {
-    mapCharacter.classList.add("map-character--arriving");
-    setTimeout(() => mapCharacter?.classList.remove("map-character--arriving"), 500);
+  if (isFirstArrival && !prefersReducedMotion) {
+    setTimeout(() => mapCharacter?.classList.remove("map-character--arriving"), 800);
   }
 
   mapCharacterInterval = setInterval(() => {
@@ -3219,6 +3513,8 @@ const removeMapCharacter = () => {
     mapCharacterInterval = null;
   }
   if (mapCharacter) {
+    const layer = mapCharacter.parentNode;
+    if (layer) layer.querySelectorAll(".puff-wisp").forEach(w => w.remove());
     mapCharacter.remove();
     mapCharacter = null;
   }
@@ -3281,8 +3577,6 @@ const updateMapCharacterPosition = (toStateId, fromStateId, animate = true) => {
       requestAnimationFrame(step);
     } else {
       mapCharacterStateId = toStateId;
-      mapCharacter.classList.add("map-character--arriving");
-      setTimeout(() => mapCharacter?.classList.remove("map-character--arriving"), 500);
     }
   };
 
@@ -3317,20 +3611,7 @@ const stopStateCharFloat = () => {
   }
 };
 
-const DRAG_PHRASES = [
-  "Aimes-tu l\u2019autorit\u00e9\u202f?",
-  "Habites-tu cet instant\u202f?",
-  "Si je cours assez vite, est-ce que j\u2019arrive \u00e0 hier\u202f?",
-  "Quelle heure il est pour une pierre\u202f?",
-  "Le pr\u00e9sent, c\u2019est \u00e0 gauche ou \u00e0 droite\u202f?",
-  "Un drapeau plant\u00e9 dans le sol, \u00e7a fait mal \u00e0 la terre\u202f?",
-  "Est-ce que la pluie demande un visa avant de tomber\u202f?",
-  "Combien de g\u00e9n\u00e9rations faut-il pour qu\u2019un envahisseur devienne un autochtone\u202f?",
-  "O\u00f9 dorment les lieux qu\u2019on a quitt\u00e9s\u202f?",
-  "Reste-t-il une odeur l\u00e0 o\u00f9 quelqu\u2019un a pleur\u00e9\u202f?",
-  "Le mardi existe-t-il aussi dans la for\u00eat\u202f?",
-  "Si on d\u00e9place une fronti\u00e8re, le sol s\u2019en aper\u00e7oit\u202f?",
-];
+const DRAG_PHRASES = getDragPhrases();
 
 const setupStateCharDrag = (img) => {
   let grabOffsetX = 0;
@@ -3391,7 +3672,7 @@ const setupStateCharDrag = (img) => {
     bubble = document.createElement("div");
     bubble.className = "state-character-bubble";
     bubble.style.whiteSpace = "pre-line";
-    bubble.textContent = "Tourner \u2192 vitesse\nSecouer \u2192 2x\nGlisser \u2192 chercher";
+    bubble.textContent = t("gesture.hints");
     img.parentElement.appendChild(bubble);
     positionAboveChar(bubble);
     setTimeout(hideBubble, 5000);
@@ -3405,7 +3686,7 @@ const setupStateCharDrag = (img) => {
     menu.className = "state-character-menu";
 
     const isPlaying = hourglassPlayer ? hourglassPlayer.playing : (activeAudio && !activeAudio.paused);
-    const playLabel = isPlaying ? "Pause" : "Jouer";
+    const playLabel = isPlaying ? t("menu.pause") : t("menu.play");
     const askMeaning = () => {
       closeMenu();
       hideBubble();
@@ -3419,10 +3700,10 @@ const setupStateCharDrag = (img) => {
 
     const items = [
       { label: playLabel, action: () => { if (hourglassPlayer) { hourglassPlayer.togglePlay(); } else if (activeAudio) { activeAudio.paused ? activeAudio.play() : activeAudio.pause(); } }},
-      { label: "Redémarrer le temps", action: () => { if (hourglassPlayer) { hourglassPlayer.restart(); } else if (activeAudio) { activeAudio.currentTime = 0; activeAudio.play().catch(() => {}); } }},
-      { label: "Quel est le sens de la vie\u202f?", action: askMeaning },
-      { label: "Gestes sablier", action: showGestureHelp },
-      { label: "\u00c0 propos", action: () => { aboutModal?.setAttribute("aria-hidden", "false"); }},
+      { label: t("menu.restart"), action: () => { if (hourglassPlayer) { hourglassPlayer.restart(); } else if (activeAudio) { activeAudio.currentTime = 0; activeAudio.play().catch(() => {}); } }},
+      { label: t("menu.meaning"), action: askMeaning },
+      { label: t("menu.gestures"), action: showGestureHelp },
+      { label: t("menu.about"), action: () => { aboutModal?.setAttribute("aria-hidden", "false"); }},
     ];
 
     for (const item of items) {
@@ -3517,10 +3798,15 @@ const showStateCharacter = () => {
   img.alt = selectedCharacter;
   img.className = "state-character";
   img.draggable = false;
+  if (!prefersReducedMotion) img.classList.add("state-character--arriving");
   app.appendChild(img);
 
   stateCharacter = img;
   stateCharFrameIdx = 0;
+
+  if (!prefersReducedMotion) {
+    setTimeout(() => stateCharacter?.classList.remove("state-character--arriving"), 800);
+  }
 
   stateCharInterval = setInterval(() => {
     stateCharFrameIdx = (stateCharFrameIdx + 1) % moveSet.idle.length;
@@ -3590,51 +3876,46 @@ const clearSelection = (options = {}) => {
     questionTimeout = null;
   }
   hideQuestionModal();
-  
+
   mapApi?.resetFocus();
   mapApi?.setActiveState(null);
   mapApi?.clearHover();
   clearFocusSigilLayer();
   stopAudioReactive();
-  hideState3D();
   hideStateCharacter();
+  hideState3D();
   activeStateId = null;
   renderInfo(null);
-  setSplitLayout(false);
   if (options.pushState !== false) updateUrlState(null);
+  lastSelectedViewBox = null;
+
+  setSplitLayout(false);
   setCollapsed(false);
   if (fullViewBox) viewbox.set(fullViewBox);
   setAnimating(false);
-  lastSelectedViewBox = null;
-  if (!stateId || !previousBox || !mapApi?.createSnapshot) return;
-  if (!mapApi.createSnapshot(stateId)) return;
-  const layer = mapApi.getSnapshotLayer();
-  if (!layer || !transformAnimator || !fullViewBox) return;
-  const startTransform = getTransformForViewBox(fullViewBox, previousBox, getMapPaneSize());
-  transformAnimator.setElement(layer);
-  transformAnimator.set(startTransform);
-  animationToken += 1;
-  const token = animationToken;
-  setAnimating(true);
-  transformAnimator.animate(
-    startTransform,
-    { x: 0, y: 0, scale: 1 },
-    prefersReducedMotion ? 0 : 520,
-    () => {
-      if (token !== animationToken) return;
-      mapApi.clearSnapshot();
-      setAnimating(false);
-    }
-  );
 };
 
 const init = async () => {
+  // i18n: wire language toggle and apply static translations
+  const langToggle = document.getElementById("lang-toggle");
+  if (langToggle) {
+    const currentLang = getLang();
+    langToggle.querySelectorAll("[data-lang]").forEach((btn) => {
+      btn.setAttribute("aria-pressed", btn.dataset.lang === currentLang ? "true" : "false");
+      btn.addEventListener("click", () => {
+        if (btn.dataset.lang !== currentLang) setLang(btn.dataset.lang);
+      });
+    });
+  }
+  applyStaticTranslations();
+
   if (!dataUrl || !svg) return;
   try {
-    setLoading(true, "Loading map data...");
+    setLoading(true, t("loading.mapData"));
+    const resolvedTracksUrl = getTracksUrl(tracksUrl);
     const [geojson, tracks, sigils] = await Promise.all([
       loadGeoJSON(dataUrl),
-      tracksUrl ? loadTracks(tracksUrl) : Promise.resolve(null),
+      resolvedTracksUrl ? loadTracks(resolvedTracksUrl) : Promise.resolve(null),
       sigilsUrl ? loadSigils(sigilsUrl) : Promise.resolve(null),
     ]);
     geojsonData = geojson;
@@ -3690,7 +3971,7 @@ const init = async () => {
     renderInfo(null);
 
     if (mapApi.preloadSnapshots && shouldPreloadSnapshots) {
-      setLoading(true, "Preparing state views 0/0...");
+      setLoading(true, t("loading.stateViews", { current: 0, total: 0 }));
       await mapApi.preloadSnapshots({ onProgress: updateLoadingProgress });
     }
     setLoading(false);
@@ -3711,8 +3992,8 @@ const init = async () => {
       selectState(initialState, { pushState: false });
     } else {
       mapCharacterBarkTimers.push(
-        setTimeout(() => showMapCharacterBark("Où ai-je donc atterri ?"), 2000),
-        setTimeout(() => showMapCharacterBark("Ne devrait-on pas essayer de découvrir ce territoire ?"), 10000),
+        setTimeout(() => showMapCharacterBark(t("bark.where")), 2000),
+        setTimeout(() => showMapCharacterBark(t("bark.discover")), 10000),
       );
     }
   } catch (error) {
@@ -3722,7 +4003,7 @@ const init = async () => {
     setLoading(false);
     if (infoContent) {
       infoContent.innerHTML =
-        '<h2 class="info-title">Error</h2><div class="info-body">Could not load map data.</div>';
+        `<h2 class="info-title">${t("error.title")}</h2><div class="info-body">${t("error.body")}</div>`;
     }
   }
 };

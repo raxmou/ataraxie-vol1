@@ -1345,6 +1345,11 @@ export const createHourglassPlayer = (container, audio) => {
     // Apply playback speed (skip during scrub drag)
     if (!isDragging) applyPlaybackSpeed();
 
+    // Late-init particles if duration became available after initial check
+    if (particles.length === 0 && audio.duration && Number.isFinite(audio.duration)) {
+      initParticles(audio.duration);
+    }
+
     // Update progress and particle time
     const duration = audio.duration;
     if (!isDragging && duration && Number.isFinite(duration)) {
@@ -1588,6 +1593,10 @@ export const createHourglassPlayer = (container, audio) => {
   // Audio events
   audio.addEventListener("timeupdate", updateTime);
   audio.addEventListener("loadedmetadata", updateDuration);
+  audio.addEventListener("durationchange", updateDuration);
+  audio.addEventListener("error", () => {
+    console.warn("[hourglass] Audio failed to load:", audio.error?.message || "unknown error", audio.src);
+  });
 
   // Initial state
   updateDuration();
@@ -1663,6 +1672,7 @@ export const createHourglassPlayer = (container, audio) => {
 
       audio.removeEventListener("timeupdate", updateTime);
       audio.removeEventListener("loadedmetadata", updateDuration);
+      audio.removeEventListener("durationchange", updateDuration);
 
       if (wrapper.parentNode) {
         wrapper.parentNode.removeChild(wrapper);

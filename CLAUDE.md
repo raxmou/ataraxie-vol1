@@ -77,7 +77,6 @@ trackById                  // Map: trackId -> track metadata
 
 // 3D rendering
 threeApi                   // Three.js state 3D renderer (lazy-loaded)
-sigilThreeApi              // Three.js sigil 3D renderer (lazy-loaded)
 audioContext/audioAnalyser // Web Audio API for reactive visuals
 
 // Rendering
@@ -93,7 +92,7 @@ sigilsByState              // Map: stateId -> sigil SVG path
 
 ### UI State Classes
 - `#app.is-split` - State View active (map left, info pane right)
-- `#app.is-3d`, `.is-3d-state`, `.is-3d-sigil` - 3D visualization states
+- `#app.is-3d`, `.is-3d-state` - 3D visualization states
 - Cells: `.is-active`, `.is-ocean`, `.is-fogged`, `.is-hover`
 - Modals: `[aria-hidden="true"]` / `[aria-hidden="false"]` for visibility
 
@@ -112,20 +111,18 @@ sigilsByState              // Map: stateId -> sigil SVG path
    - `#map-sigils` - Hover sigil overlays
 3. **3D Stack** (`#state-3d-stack`) - Canvas layers for Three.js
    - `#state-3d-canvas` - State mesh 3D view
-   - `#sigil-3d-canvas` - Sigil mesh 3D view
 
 ## Conventions
 
 ### DOM Hooks
 - Main: `#app`, `#map-svg`, `.map-pane`, `#info-pane`, `#state-content`, `#state-back`
 - Modals: `#character-select`, `#question-modal`, `#credits-modal`, `#loading-screen`
-- 3D: `#state-3d-canvas`, `#sigil-3d-canvas`, `#three-toggle`
+- 3D: `#state-3d-canvas`
 - Buttons: `#info-button`, `#character-confirm`, `#credits-close`, `#credits-change-character`
 - Data attributes:
   - `data-geojson`, `data-tracks`, `data-sigils` (on `#app`) - Data file URLs
   - `data-state` (on cells) - State ID
   - `data-character` (on character cards) - Character type
-  - `data-3d-target` (on toggle buttons) - "state" or "sigil"
 - State ID from `feature.properties.state`; `"0"` is ocean (ignored in most logic)
 
 ### Styling
@@ -143,7 +140,6 @@ const SVG_LOADER_URL = "https://unpkg.com/three@0.164.1/examples/jsm/loaders/SVG
 ```
 Used for:
 - State 3D mesh (extruded SVG paths with audio-reactive displacement)
-- Sigil 3D mesh (extruded sigil SVG with rotation/animation)
 - Hourglass 3D overlay (procedural LatheGeometry with glass/wire materials)
 
 ### Audio System

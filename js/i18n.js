@@ -17,6 +17,11 @@ const STRINGS = {
     fr: "Aucune IA n\u2019a \u00e9t\u00e9 bless\u00e9e durant la cr\u00e9ation",
     en: "No AI was hurt during creation",
   },
+  "mobile.warning": {
+    fr: "Bien que bancale, l\u2019application marche sur t\u00e9l\u00e9phone. Les rendus seront s\u00fbrement n\u00e9glig\u00e9s. Privil\u00e9gie un support plus grand, les artistes et le d\u00e9veloppeur te remercieront.",
+    en: "Although a bit wobbly, the app works on phone. Visuals will likely be degraded. Prefer a larger screen \u2014 the artists and the developer will thank you.",
+  },
+  "mobile.dismiss": { fr: "Compris, continuer", en: "Got it, continue" },
   "loading.mapData": { fr: "Chargement des donn\u00e9es\u2026", en: "Loading map data\u2026" },
   "loading.stateViews": {
     fr: "Pr\u00e9paration des vues ${current}/${total}\u2026",

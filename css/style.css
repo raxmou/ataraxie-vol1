@@ -536,8 +536,9 @@ body::before {
 }
 
 #app {
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   overflow: hidden;
   background: transparent;
@@ -548,7 +549,7 @@ body::before {
   height: 100%;
   flex: 1 1 auto;
   background: url("../assets/backgrounds/VISUALWORKS54.png") center no-repeat;
-  background-size: 100% 100%;
+  background-size: cover;
   transition: width var(--transition-fast);
   position: relative;
   isolation: isolate;
@@ -669,8 +670,7 @@ body::before {
   z-index: 1;
 }
 
-.state-3d-slot,
-.sigil-3d-slot {
+.state-3d-slot {
   position: absolute;
   inset: 0;
   overflow: hidden;
@@ -678,8 +678,7 @@ body::before {
   pointer-events: none;
 }
 
-#state-3d-canvas,
-#sigil-3d-canvas {
+#state-3d-canvas {
   width: 100%;
   height: 100%;
   display: block;
@@ -715,15 +714,6 @@ body::before {
   pointer-events: auto;
 }
 
-.map-pane.is-3d-sigil .sigil-3d-slot {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.map-pane.is-3d-sigil #sigil-3d-canvas {
-  pointer-events: auto;
-}
-
 .lang-toggle {
   position: fixed;
   top: 18px;
@@ -736,32 +726,6 @@ body::before {
   background: linear-gradient(180deg, rgba(20, 26, 14, 0.92), rgba(10, 14, 7, 0.96));
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
   overflow: hidden;
-}
-
-.three-toggle {
-  position: absolute;
-  top: 18px;
-  right: calc(var(--panel-width) + 12px);
-  display: flex;
-  align-items: center;
-  z-index: 5;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-6px);
-  transition: opacity var(--transition-fast), transform var(--transition-fast);
-  border: 1px solid rgba(189, 255, 0, 0.45);
-  border-radius: 999px;
-  background: linear-gradient(180deg,
-    rgba(20, 26, 14, 0.92) 0%,
-    rgba(10, 14, 7, 0.96) 100%);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-}
-
-.map-pane.is-3d .three-toggle {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
 }
 
 .toggle-divider {
@@ -1881,11 +1845,13 @@ body::before {
 
   .map-pane {
     height: 100vh;
+    height: 100dvh;
   }
 
   #app.is-split .map-pane {
     width: 100%;
     height: 100vh;
+    height: 100dvh;
     flex: 0 0 100%;
   }
 
@@ -1932,6 +1898,12 @@ body::before {
   .question-answers .answer-btn {
     padding: 10px 14px;
     font-size: 0.85rem;
+  }
+
+  .question-card {
+    min-width: 0;
+    max-width: 90vw;
+    padding: 28px 24px;
   }
 }
 
@@ -2492,5 +2464,286 @@ body::before {
   .shrine-glow {
     width: 280px;
     height: 280px;
+  }
+}
+
+/* Mobile Warning Modal — glassmorphism style matching about-modal */
+.mobile-warning {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 4, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  z-index: 11;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+.mobile-warning[aria-hidden="false"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mobile-warning-card {
+  position: relative;
+  padding: 36px 28px 28px;
+  border-radius: 28px;
+  background: rgba(14, 18, 10, 0.45);
+  border: 1px solid rgba(189, 255, 0, 0.12);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(189, 255, 0, 0.08);
+  text-align: center;
+  max-width: 340px;
+  width: 88%;
+}
+
+.mobile-warning-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 20px;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 8px rgba(189, 255, 0, 0.25));
+}
+
+.mobile-warning-text {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--muted-text);
+  margin: 0 0 24px;
+}
+
+.mobile-warning-dismiss {
+  all: unset;
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 0.85rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(189, 255, 0, 0.6);
+  cursor: pointer;
+  transition: color 0.25s ease, text-shadow 0.25s ease;
+}
+
+.mobile-warning-dismiss::after {
+  content: " \2192";
+  display: inline-block;
+  transition: transform 0.25s ease;
+}
+
+.mobile-warning-dismiss:hover,
+.mobile-warning-dismiss:active {
+  color: #bdff00;
+  text-shadow: 0 0 14px rgba(189, 255, 0, 0.5);
+}
+
+.mobile-warning-dismiss:hover::after {
+  transform: translateX(4px);
+}
+
+.mobile-warning-dismiss:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .character-select {
+    gap: 2vh;
+    padding: 8px 0;
+  }
+
+  .splash-logo {
+    max-height: 12vh;
+  }
+
+  .character-select-card {
+    max-width: 100%;
+  }
+
+  .character-select-title {
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+
+  .character-grid {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .character-card {
+    width: 26vw;
+    max-width: 100px;
+    padding: 10px 6px;
+    gap: 6px;
+    border-radius: 12px;
+  }
+
+  .character-card-img {
+    width: 14vw;
+    height: 14vw;
+    max-width: 56px;
+    max-height: 56px;
+  }
+
+  .character-confirm {
+    font-size: 0.9rem;
+    margin-top: 8px;
+  }
+
+  .question-card {
+    min-width: 0;
+    max-width: 90vw;
+    padding: 24px 20px;
+  }
+
+  .loading-card {
+    min-width: 0;
+    width: 85vw;
+    max-width: 300px;
+  }
+
+  .about-content {
+    padding: 28px 20px 24px;
+  }
+
+  .state-character {
+    right: 16px;
+    bottom: auto;
+    top: 16px;
+  }
+
+  .hourglass-container {
+    width: 120px;
+    height: 192px;
+  }
+
+  .hourglass-3d {
+    width: 120px !important;
+    height: 192px !important;
+  }
+}
+
+/* Landscape phones — keep info pane on the right instead of bottom sheet */
+@media (max-width: 900px) and (orientation: landscape) {
+  #app {
+    flex-direction: row;
+  }
+
+  #app.is-split .map-pane {
+    flex: 1 1 auto;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  .info-pane {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: 44%;
+    max-height: none;
+    border-radius: 16px 0 0 16px;
+    transform: translateX(24px);
+  }
+
+  #app.is-split .info-pane {
+    transform: translateX(0);
+  }
+
+  /* Tarot cards side by side, scaled to fit narrow panel */
+  .tarot-spread {
+    flex-direction: row;
+    gap: 10px;
+    padding-bottom: 12px;
+  }
+
+  .tarot-card {
+    width: 120px;
+    height: 180px;
+  }
+
+  .tarot-card-label {
+    font-size: 0.6rem;
+  }
+}
+
+/* Landscape phones — very short viewport */
+@media (max-height: 420px) and (orientation: landscape) {
+  .character-select {
+    gap: 0;
+    padding: 8px 0;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .splash-logo {
+    max-height: 32vh;
+    width: min(30vw, 280px);
+    flex-shrink: 0;
+    margin-right: 0;
+    transition: max-height 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+                margin 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Card collapses width too so logo stays centered when hidden */
+  .character-select-card {
+    max-height: none;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateX(20px);
+    transition: opacity 0.7s ease 0.1s, transform 0.7s ease 0.1s, max-width 0.9s ease;
+  }
+
+  .character-select-card.is-card-visible {
+    max-height: none;
+    max-width: 60vw;
+    overflow: visible;
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* Logo shifts left when card is visible — :has() targets logo based on next sibling */
+  .splash-logo:has(+ .character-select-card.is-card-visible) {
+    margin-right: 4vw;
+  }
+
+  .character-select-title {
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+
+  .character-grid {
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .character-card {
+    width: 18vw;
+    max-width: 120px;
+    padding: 10px 8px;
+    gap: 6px;
+    border-radius: 12px;
+  }
+
+  .character-card-img {
+    width: 18vh;
+    height: 18vh;
+    max-width: 80px;
+    max-height: 80px;
+  }
+
+  .character-confirm {
+    font-size: 0.9rem;
+    margin-top: 6px;
   }
 }

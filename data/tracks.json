@@ -2,7 +2,7 @@
   "tracks": [
     {
       "id": "anta-doma-shapes-premaster",
-      "title": "Anta Doma - Shapes (Premaster)",
+      "title": "Anta Doma - Shapes",
       "file": "assets/music/Anta Doma - Shapes.mp3",
       "bpm": 128,
       "bandcamp": "https://antadoma.bandcamp.com",
@@ -21,7 +21,7 @@
     },
     {
       "id": "aquacrypt-unknown",
-      "title": "Aquacrypt - UNKNOWN",
+      "title": "ǟզʊǟƈʀʏքȶ - Cairn Path Reuptake",
       "file": "assets/music/Aquacrypt - UNKNOWN.mp3",
       "bpm": 130,
       "bandcamp": "https://aquacrypt.bandcamp.com",
@@ -74,7 +74,7 @@
     },
     {
       "id": "gustave-retour-le-pi-ge",
-      "title": "Gustave Retour - Le piège",
+      "title": "Gustave Retour - Le Piège",
       "file": "assets/music/Gustave Retour - Le Piège.mp3",
       "bpm": 120,
       "bandcamp": "https://gustaveretour.bandcamp.com",
@@ -91,7 +91,7 @@
     },
     {
       "id": "naeja-may-the-world-ends-with-you",
-      "title": "Naeja - May The World Ends (With You)",
+      "title": "Næja - May the World End (With You)",
       "file": "assets/music/Naeja - May the World End (With You).mp3",
       "bpm": 132,
       "bandcamp": "https://naeja.bandcamp.com",
@@ -109,7 +109,7 @@
     },
     {
       "id": "nostromodamus-another-presence-master-reference-v2",
-      "title": "Nostromodamus - Another Presence (MASTER REFERENCE V2)",
+      "title": "Nostromodamus - Another Presence",
       "file": "assets/music/Nostromodamus - Another Presence.mp3",
       "bpm": 128,
       "bandcamp": "https://nostromodamus.bandcamp.com",
@@ -126,7 +126,7 @@
     },
     {
       "id": "smogo-obliteration-premaster-24bit-44-1khz",
-      "title": "Smogo - Obliteration (Premaster - 24bit 44.1khz)",
+      "title": "Smogo - Obliteration",
       "file": "assets/music/Smogo - Obliteration.mp3",
       "bpm": 140,
       "bandcamp": "https://smogo.bandcamp.com",
@@ -144,7 +144,7 @@
     },
     {
       "id": "acideplastique-vectorial-soil",
-      "title": "acideplastique - Vectorial Soil",
+      "title": "Acideplastique - Vectorial Soil",
       "file": "assets/music/Acideplastique - Vectorial Soil.mp3",
       "bpm": 133,
       "bandcamp": "https://acideplastique.bandcamp.com",
@@ -162,7 +162,7 @@
     },
     {
       "id": "le-frit-streetview-belly-slide-mixdown",
-      "title": "le frit - streetview belly slide (mixdown)",
+      "title": "Le Frit - Streetview Belly Slide",
       "file": "assets/music/le frit - streetview belly slide.mp3",
       "bpm": 138,
       "bandcamp": "https://lefrit.bandcamp.com",
@@ -179,7 +179,7 @@
     },
     {
       "id": "zero-crossing-point-half-past-six-mix-24b-v2",
-      "title": "Zero Crossing Point - Half Past Six (Mix 24b V2)",
+      "title": "Zero Crossing Point - Half Past Six",
       "file": "assets/music/Zero Crossing Point - Half Past Six.mp3",
       "bpm": 126,
       "bandcamp": "https://zerocrossingpoint.bandcamp.com",

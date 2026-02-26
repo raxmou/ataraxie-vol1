@@ -1350,6 +1350,11 @@ export const createHourglassPlayer = (container, audio) => {
       initParticles(audio.duration);
     }
 
+    // Hide retry button once particles are loaded
+    if (particles.length > 0 && !retryBtn.hidden) {
+      retryBtn.hidden = true;
+    }
+
     // Update progress and particle time
     const duration = audio.duration;
     if (!isDragging && duration && Number.isFinite(duration)) {
@@ -1406,6 +1411,40 @@ export const createHourglassPlayer = (container, audio) => {
   scrubZone.setAttribute("aria-valuenow", "0");
   scrubZone.tabIndex = 0;
   wrapper.appendChild(scrubZone);
+
+  // Retry button (shown when particles fail to load or audio fails to play)
+  const retryBtn = document.createElement("button");
+  retryBtn.className = "hourglass-retry";
+  retryBtn.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`;
+  retryBtn.hidden = true;
+  retryBtn.setAttribute("aria-label", "Retry");
+  wrapper.appendChild(retryBtn);
+
+  const showRetryIfNeeded = () => {
+    if (disposed) return;
+    if (particles.length === 0 || (audio.paused && !userPaused && !isPlayingReversed && audio.currentTime === 0)) {
+      retryBtn.hidden = false;
+    }
+  };
+
+  let retryTimeout = null;
+  if (!prefersReducedMotion) {
+    retryTimeout = setTimeout(showRetryIfNeeded, 3000);
+  }
+
+  // Also show retry if audio fails to play
+  audio.addEventListener("error", () => {
+    if (!disposed) retryBtn.hidden = false;
+  });
+
+  retryBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    retryBtn.hidden = true;
+    if (audio.duration && Number.isFinite(audio.duration)) {
+      initParticles(audio.duration);
+    }
+    audio.play().catch(() => {});
+  });
 
   // Assemble
   container.appendChild(wrapper);
@@ -1656,6 +1695,7 @@ export const createHourglassPlayer = (container, audio) => {
       disposed = true;
       if (animationFrame) cancelAnimationFrame(animationFrame);
       if (shakeDecayTimer) clearTimeout(shakeDecayTimer);
+      if (retryTimeout) clearTimeout(retryTimeout);
       stopReversePlayback();
       if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
       if (three3d) { three3d.dispose(); three3d = null; }

@@ -1713,13 +1713,25 @@ const renderInfo = (stateId, infoOptions = {}) => {
   const playBtn = infoContent.querySelector(".narrative-play-btn");
   if (playBtn) {
     playBtn.addEventListener("click", () => {
+      // Start audio in user gesture context to satisfy autoplay policy
+      if (audio instanceof HTMLAudioElement) {
+        audio.play().catch(() => {});
+      }
       const narrativeEl = infoContent.querySelector(".narrative-container");
       if (narrativeEl) {
-        narrativeEl.classList.add("is-fading");
-        narrativeEl.addEventListener("animationend", () => {
+        if (prefersReducedMotion) {
           narrativeEl.remove();
           showTrackShrine(title, artist, track, audio, infoOptions);
-        }, { once: true });
+        } else {
+          narrativeEl.classList.add("is-fading");
+          const onFadeEnd = (e) => {
+            if (e.animationName !== "narrative-fade-out") return;
+            narrativeEl.removeEventListener("animationend", onFadeEnd);
+            narrativeEl.remove();
+            showTrackShrine(title, artist, track, audio, infoOptions);
+          };
+          narrativeEl.addEventListener("animationend", onFadeEnd);
+        }
       } else {
         showTrackShrine(title, artist, track, audio, infoOptions);
       }
@@ -1788,6 +1800,10 @@ const showTrackShrine = (title, artist, track, audio, infoOptions = {}) => {
   if (audio instanceof HTMLAudioElement) {
     activeAudio = audio;
     setupTrackPlayer(player, audio);
+    // If audio is already playing (started during narrative click),
+    // the "play" event already fired before the listener was attached,
+    // so kick off audio-reactive manually.
+    if (!audio.paused) startAudioReactive(audio);
     const playPromise = audio.play();
     if (playPromise && typeof playPromise.catch === "function") {
       playPromise.catch((err) => {
@@ -1801,11 +1817,23 @@ const showTrackShrine = (title, artist, track, audio, infoOptions = {}) => {
         bubble.className = "state-character-bubble";
         bubble.textContent = t("bark.finale");
         stateCharacter.parentElement.appendChild(bubble);
-        const rect = stateCharacter.getBoundingClientRect();
-        const parentRect = (stateCharacter.offsetParent || app).getBoundingClientRect();
-        bubble.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
-        bubble.style.top = `${rect.top - parentRect.top - 12}px`;
-        setTimeout(() => bubble.remove(), 8000);
+        const positionBubble = () => {
+          const rect = stateCharacter.getBoundingClientRect();
+          const parentRect = (stateCharacter.offsetParent || app).getBoundingClientRect();
+          bubble.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
+          bubble.style.top = `${rect.top - parentRect.top - 12}px`;
+        };
+        positionBubble();
+        // Hook into the floating animation sync loop
+        const origSync = stateCharacter._syncOverlays;
+        stateCharacter._syncOverlays = () => {
+          if (origSync) origSync();
+          if (bubble.parentElement) positionBubble();
+        };
+        setTimeout(() => {
+          bubble.remove();
+          stateCharacter._syncOverlays = origSync;
+        }, 8000);
       };
       setTimeout(tryBark, 1500);
     }
@@ -1864,13 +1892,24 @@ const showNarrative = (title, artist, track, infoOptions) => {
   const playBtn = infoContent.querySelector(".narrative-play-btn");
   if (playBtn) {
     playBtn.addEventListener("click", () => {
+      if (audio instanceof HTMLAudioElement) {
+        audio.play().catch(() => {});
+      }
       const narrativeEl = infoContent.querySelector(".narrative-container");
       if (narrativeEl) {
-        narrativeEl.classList.add("is-fading");
-        narrativeEl.addEventListener("animationend", () => {
+        if (prefersReducedMotion) {
           narrativeEl.remove();
           showTrackShrine(title, artist, track, audio, infoOptions);
-        }, { once: true });
+        } else {
+          narrativeEl.classList.add("is-fading");
+          const onFadeEnd = (e) => {
+            if (e.animationName !== "narrative-fade-out") return;
+            narrativeEl.removeEventListener("animationend", onFadeEnd);
+            narrativeEl.remove();
+            showTrackShrine(title, artist, track, audio, infoOptions);
+          };
+          narrativeEl.addEventListener("animationend", onFadeEnd);
+        }
       } else {
         showTrackShrine(title, artist, track, audio, infoOptions);
       }
@@ -2060,7 +2099,9 @@ const showQuestionModal = (stateId) => {
             continueBtn.textContent = t("continue.exploring");
             continueBtn.addEventListener('click', () => { clearSelection(); });
             container.appendChild(continueBtn);
-            continueBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            setTimeout(() => {
+              continueBtn.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }, 650);
           }
         }, 1100);
       });
@@ -2152,7 +2193,9 @@ const showQuestionModal = (stateId) => {
             clearSelection();
           });
           container.appendChild(continueBtn);
-          continueBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          setTimeout(() => {
+            continueBtn.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          }, 650);
         }
       }, 1100);
     });
@@ -3213,12 +3256,30 @@ const init = async () => {
   }
   applyStaticTranslations();
 
+  // Rotate overlay: block portrait on mobile until user rotates to landscape
+  const rotateOverlay = document.getElementById("rotate-overlay");
+  const isMobile = window.matchMedia("(pointer: coarse)").matches;
+  const isPortrait = () => window.innerHeight > window.innerWidth;
+  if (rotateOverlay && isMobile && isPortrait()) {
+    rotateOverlay.setAttribute("aria-hidden", "false");
+    await new Promise((resolve) => {
+      const check = () => {
+        if (!isPortrait()) {
+          rotateOverlay.setAttribute("aria-hidden", "true");
+          window.removeEventListener("resize", check);
+          resolve();
+        }
+      };
+      window.addEventListener("resize", check);
+    });
+  }
+
   // Mobile warning: show once per session on small screens
   const mobileWarning = document.getElementById("mobile-warning");
   if (
     mobileWarning &&
-    (window.matchMedia("(max-width: 480px)").matches ||
-      window.matchMedia("(max-height: 480px) and (pointer: coarse)").matches) &&
+    window.matchMedia("(pointer: coarse)").matches &&
+    Math.min(screen.width, screen.height) <= 480 &&
     !sessionStorage.getItem("ataraxie-mobile-warned")
   ) {
     mobileWarning.setAttribute("aria-hidden", "false");

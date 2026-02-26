@@ -5,6 +5,7 @@ import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
 import { createTextureCanvas } from "./texture-canvas.js";
 import { createHourglassPlayer } from "./hourglass-player.js";
 import { createCharacterDancer } from "./character-dancer.js";
+import { createInfoPaneGesture } from "./info-pane-gesture.js";
 import {
   revealedStates,
   questionedStates,
@@ -18,6 +19,16 @@ import {
   explorationOrder,
   addTrail,
 } from "./fog.js";
+
+/* ── request fullscreen on first user gesture (mobile) ── */
+if (/Mobi|Android/i.test(navigator.userAgent)) {
+  const goFS = () => {
+    const el = document.documentElement;
+    const rfs = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (rfs) rfs.call(el).catch(() => {});
+  };
+  document.addEventListener("pointerdown", goFS, { once: true });
+}
 
 const svgNS = "http://www.w3.org/2000/svg";
 const sigilLayerId = "map-sigils";
@@ -111,6 +122,8 @@ let stateCharInterval = null;
 let stateCharFloatRAF = null;
 let stateCharFloatStart = 0;
 let stateCharDragging = false;
+let infoPaneGesture = null;
+const mobileMediaQuery = matchMedia("(max-width: 900px)");
 
 const stateTextureFiles = [
   "assets/textures/VISUALWORKS1 6.png",
@@ -1528,10 +1541,22 @@ const setSplitLayout = (isSplit) => {
     infoPane.removeAttribute("aria-hidden");
     backButton?.removeAttribute("hidden");
     hideHoverSigil();
+    // Init swipe gesture on mobile
+    if (mobileMediaQuery.matches && !infoPaneGesture) {
+      infoPaneGesture = createInfoPaneGesture(infoPane, {
+        onMinimize: () => app.classList.add("is-pane-minimized"),
+        onMaximize: () => app.classList.remove("is-pane-minimized"),
+      });
+      infoPaneGesture.init();
+    }
   } else {
-    app.classList.remove("is-split");
+    app.classList.remove("is-split", "is-pane-minimized");
     infoPane.setAttribute("aria-hidden", "true");
     backButton?.setAttribute("hidden", "");
+    if (infoPaneGesture) {
+      infoPaneGesture.dispose();
+      infoPaneGesture = null;
+    }
   }
 };
 
@@ -1966,6 +1991,9 @@ const selectState = (stateId, options = {}) => {
   if (normalized === "0" || normalized === activeStateId) return;
 
   hideMapCharacterBark();
+
+  // Auto-maximize info pane if minimized
+  if (infoPaneGesture?.isMinimized) infoPaneGesture.maximize();
 
   const skipQuestion = options.skipQuestion || hasBeenQuestioned(normalized);
 
@@ -3449,6 +3477,8 @@ backButton?.addEventListener("click", (event) => {
 
 window.addEventListener("resize", () => {
   resizeThree();
+  // Reset info pane gesture on orientation change
+  if (infoPaneGesture?.isMinimized) infoPaneGesture.maximize();
   if (!activeStateId) return;
   const target = getTargetViewBoxForState(activeStateId);
   viewbox.set(target);

@@ -829,6 +829,11 @@ body::before {
   transform: translateX(0);
 }
 
+/* Drag handle — hidden on desktop */
+.info-pane-handle {
+  display: none;
+}
+
 .info-header {
   display: flex;
   align-items: center;
@@ -1552,6 +1557,12 @@ body::before {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .info-pane {
+    transition: none !important;
+  }
+}
+
 /* ── Track shrine (hourglass hero layout) ── */
 
 .track-shrine {
@@ -1878,6 +1889,40 @@ body::before {
   #app.is-split .info-pane {
     padding: 20px;
     transform: translateY(0);
+    transition: opacity var(--transition-fast), transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+  }
+
+  .info-pane-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    flex-shrink: 0;
+    touch-action: none;
+    cursor: grab;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .info-pane-handle-bar {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(189, 255, 0, 0.25);
+  }
+
+  .info-pane.is-minimized {
+    transform: translateY(calc(100% - 60px));
+  }
+
+  .info-pane.is-minimized #state-content {
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .info-pane.is-gesture-active {
+    transition: none !important;
   }
 
   .state-character {
@@ -2213,6 +2258,9 @@ body::before {
   text-align: center;
   max-width: 420px;
   width: 88%;
+  max-height: 80vh;
+  max-height: 80dvh;
+  overflow-y: auto;
 }
 
 .about-close {
@@ -2340,12 +2388,59 @@ body::before {
 }
 
 @media (max-width: 900px) {
+  .about-modal {
+    align-items: flex-end;
+  }
+
   .about-content {
-    padding: 36px 28px 28px;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    padding: 12px 28px 28px;
+    max-height: 80vh;
+    max-height: 80dvh;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .about-modal[aria-hidden="false"] .about-content {
+    transform: translateY(0);
+  }
+
+  /* Drag handle */
+  .about-content::before {
+    content: "";
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(189, 255, 0, 0.25);
+    margin: 0 auto 16px;
+  }
+
+  .about-close {
+    top: 12px;
+    right: 16px;
   }
 
   .about-title {
     font-size: 1.35rem;
+  }
+
+  .about-subtitle {
+    margin-bottom: 20px;
+  }
+
+  .about-divider {
+    margin-bottom: 18px;
+  }
+
+  .about-text {
+    margin-bottom: 20px;
+  }
+
+  .about-links {
+    margin-bottom: 20px;
   }
 }
 
@@ -2700,7 +2795,12 @@ body::before {
   }
 
   .about-content {
-    padding: 28px 20px 24px;
+    padding: 12px 20px 24px;
+  }
+
+  .about-change-character {
+    padding: 10px 22px;
+    font-size: 0.78rem;
   }
 
   .state-character {
@@ -2751,6 +2851,29 @@ body::before {
 
   #app.is-split .info-pane {
     transform: translateX(0);
+    transition: opacity var(--transition-fast), transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+  }
+
+  .info-pane-handle {
+    display: none;
+  }
+
+  .info-pane.is-minimized {
+    transform: translateX(calc(100% - 40px));
+  }
+
+  .info-pane.is-minimized #state-content {
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .info-pane.is-gesture-active {
+    transition: none !important;
+  }
+
+  .is-pane-minimized .state-3d-stack {
+    right: 40px;
   }
 
   .hourglass-container {
@@ -2862,5 +2985,54 @@ body::before {
   .character-confirm {
     font-size: 0.9rem;
     margin-top: 6px;
+  }
+
+  .about-content {
+    padding: 10px 20px 16px;
+    max-height: 76vh;
+    max-height: 76dvh;
+  }
+
+  .about-content::before {
+    margin-bottom: 10px;
+  }
+
+  .about-title {
+    font-size: 1.1rem;
+    margin-bottom: 2px;
+  }
+
+  .about-subtitle {
+    font-size: 0.72rem;
+    margin-bottom: 10px;
+  }
+
+  .about-divider {
+    margin-bottom: 8px;
+  }
+
+  .about-text {
+    font-size: 0.76rem;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  .about-links {
+    margin-bottom: 10px;
+    gap: 12px;
+  }
+
+  .about-link {
+    width: 34px;
+    height: 34px;
+  }
+
+  .about-change-character {
+    margin-bottom: 8px;
+    padding: 6px 16px;
+  }
+
+  .about-footer {
+    font-size: 0.65rem;
   }
 }

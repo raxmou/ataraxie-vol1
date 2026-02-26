@@ -1855,6 +1855,10 @@ body::before {
 }
 
 @media (max-width: 900px) {
+  body {
+    overscroll-behavior: none;
+  }
+
   #app {
     flex-direction: column;
   }
@@ -1862,6 +1866,8 @@ body::before {
   .map-pane {
     height: 100vh;
     height: 100dvh;
+    touch-action: none;
+    overscroll-behavior: none;
   }
 
   #app.is-split .map-pane {

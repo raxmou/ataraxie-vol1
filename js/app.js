@@ -6,6 +6,7 @@ import { createTextureCanvas } from "./texture-canvas.js";
 import { createHourglassPlayer } from "./hourglass-player.js";
 import { createCharacterDancer } from "./character-dancer.js";
 import { createInfoPaneGesture } from "./info-pane-gesture.js";
+import { createMapGestures } from "./map-gestures.js";
 import {
   revealedStates,
   questionedStates,
@@ -123,6 +124,7 @@ let stateCharFloatRAF = null;
 let stateCharFloatStart = 0;
 let stateCharDragging = false;
 let infoPaneGesture = null;
+let mapGestures = null;
 const mobileMediaQuery = matchMedia("(max-width: 900px)");
 
 const stateTextureFiles = [
@@ -1990,6 +1992,7 @@ const selectState = (stateId, options = {}) => {
   const normalized = String(stateId);
   if (normalized === "0" || normalized === activeStateId) return;
 
+  mapGestures?.disable();
   hideMapCharacterBark();
 
   // Auto-maximize info pane if minimized
@@ -3266,7 +3269,9 @@ const clearSelection = (options = {}) => {
 
   setSplitLayout(false);
   setCollapsed(false);
-  if (fullViewBox) viewbox.set(fullViewBox);
+  const restoreBox = mapGestures?.getUserViewBox() || fullViewBox;
+  if (restoreBox) viewbox.set(restoreBox);
+  mapGestures?.enable();
   setAnimating(false);
 };
 
@@ -3347,6 +3352,28 @@ const init = async () => {
     });
     fullViewBox = mapApi.fullViewBox;
     if (fullViewBox) viewbox.set(fullViewBox);
+
+    // Initialize map gestures on touch devices
+    if (isMobile && fullViewBox && svg) {
+      mapGestures = createMapGestures(svg, {
+        getFullViewBox: () => fullViewBox,
+        getViewBox: () => viewbox.parse(),
+        setViewBox: (box) => viewbox.set(box),
+      });
+      // Start zoomed in to ~40% width, centered
+      const rect = svg.getBoundingClientRect();
+      const aspect = rect.height / rect.width;
+      const initW = fullViewBox.width * 0.4;
+      const initH = initW * aspect;
+      const initBox = {
+        x: fullViewBox.x + (fullViewBox.width - initW) / 2,
+        y: fullViewBox.y + (fullViewBox.height - initH) / 2,
+        width: initW,
+        height: initH,
+      };
+      viewbox.set(initBox);
+      mapGestures.enable();
+    }
 
     // Initialize texture canvas for patchwork effect
     const stateOutlines = mapApi.getStateOutlines();

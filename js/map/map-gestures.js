@@ -1,4 +1,9 @@
 /**
+ * @module map/map-gestures
+ * Pinch-to-zoom and pan gesture handling for the SVG map.
+ */
+
+/**
  * Map gestures — pinch-to-zoom + drag-to-pan via Pointer Events.
  * Manipulates the SVG viewBox; texture canvas auto-syncs via MutationObserver.
  *

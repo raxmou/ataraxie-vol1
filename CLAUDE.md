@@ -14,12 +14,88 @@ make
 # or
 python3 -m http.server 8003
 
+# Lint & format
+make lint
+make format
+
 # Deploy to Vercel
 vercel
 # or push to main branch for auto-deploy
 ```
 
 ## Architecture
+
+### Directory Structure
+
+```
+js/
+  main.js                         -- Entry point
+  app.js                          -- Orchestrator (~740 lines)
+
+  core/
+    store.js                      -- Reactive state store + event bus
+    constants.js                  -- Magic numbers, URLs, config
+    dom-refs.js                   -- Cached DOM references
+    utils.js                      -- formatTime, clamp, easing, noise
+
+  data/
+    data.js                       -- JSON loaders (geojson, tracks, sigils)
+    fog.js                        -- Fog of war state + neighbor graph
+
+  map/
+    map.js                        -- SVG map rendering, state coloring
+    map-gestures.js               -- Pinch/pan gestures
+    geometry.js                   -- GeoJSON-to-SVG paths
+    outline.js                    -- State boundary computation
+    viewbox.js                    -- ViewBox animation
+    texture-canvas.js             -- Canvas texture renderer
+    sigils.js                     -- Sigil hover/focus rendering
+    navigation.js                 -- (planned) selectState, clearSelection
+
+  three/
+    three-loader.js               -- Lazy CDN import + cache
+    three-scene.js                -- Init, resize, render loop, dispose
+    three-mesh.js                 -- buildStateMesh, geometry helpers
+    three-morph.js                -- morphTo3D, morphFrom3D
+    three-interaction.js          -- Pointer drag/rotate/raycast
+
+  audio/
+    audio-reactive.js             -- FFT-driven visuals, ambient breathing
+    hourglass/
+      hourglass-player.js         -- Player orchestrator (~590 lines)
+      hourglass-3d.js             -- 3D overlay (LatheGeometry)
+      hourglass-particles.js      -- Particle class + physics + rendering
+      hourglass-gestures.js       -- Rotation, shake, snap detection
+      hourglass-audio.js          -- Reverse playback, Web Audio bridge
+      hourglass-constants.js      -- WIDTH, HEIGHT, colors, geometry
+
+  ui/
+    info-panel.js                 -- Narrative, track shrine, play flow
+    question-modal.js             -- Tarot cards, handleAnswer, celebration
+    character-select.js           -- Selection modal + fly animation
+    character-map.js              -- Map character, trails, bark
+    character-state.js            -- State character, drag, float, menu
+    character-data.js             -- CHARACTER_MOVE_MAP, getCharacterFrame
+    modals.js                     -- Layout toggles, loading, about modal
+    info-pane-gesture.js          -- Swipe gesture
+
+  i18n/
+    i18n.js                       -- Translations (FR/EN)
+
+  state.js                        -- Standalone state page viewer
+
+css/
+  style.css                       -- @import hub for all partials
+  base.css                        -- Reset, fonts, :root variables
+  layout.css                      -- App grid, split view, panes
+  map.css                         -- Cells, borders, fog, textures
+  characters.css                  -- Character select, avatar, cards
+  modals.css                      -- About, loading, rotate overlay, mobile warning
+  tarot.css                       -- Tarot card flip animations
+  hourglass.css                   -- Hourglass player, shrine, narrative
+  trails.css                      -- Trail lines, markers, characters
+  responsive.css                  -- All @media queries
+```
 
 ### Data Flow
 1. `index.html` provides data URLs via `data-geojson`, `data-tracks`, `data-sigils` attributes on `#app`
@@ -28,62 +104,26 @@ vercel
 4. User clicks state → fog of war question modal → state reveals → viewBox animation → info panel + audio
 5. Hourglass player controls audio with rotation gestures and physics-based particle visualization
 
-### Module Responsibilities
-- **app.js** (2912 lines): Main controller, state machine, UI orchestration
-  - Manages: activeStateId, audio playback, 3D state, fog of war, modals, texture canvas
-  - Handles: user interactions, state transitions, question prompts, character selection
-- **main.js**: Entry point (imports app.js)
-- **map.js**: SVG DOM manipulation, cell/border rendering, snapshot caching for transitions
-- **fog.js**: Fog of war state (revealedStates/questionedStates Sets, neighbor graph, exploration trails)
-- **viewbox.js**: SVG viewBox parsing, animation utilities (easing, interpolation)
-- **geometry.js**: GeoJSON-to-SVG path conversion (Polygon/MultiPolygon support)
-- **data.js**: Promise-based JSON loaders with type-specific caching
-- **texture-canvas.js**: Canvas-based texture renderer synced with SVG viewBox
-  - Renders state-specific textures clipped to state outlines
-  - Adaptive tile sizing based on zoom level
-  - Hover state highlighting
-- **outline.js**: State boundary computation from hex cell edges
-  - Extracts exterior edges (count === 1) per state
-  - Chains edges into closed rings for Path2D clipping
-- **hourglass-player.js** (1580 lines): Physics-based audio player
-  - Rotation gestures control playback speed/direction (-2x to 2x)
-  - Shake gesture detection for 2x boost
-  - Reverse playback via Web Audio API
-  - Particle physics (gravity, collision, settling) with 1 particle per second
-  - 3D Three.js hourglass overlay (LatheGeometry with glass/wire/rim materials)
-  - Vertical scrubbing for seek
-- **state.js**: Standalone state page viewer (for `?state=<id>` URLs)
-  - Rehydrates shared overlay from sessionStorage for seamless transitions
+### Module Communication Pattern
+Modules use a factory pattern with dependency injection to avoid circular imports:
+```javascript
+// Factory receives dependencies as callbacks/getters
+export const createInfoPanel = ({
+  getActiveStateId: () => activeStateId,
+  onShowQuestionModal: (stateId) => questionMgr.showQuestionModal(stateId),
+}) => { ... };
+```
+Cross-module mutable state is accessed via closure getters (e.g., `() => infoPanel?.hourglassPlayer`).
 
 ### Key State Variables (app.js)
 ```javascript
-// Core state
 activeStateId              // Currently selected state ID (string)
 geojsonData                // Loaded GeoJSON feature collection
 stateCounts                // Map: stateId -> cell count
 selectedCharacter          // "demon" | "succube" | "gargoyle"
-
-// Fog of war (imported from fog.js)
-revealedStates             // Set<stateId> - discovered states
-questionedStates           // Set<stateId> - states that showed questions
-explorationTrails          // Array<{from, to}> - discovery paths
-explorationOrder           // Array<stateId> - discovery sequence
-
-// Audio & player
-activeAudio                // HTMLAudioElement - current track
-hourglassPlayer            // Hourglass player API instance
-trackByState               // Map: stateId -> track metadata
-trackById                  // Map: trackId -> track metadata
-
-// 3D rendering
-threeApi                   // Three.js state 3D renderer (lazy-loaded)
-audioContext/audioAnalyser // Web Audio API for reactive visuals
-
-// Rendering
 mapApi                     // Map DOM API (from map.js)
 textureCanvas              // Texture canvas API (from texture-canvas.js)
-colorForState              // Function: stateId -> HSL color
-sigilsByState              // Map: stateId -> sigil SVG path
+colorForState              // Function: stateId -> palette color
 ```
 
 ### Views
@@ -126,6 +166,7 @@ sigilsByState              // Map: stateId -> sigil SVG path
 - State ID from `feature.properties.state`; `"0"` is ocean (ignored in most logic)
 
 ### Styling
+- CSS split into 9 domain partials, assembled via `@import` in `style.css`
 - CSS variables in `:root` (colors, sizes, transitions)
 - Map pane full width until `#app.is-split` triggers split layout
 - Respect `prefers-reduced-motion` (disables particle physics, uses static hourglass fill)

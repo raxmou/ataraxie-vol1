@@ -1,3 +1,8 @@
+/**
+ * @module map/map
+ * SVG map rendering, cell creation, and state coloring.
+ */
+
 import { forEachCoordinate, geometryToPath } from "./geometry.js";
 import { buildStateEdgeCounts, computeStateOutlines } from "./outline.js";
 import { SVG_NS, TEXTURE_FILES, getTextureIndexForState } from "../core/constants.js";

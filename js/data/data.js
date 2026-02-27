@@ -1,3 +1,8 @@
+/**
+ * @module data/data
+ * Promise-based JSON loaders with type-specific caching.
+ */
+
 const loadJson = async (url, label) => {
   const response = await fetch(url);
   if (!response.ok) {

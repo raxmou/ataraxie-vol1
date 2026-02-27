@@ -1,3 +1,8 @@
+/**
+ * @module app
+ * Main application orchestrator: wires all modules, handles init and global events.
+ */
+
 import {
   getLang,
   setLang,

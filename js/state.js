@@ -1,3 +1,8 @@
+/**
+ * @module state
+ * Standalone state page viewer for ?state=<id> URLs.
+ */
+
 import { getLang, setLang, t, applyStaticTranslations } from "./i18n/i18n.js";
 import { forEachCoordinate, geometryToPath } from "./map/geometry.js";
 

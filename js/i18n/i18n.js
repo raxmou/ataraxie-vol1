@@ -1,3 +1,8 @@
+/**
+ * @module i18n/i18n
+ * Internationalization: language detection, translation, and static text injection.
+ */
+
 const STRINGS = {
   "toggle.territory": { fr: "Territoire", en: "Territory" },
   "toggle.sigil": { fr: "Sigle", en: "Sigil" },

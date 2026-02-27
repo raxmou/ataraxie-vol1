@@ -35,6 +35,7 @@ const weightedRandom = (moves, weights) => {
 };
 
 /**
+ * @module ui/character-dancer
  * Creates a character dancer that plays multiple animation moves
  * @param {HTMLElement} container - Parent element for the dancer
  * @param {Object} moveSet - Map of move names to frame path arrays

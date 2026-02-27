@@ -1,3 +1,8 @@
+/**
+ * @module map/viewbox
+ * SVG viewBox parsing and animated transitions.
+ */
+
 import { easeInOutCubic } from "../core/utils.js";
 
 export const createViewBoxAnimator = (svg, options = {}) => {

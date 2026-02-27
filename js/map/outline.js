@@ -1,4 +1,5 @@
 /**
+ * @module map/outline
  * Computes state outlines by extracting exterior edges from hex cells.
  * An exterior edge belongs to only one cell within a state (count === 1).
  * Interior edges are shared by two cells (count === 2) and are filtered out.

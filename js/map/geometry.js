@@ -1,3 +1,8 @@
+/**
+ * @module map/geometry
+ * GeoJSON-to-SVG path conversion for Polygon and MultiPolygon.
+ */
+
 export const ringToPath = (ring) => {
   if (!ring.length) return "";
   const [firstX, firstY] = ring[0];

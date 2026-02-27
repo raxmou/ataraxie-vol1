@@ -1,4 +1,9 @@
 /**
+ * @module ui/info-pane-gesture
+ * Swipe-to-close gesture for the info pane.
+ */
+
+/**
  * Swipeable info pane gesture — portrait (vertical) + landscape (horizontal edge swipe).
  * @param {HTMLElement} infoPane
  * @param {Object} opts

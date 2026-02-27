@@ -4,6 +4,7 @@
  */
 
 /**
+ * @module ui/kick-detector
  * Creates a kick detector with configurable threshold and cooldown
  * @param {number} threshold - Energy delta threshold for kick detection (0.10-0.20)
  * @param {number} cooldown - Minimum time between kicks in ms (250-400)

@@ -1,4 +1,5 @@
 /**
+ * @module map/texture-canvas
  * Canvas-based texture renderer for state patchwork effect.
  * Renders textures clipped to state outlines, synced with SVG viewBox.
  */

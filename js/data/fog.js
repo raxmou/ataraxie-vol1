@@ -1,3 +1,8 @@
+/**
+ * @module data/fog
+ * Fog of war state: revealed states, questioned states, neighbor graph, exploration trails.
+ */
+
 // Fog of war state management
 
 // Track which states are revealed (initially only state 1)

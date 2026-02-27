@@ -1,58 +1,15 @@
 import { getLang, setLang, t, applyStaticTranslations } from "./i18n/i18n.js";
+import { forEachCoordinate, geometryToPath } from "./map/geometry.js";
 
-const app = document.getElementById("state-app");
 const svg = document.getElementById("state-svg");
 const infoPane = document.getElementById("state-info");
 const content = document.getElementById("state-content");
-const dataUrl = new URL(document.baseURI).pathname.endsWith("/")
-  ? document.getElementById("app")?.dataset?.geojson
-  : null;
-// fallback to index main's data attribute path
 const geojsonPath = "Mia%20Cells%202025-12-23.geojson";
 
 const svgNS = "http://www.w3.org/2000/svg";
 
 const params = new URLSearchParams(location.search);
 const stateId = params.get("state");
-
-const forEachCoordinate = (geometry, callback) => {
-  if (!geometry) return;
-  if (geometry.type === "Polygon") {
-    geometry.coordinates.forEach((ring) => {
-      ring.forEach(([x, y]) => callback(x, y));
-    });
-    return;
-  }
-  if (geometry.type === "MultiPolygon") {
-    geometry.coordinates.forEach((polygon) => {
-      polygon.forEach((ring) => {
-        ring.forEach(([x, y]) => callback(x, y));
-      });
-    });
-  }
-};
-
-const ringToPath = (ring) => {
-  if (!ring.length) return "";
-  const [firstX, firstY] = ring[0];
-  let d = `M ${firstX} ${firstY}`;
-  for (let i = 1; i < ring.length; i += 1) {
-    const [x, y] = ring[i];
-    d += ` L ${x} ${y}`;
-  }
-  return `${d} Z`;
-};
-
-const geometryToPath = (geometry) => {
-  if (!geometry) return "";
-  if (geometry.type === "Polygon") {
-    return geometry.coordinates.map(ringToPath).join(" ");
-  }
-  if (geometry.type === "MultiPolygon") {
-    return geometry.coordinates.map((polygon) => polygon.map(ringToPath).join(" ")).join(" ");
-  }
-  return "";
-};
 
 const colorForState = (stateId) => {
   const goldenAngle = 137.508;
@@ -85,7 +42,7 @@ const render = (geojson, stateId) => {
   if (sharedSvgHtml && sharedMetaStr) {
     try {
       sharedMeta = JSON.parse(sharedMetaStr);
-    } catch (e) {
+    } catch (_) {
       sharedMeta = null;
     }
   }
@@ -172,21 +129,8 @@ const init = async () => {
   applyStaticTranslations();
 
   try {
-    // Try to rehydrate a shared overlay created during the transition
-    const sharedSvg = sessionStorage.getItem("sharedOverlay");
-    const sharedMeta = sessionStorage.getItem("sharedOverlayMeta");
-    let rehydratedOverlay = null;
-    let sharedMetaObj = null;
-    if (sharedSvg && sharedMeta) {
-      try {
-        sharedMetaObj = JSON.parse(sharedMeta);
-      } catch (err) {
-        console.warn("Invalid sharedOverlayMeta", err);
-      }
-      // Do not append the shared overlay here. The `render` function will adopt
-      // the shared overlay directly into the page SVG when possible, avoiding
-      // duplicate elements and preventing a fade-out that breaks the handoff.
-    }
+    // The `render` function will adopt any shared overlay from sessionStorage
+    // directly into the page SVG for seamless page transitions.
     const res = await fetch(geojsonPath);
     if (!res.ok) throw new Error("failed to load geojson");
     const geojson = await res.json();

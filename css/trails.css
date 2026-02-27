@@ -1,0 +1,229 @@
+/* Exploration trail */
+#map-trails {
+  pointer-events: none;
+}
+
+.trail-line {
+  stroke: rgba(189, 255, 0, 0.7);
+  stroke-width: 4px;
+  stroke-dasharray: 10 6;
+  stroke-linecap: round;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 4px rgba(189, 255, 0, 0.3));
+}
+
+.trail-line--appear {
+  animation: trail-line-in 1000ms ease both;
+}
+
+@keyframes trail-line-in {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.trail-marker {
+  fill: #bdff00;
+  stroke: rgba(8, 12, 6, 0.8);
+  stroke-width: 1px;
+  opacity: 0.9;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 3px rgba(189, 255, 0, 0.4));
+}
+
+.trail-marker--origin {
+  fill: #e8ffb2;
+  stroke: #bdff00;
+  stroke-width: 1.4px;
+  filter: drop-shadow(0 0 5px rgba(189, 255, 0, 0.7));
+}
+
+.trail-marker--appear {
+  animation: trail-marker-in 700ms ease both;
+}
+
+@keyframes trail-marker-in {
+  0% {
+    opacity: 0;
+    r: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trail-marker--appear {
+    animation: none;
+  }
+  .map-character--arriving,
+  .state-character--arriving {
+    animation: none;
+  }
+}
+
+/* Map View Character (SVG on trail layer) */
+.map-character {
+  pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(189, 255, 0, 0.4));
+  transition: filter 0.3s ease;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.map-character--arriving {
+  animation: puff-materialize 800ms ease-out both;
+}
+
+@keyframes puff-materialize {
+  0% {
+    opacity: 0;
+    scale: 0.3;
+    filter: blur(4px) drop-shadow(0 0 20px rgba(189, 255, 0, 0.9));
+  }
+  40% {
+    opacity: 0.7;
+    scale: 1.15;
+    filter: blur(1.5px) drop-shadow(0 0 14px rgba(189, 255, 0, 0.6));
+  }
+  70% {
+    opacity: 1;
+    scale: 0.95;
+    filter: blur(0) drop-shadow(0 0 8px rgba(189, 255, 0, 0.5));
+  }
+  100% {
+    scale: 1;
+    filter: drop-shadow(0 0 6px rgba(189, 255, 0, 0.4));
+  }
+}
+
+.puff-wisp {
+  pointer-events: none;
+  opacity: 0;
+}
+
+/* State View Character (floating + draggable in info pane) */
+.state-character {
+  position: absolute;
+  bottom: 40px;
+  right: calc(var(--panel-width) - 48px);
+  translate: 0 0;
+  width: 64px;
+  height: 64px;
+  pointer-events: auto;
+  cursor: grab;
+  filter: drop-shadow(0 0 6px rgba(189, 255, 0, 0.4));
+  transition: filter 0.3s ease;
+  touch-action: none;
+  z-index: 9999;
+  user-select: none;
+}
+
+.state-character--arriving {
+  animation: puff-materialize 800ms ease-out both;
+}
+
+.state-character--dragging {
+  cursor: grabbing;
+  filter: drop-shadow(0 0 14px rgba(189, 255, 0, 0.8));
+}
+
+.state-character-bubble {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 8px 14px;
+  background: rgba(8, 12, 6, 0.92);
+  border: 1px solid rgba(189, 255, 0, 0.4);
+  border-radius: 10px;
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  color: rgba(232, 255, 178, 0.9);
+  font-size: 0.92rem;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 10000;
+  animation: bubble-appear 0.3s ease both;
+}
+
+.state-character-bubble::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  translate: -50% 0;
+  width: 10px;
+  height: 10px;
+  background: rgba(8, 12, 6, 0.92);
+  border-right: 1px solid rgba(189, 255, 0, 0.4);
+  border-bottom: 1px solid rgba(189, 255, 0, 0.4);
+  rotate: 45deg;
+}
+
+@keyframes bubble-appear {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -100%) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}
+
+.state-character-menu {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: rgba(8, 12, 6, 0.92);
+  border: 1px solid rgba(189, 255, 0, 0.4);
+  border-radius: 10px;
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  z-index: 10000;
+  animation: bubble-appear 0.3s ease both;
+}
+
+.state-character-menu::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  translate: -50% 0;
+  width: 10px;
+  height: 10px;
+  background: rgba(8, 12, 6, 0.92);
+  border-right: 1px solid rgba(189, 255, 0, 0.4);
+  border-bottom: 1px solid rgba(189, 255, 0, 0.4);
+  rotate: 45deg;
+}
+
+.state-character-menu-item {
+  background: none;
+  border: none;
+  padding: 7px 16px;
+  border-radius: 6px;
+  font-family: inherit;
+  color: rgba(232, 255, 178, 0.9);
+  font-size: 0.92rem;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.state-character-menu-item:hover {
+  background: rgba(189, 255, 0, 0.12);
+}
+

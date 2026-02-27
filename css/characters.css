@@ -1,0 +1,403 @@
+/* Character Selection Screen */
+.character-select {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top, rgba(16, 20, 10, 0.97), rgba(6, 8, 4, 0.99));
+  z-index: 12;
+  transition:
+    opacity 0.4s ease,
+    gap 0.9s ease;
+  gap: 10vh;
+  padding: 24px 0;
+}
+
+/* ── Splash logo (inline SVG) ── */
+
+.splash-logo {
+  width: min(90vw, 588px);
+  max-height: 25vh;
+  height: auto;
+  filter: drop-shadow(0 0 5px rgba(189, 255, 0, 0.05));
+  transition:
+    max-height 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Word elements start clipped (reveal L→R) */
+.splash-logo-svg #my,
+.splash-logo-svg #land,
+.splash-logo-svg #is,
+.splash-logo-svg #eating,
+.splash-logo-svg #my2,
+.splash-logo-svg #territory,
+.splash-logo-svg #Vector_15 {
+  clip-path: inset(0 100% 0 0);
+}
+
+/* Decorative elements + border start invisible (fade in) */
+.splash-logo-svg #Vector,
+.splash-logo-svg #Vector_2,
+.splash-logo-svg #Vector_3,
+.splash-logo-svg #Vector_4,
+.splash-logo-svg #Vector_5 {
+  opacity: 0;
+}
+
+/* ── Engrave keyframes ── */
+
+@keyframes engrave-word {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0% 0 0);
+  }
+}
+
+@keyframes engrave-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes logo-engrave-glow {
+  0% {
+    filter: drop-shadow(0 0 5px rgba(189, 255, 0, 0.05));
+  }
+  40% {
+    filter: drop-shadow(0 0 20px rgba(189, 255, 0, 0.2));
+  }
+  85% {
+    filter: drop-shadow(0 0 50px rgba(189, 255, 0, 0.45));
+  }
+  100% {
+    filter: drop-shadow(0 0 30px rgba(189, 255, 0, 0.25));
+  }
+}
+
+/* ── Trigger animations when character-select is visible ── */
+
+.character-select[aria-hidden="false"] .splash-logo-svg {
+  animation: logo-engrave-glow 4.8s ease forwards;
+}
+
+.character-select[aria-hidden="false"] .splash-logo-svg #Vector {
+  animation: engrave-fade 800ms linear forwards;
+  animation-delay: 0ms;
+}
+
+.character-select[aria-hidden="false"] .splash-logo-svg #my {
+  animation: engrave-word 600ms linear forwards;
+  animation-delay: 300ms;
+}
+
+.character-select[aria-hidden="false"] .splash-logo-svg #land {
+  animation: engrave-word 600ms linear forwards;
+  animation-delay: 900ms;
+}
+
+.character-select[aria-hidden="false"] .splash-logo-svg #is {
+  animation: engrave-word 600ms linear forwards;
+  animation-delay: 1500ms;
+}
+
+.character-select[aria-hidden="false"] .splash-logo-svg #eating {
+  animation: engrave-word 600ms linear forwards;
+  animation-delay: 2100ms;
+}
+
+.character-select[aria-hidden="false"] .splash-logo-svg #my2 {
+  animation: engrave-word 600ms linear forwards;
+  animation-delay: 2700ms;
+}
+
+.character-select[aria-hidden="false"] .splash-logo-svg #territory {
+  animation: engrave-word 700ms linear forwards;
+  animation-delay: 3300ms;
+}
+
+.character-select[aria-hidden="false"] .splash-logo-svg #Vector_2,
+.character-select[aria-hidden="false"] .splash-logo-svg #Vector_3,
+.character-select[aria-hidden="false"] .splash-logo-svg #Vector_4,
+.character-select[aria-hidden="false"] .splash-logo-svg #Vector_5 {
+  animation: engrave-fade 400ms linear forwards;
+  animation-delay: 4000ms;
+}
+
+.character-select[aria-hidden="false"] .splash-logo-svg #Vector_15 {
+  animation: engrave-word 500ms linear forwards;
+  animation-delay: 4200ms;
+}
+
+/* Logo intro phase: logo is centered and large */
+.character-select.is-logo-intro {
+  gap: 0;
+}
+
+.character-select.is-logo-intro .splash-logo {
+  width: min(90vw, 780px);
+  max-height: 45vh;
+}
+
+/* Card starts hidden, revealed by .is-card-visible */
+.character-select-card {
+  opacity: 0;
+  transform: translateY(40px);
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.7s ease 0.1s,
+    transform 0.7s ease 0.1s,
+    max-height 0.9s ease;
+}
+
+.character-select-card.is-card-visible {
+  opacity: 1;
+  transform: translateY(0);
+  max-height: 600px;
+  pointer-events: auto;
+}
+
+/* ── Reduced motion: show everything immediately ── */
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-logo-svg,
+  .splash-logo-svg #Vector,
+  .splash-logo-svg #my,
+  .splash-logo-svg #land,
+  .splash-logo-svg #is,
+  .splash-logo-svg #eating,
+  .splash-logo-svg #my2,
+  .splash-logo-svg #territory,
+  .splash-logo-svg #Vector_2,
+  .splash-logo-svg #Vector_3,
+  .splash-logo-svg #Vector_4,
+  .splash-logo-svg #Vector_5,
+  .splash-logo-svg #Vector_15 {
+    clip-path: none !important;
+    opacity: 1 !important;
+    animation: none !important;
+    filter: drop-shadow(0 0 30px rgba(189, 255, 0, 0.25));
+  }
+}
+
+.character-select-card {
+  text-align: center;
+  max-width: 720px;
+  width: 90%;
+}
+
+.character-select[aria-hidden="true"] {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Flying character transition */
+.character-flyer {
+  position: fixed;
+  z-index: 13;
+  pointer-events: none;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px rgba(189, 255, 0, 0.4));
+  will-change: left, top, width, height, filter;
+}
+
+.character-flyer--landed {
+  filter: drop-shadow(0 0 32px rgba(189, 255, 0, 1)) !important;
+  transition: filter 0.3s ease;
+}
+
+/* Exit transition: fade non-selected elements */
+.character-select.is-flying-out .character-select-title,
+.character-select.is-flying-out .character-confirm,
+.character-select.is-flying-out .splash-logo,
+.character-select.is-flying-out .character-card:not(.is-selected) {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.character-select.is-flying-out .character-card.is-selected {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  transition:
+    border-color 0.3s ease 0.2s,
+    background 0.3s ease 0.2s,
+    box-shadow 0.3s ease 0.2s;
+}
+
+.character-select.is-flying-out .character-card.is-selected .character-card-img {
+  opacity: 0;
+  transition: opacity 0.05s ease 0.05s;
+}
+
+/* Background fade to transparent */
+.character-select.is-bg-fading {
+  background: transparent;
+  transition: background 0.5s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .character-flyer {
+    display: none;
+  }
+}
+
+.character-select-title {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #bdff00;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 0 0 36px 0;
+}
+
+.character-grid {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.character-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 20px;
+  border: 2px solid rgba(189, 255, 0, 0.3);
+  border-radius: 18px;
+  background: rgba(8, 12, 6, 0.85);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  width: 180px;
+}
+
+.character-card:hover {
+  border-color: rgba(189, 255, 0, 0.6);
+  background: rgba(14, 18, 10, 0.9);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(189, 255, 0, 0.15);
+}
+
+.character-card:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+
+.character-card.is-selected {
+  border-color: #bdff00;
+  box-shadow:
+    0 0 24px rgba(189, 255, 0, 0.35),
+    inset 0 0 16px rgba(189, 255, 0, 0.08);
+}
+
+.character-card-img {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(189, 255, 0, 0.15));
+  transition: filter 0.25s ease;
+}
+
+.character-card:hover .character-card-img,
+.character-card.is-selected .character-card-img {
+  filter: drop-shadow(0 4px 16px rgba(189, 255, 0, 0.3));
+}
+
+.character-name {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 0.9rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #e8ffb2;
+}
+
+.character-confirm {
+  all: unset;
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 1.2rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: rgba(189, 255, 0, 0.7);
+  cursor: pointer;
+  transition:
+    color 0.25s ease,
+    text-shadow 0.25s ease,
+    opacity 0.3s ease;
+  margin-top: 28px;
+}
+
+.character-confirm[hidden] {
+  display: none;
+}
+
+.character-confirm::after {
+  content: " \2192";
+  display: inline-block;
+  transition: transform 0.25s ease;
+}
+
+.character-confirm:hover {
+  color: #bdff00;
+  text-shadow: 0 0 14px rgba(189, 255, 0, 0.5);
+}
+
+.character-confirm:hover::after {
+  transform: translateX(4px);
+}
+
+.character-confirm:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+
+/* Character avatar in info panel header */
+.character-avatar {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(189, 255, 0, 0.2));
+}
+
+/* Change character button in about modal */
+.about-change-character {
+  display: inline-block;
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 1px solid rgba(189, 255, 0, 0.15);
+  border-radius: 999px;
+  background: rgba(189, 255, 0, 0.04);
+  color: rgba(184, 217, 130, 0.7);
+  padding: 7px 18px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  margin-bottom: 20px;
+}
+
+.about-change-character:hover {
+  border-color: rgba(189, 255, 0, 0.4);
+  color: #bdff00;
+  background: rgba(189, 255, 0, 0.08);
+}
+
+.about-change-character:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+

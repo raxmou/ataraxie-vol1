@@ -1,0 +1,437 @@
+/* ── Tarot card question UI ── */
+
+.tarot-reading {
+  text-align: center;
+  padding: 12px 20px;
+  border-radius: 0;
+  background: transparent;
+  border: none;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.tarot-reading .question-text {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 0.88rem;
+  font-style: italic;
+  line-height: 1.7;
+  color: rgba(232, 255, 178, 0.7);
+}
+
+.tarot-oracle {
+  display: flex;
+  justify-content: center;
+}
+
+.tarot-oracle .character-dialog-avatar {
+  width: 72px;
+  height: 72px;
+  filter: drop-shadow(0 0 12px rgba(189, 255, 0, 0.3));
+}
+
+.tarot-spread {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+/* Card button reset + dimensions */
+.tarot-card {
+  width: 170px;
+  height: 260px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  perspective: 800px;
+  opacity: 0;
+  animation: tarot-deal-in 500ms ease forwards;
+}
+
+.tarot-card:nth-child(1) {
+  animation-delay: 200ms;
+}
+.tarot-card:nth-child(2) {
+  animation-delay: 450ms;
+}
+
+@keyframes tarot-deal-in {
+  from {
+    opacity: 0;
+    transform: translateY(40px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 3D flip container — face-down by default, flips on hover */
+.tarot-card-inner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateY(180deg);
+  transition: transform 0.5s ease;
+}
+
+/* Shared face styles */
+.tarot-card-front,
+.tarot-card-back {
+  position: absolute;
+  inset: 0;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  border-radius: 10px;
+}
+
+/* Card back — face-down pattern */
+.tarot-card-back {
+  background: #10140a;
+  border: 2px solid rgba(189, 255, 0, 0.35);
+  transform: rotateY(180deg);
+  overflow: hidden;
+}
+
+/* Corner ornaments on card back */
+.tarot-card-back::before,
+.tarot-card-back::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-color: rgba(189, 255, 0, 0.5);
+  border-style: solid;
+}
+
+.tarot-card-back::before {
+  top: 8px;
+  left: 8px;
+  border-width: 2px 0 0 2px;
+}
+
+.tarot-card-back::after {
+  bottom: 8px;
+  right: 8px;
+  border-width: 0 2px 2px 0;
+}
+
+.tarot-card-back-pattern {
+  position: absolute;
+  inset: 12px;
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(189, 255, 0, 0.06) 0px,
+      rgba(189, 255, 0, 0.06) 1px,
+      transparent 1px,
+      transparent 8px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(189, 255, 0, 0.06) 0px,
+      rgba(189, 255, 0, 0.06) 1px,
+      transparent 1px,
+      transparent 8px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0px,
+      transparent 11px,
+      rgba(189, 255, 0, 0.04) 11px,
+      rgba(189, 255, 0, 0.04) 12px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 11px,
+      rgba(189, 255, 0, 0.04) 11px,
+      rgba(189, 255, 0, 0.04) 12px
+    );
+}
+
+/* Diamond accent in center of back pattern */
+.tarot-card-back-pattern::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border: 1.5px solid rgba(189, 255, 0, 0.3);
+  background: rgba(189, 255, 0, 0.05);
+}
+
+/* Card front — answer face */
+.tarot-card-front {
+  background: #10140a;
+  border: 2px solid rgba(189, 255, 0, 0.35);
+  display: flex;
+  align-items: stretch;
+  transform: rotateY(0deg);
+}
+
+/* Corner ornaments on card front */
+.tarot-card-front::before,
+.tarot-card-front::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-color: rgba(189, 255, 0, 0.4);
+  border-style: solid;
+  z-index: 1;
+  transition: border-color 0.25s ease;
+}
+
+.tarot-card-front::before {
+  top: 8px;
+  left: 8px;
+  border-width: 2px 0 0 2px;
+}
+
+.tarot-card-front::after {
+  bottom: 8px;
+  right: 8px;
+  border-width: 0 2px 2px 0;
+}
+
+.tarot-card-border {
+  flex: 1;
+  margin: 10px;
+  border: 1px solid rgba(189, 255, 0, 0.2);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: border-color 0.25s ease;
+}
+
+.tarot-card-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 6px;
+  text-align: center;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tarot-card-label {
+  font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: rgba(189, 255, 0, 0.45);
+  line-height: 1.45;
+  letter-spacing: 0.03em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 7;
+  -webkit-box-orient: vertical;
+}
+
+/* ── Tarot card interactions ── */
+
+.tarot-card:hover .tarot-card-inner {
+  transform: rotateY(0deg);
+}
+
+.tarot-card:hover .tarot-card-front {
+  border-color: rgba(189, 255, 0, 0.6);
+  box-shadow: 0 8px 24px rgba(189, 255, 0, 0.15);
+}
+
+.tarot-card:focus-visible .tarot-card-front {
+  outline: 2px solid #bdff00;
+  outline-offset: 2px;
+}
+
+/* ── Tarot card selection states ── */
+
+.tarot-card.answer-btn--selected .tarot-card-inner {
+  transform: rotateY(0deg);
+  animation: tarot-select-pulse 500ms ease;
+}
+
+.tarot-card.answer-btn--selected .tarot-card-front {
+  border-color: #bdff00;
+  box-shadow:
+    0 0 20px rgba(189, 255, 0, 0.3),
+    0 0 40px rgba(189, 255, 0, 0.15);
+  animation: tarot-selected-glow 2s ease-in-out infinite;
+}
+
+@keyframes tarot-select-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes tarot-selected-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 20px rgba(189, 255, 0, 0.3),
+      0 0 40px rgba(189, 255, 0, 0.15);
+  }
+  50% {
+    box-shadow:
+      0 0 28px rgba(189, 255, 0, 0.45),
+      0 0 56px rgba(189, 255, 0, 0.2);
+  }
+}
+
+/* Dismissed card — flip back, fade, then collapse so selected card slides to center */
+.tarot-card.answer-btn--dismissed {
+  animation: tarot-dismiss 1000ms ease forwards;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.tarot-card.answer-btn--dismissed .tarot-card-inner {
+  animation: tarot-dismiss-flip 500ms ease forwards;
+}
+
+@keyframes tarot-dismiss {
+  0% {
+    opacity: 1;
+    width: 140px;
+  }
+  40% {
+    opacity: 0;
+    width: 140px;
+  }
+  100% {
+    opacity: 0;
+    width: 0;
+    margin: 0;
+  }
+}
+
+@keyframes tarot-dismiss-flip {
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(180deg);
+  }
+}
+
+/* Static result card — revisited state, shown face-up immediately */
+.tarot-card--static {
+  opacity: 1;
+  animation: none;
+  cursor: default;
+}
+
+.tarot-card--static .tarot-card-inner {
+  transform: rotateY(0deg);
+  animation: none;
+  transition: none;
+}
+
+/* Continue button in tarot context */
+.question-container .answer-btn--continue {
+  margin-top: 0;
+}
+
+/* ── Tarot responsive (< 900px) ── */
+
+@media (max-width: 900px) {
+  .tarot-spread {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .tarot-card {
+    width: 160px;
+    height: 200px;
+  }
+
+  .tarot-oracle .character-dialog-avatar {
+    width: 56px;
+    height: 56px;
+  }
+
+  .tarot-reading .question-text {
+    font-size: 0.82rem;
+  }
+
+  .tarot-card-label {
+    font-size: 0.65rem;
+  }
+
+  .tarot-card.answer-btn--dismissed {
+    animation: tarot-dismiss-mobile 1000ms ease forwards;
+  }
+}
+
+@keyframes tarot-dismiss-mobile {
+  0% {
+    opacity: 1;
+    height: 200px;
+  }
+  40% {
+    opacity: 0;
+    height: 200px;
+  }
+  100% {
+    opacity: 0;
+    height: 0;
+    margin: 0;
+  }
+}
+
+/* ── Tarot reduced motion ── */
+
+@media (prefers-reduced-motion: reduce) {
+  .tarot-card {
+    opacity: 1;
+    animation: none;
+  }
+
+  .tarot-card-inner {
+    transform: rotateY(0deg);
+    animation: none;
+  }
+
+  .tarot-card.answer-btn--selected .tarot-card-inner {
+    animation: none;
+  }
+
+  .tarot-card.answer-btn--selected .tarot-card-front {
+    animation: none;
+    box-shadow: 0 0 20px rgba(189, 255, 0, 0.3);
+  }
+
+  .tarot-card.answer-btn--dismissed {
+    animation: none;
+    opacity: 0;
+  }
+
+  .tarot-card.answer-btn--dismissed .tarot-card-inner {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .info-pane {
+    transition: none !important;
+  }
+}
+

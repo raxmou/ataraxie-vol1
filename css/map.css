@@ -1,0 +1,44 @@
+.cell {
+  cursor: pointer;
+  pointer-events: all;
+  transition: filter 160ms ease;
+}
+
+/* Hide hex mesh - cells are transparent, canvas shows textures */
+.cell:not(.is-ocean) {
+  fill: transparent !important;
+  stroke: none !important;
+}
+
+.cell.is-active {
+  /* shadow removed for performance */
+}
+
+#map-svg.is-collapsed #map-base {
+  display: none;
+}
+
+#map-snapshot {
+  pointer-events: none;
+}
+
+#app.is-split #map-svg {
+  filter: drop-shadow(0 0 var(--audio-glow) rgba(189, 255, 0, 0.35));
+}
+
+.cell.is-ocean {
+  cursor: default;
+  fill: transparent;
+  stroke: none;
+  pointer-events: none;
+}
+
+.cell.is-fogged {
+  pointer-events: none;
+  cursor: default;
+}
+
+.state-border {
+  display: none;
+}
+

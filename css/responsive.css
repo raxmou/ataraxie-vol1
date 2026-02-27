@@ -1,0 +1,421 @@
+@media (max-width: 900px) {
+  body {
+    overscroll-behavior: none;
+  }
+
+  #app {
+    flex-direction: column;
+  }
+
+  .map-pane {
+    height: 100vh;
+    height: 100dvh;
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+
+  #app.is-split .map-pane {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    flex: 0 0 100%;
+  }
+
+  .info-pane {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    height: auto;
+    max-height: 50vh;
+    transform: translateY(24px);
+    border-radius: 16px;
+    border-right: 1px solid rgba(189, 255, 0, 0.12);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+
+  #app.is-split .info-pane {
+    padding: 20px;
+    transform: translateY(0);
+    transition:
+      opacity var(--transition-fast),
+      transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+  }
+
+  .info-pane-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    flex-shrink: 0;
+    touch-action: none;
+    cursor: grab;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .info-pane-handle-bar {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(189, 255, 0, 0.25);
+  }
+
+  .info-pane.is-minimized {
+    transform: translateY(calc(100% - 60px));
+  }
+
+  .info-pane.is-minimized #state-content {
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .info-pane.is-gesture-active {
+    transition: none !important;
+  }
+
+  .state-character {
+    width: 52px;
+    height: 52px;
+  }
+
+  .character-dialog-avatar {
+    width: 42px;
+    height: 42px;
+  }
+
+  .character-dialog-avatar img,
+  .character-dialog-avatar .dancer-frame {
+    width: 100%;
+    height: 100%;
+  }
+
+  .character-dialog-bubble {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  .question-text {
+    font-size: 0.9rem;
+  }
+
+  .question-answers .answer-btn {
+    padding: 10px 14px;
+    font-size: 0.85rem;
+  }
+
+  .question-card {
+    min-width: 0;
+    max-width: 90vw;
+    padding: 28px 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .character-select {
+    gap: 2vh;
+    padding: 8px 0;
+  }
+
+  .splash-logo {
+    max-height: 12vh;
+  }
+
+  .character-select-card {
+    max-width: 100%;
+  }
+
+  .character-select-title {
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+
+  .character-grid {
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .character-card {
+    width: 26vw;
+    max-width: 100px;
+    padding: 10px 6px;
+    gap: 6px;
+    border-radius: 12px;
+  }
+
+  .character-card-img {
+    width: 14vw;
+    height: 14vw;
+    max-width: 56px;
+    max-height: 56px;
+  }
+
+  .character-confirm {
+    font-size: 0.9rem;
+    margin-top: 8px;
+  }
+
+  .question-card {
+    min-width: 0;
+    max-width: 90vw;
+    padding: 24px 20px;
+  }
+
+  .loading-card {
+    min-width: 0;
+    width: 85vw;
+    max-width: 300px;
+  }
+
+  .about-content {
+    padding: 12px 20px 24px;
+  }
+
+  .about-change-character {
+    padding: 10px 22px;
+    font-size: 0.78rem;
+  }
+
+  .state-character {
+    right: 16px;
+    bottom: auto;
+    top: 16px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .hourglass-container {
+    width: 100px;
+    height: 160px;
+  }
+
+  .hourglass-3d {
+    width: 100px !important;
+    height: 160px !important;
+  }
+}
+
+/* Landscape phones — keep info pane on the right instead of bottom sheet */
+@media (max-width: 900px) and (orientation: landscape) {
+  #app {
+    flex-direction: row;
+  }
+
+  #app.is-split .map-pane {
+    flex: 1 1 auto;
+    height: 100vh;
+    height: 100dvh;
+  }
+
+  #app.is-split .state-3d-stack {
+    right: 44%;
+  }
+
+  .info-pane {
+    top: 12px;
+    right: 0;
+    bottom: 12px;
+    left: auto;
+    width: 44%;
+    max-height: none;
+    border-radius: 16px 0 0 16px;
+    transform: translateX(24px);
+  }
+
+  #app.is-split .info-pane {
+    transform: translateX(0);
+    transition:
+      opacity var(--transition-fast),
+      transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+  }
+
+  .info-pane-handle {
+    display: none;
+  }
+
+  .info-pane.is-minimized {
+    transform: translateX(calc(100% - 40px));
+  }
+
+  .info-pane.is-minimized #state-content {
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .info-pane.is-gesture-active {
+    transition: none !important;
+  }
+
+  .is-pane-minimized .state-3d-stack {
+    right: 40px;
+  }
+
+  .hourglass-container {
+    width: 80px;
+    height: 128px;
+  }
+
+  .hourglass-3d {
+    width: 80px !important;
+    height: 128px !important;
+  }
+
+  .shrine-glow {
+    width: 160px;
+    height: 160px;
+  }
+
+  .state-character {
+    width: 44px;
+    height: 44px;
+  }
+
+  /* Tarot cards side by side, scaled to fit narrow panel */
+  .tarot-spread {
+    flex-direction: row;
+    gap: 10px;
+    padding-bottom: 12px;
+  }
+
+  .tarot-card {
+    width: 120px;
+    height: 180px;
+  }
+
+  .tarot-card-label {
+    font-size: 0.6rem;
+  }
+}
+
+/* Landscape phones — very short viewport */
+@media (max-height: 420px) and (orientation: landscape) {
+  .character-select {
+    gap: 0;
+    padding: 8px 0;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .splash-logo {
+    max-height: 32vh;
+    width: min(30vw, 280px);
+    flex-shrink: 0;
+    margin-right: 0;
+    transition:
+      max-height 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+      width 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+      margin 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Card collapses width too so logo stays centered when hidden */
+  .character-select-card {
+    max-height: none;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateX(20px);
+    transition:
+      opacity 0.7s ease 0.1s,
+      transform 0.7s ease 0.1s,
+      max-width 0.9s ease;
+  }
+
+  .character-select-card.is-card-visible {
+    max-height: none;
+    max-width: 60vw;
+    overflow: visible;
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* Logo shifts left when card is visible — :has() targets logo based on next sibling */
+  .splash-logo:has(+ .character-select-card.is-card-visible) {
+    margin-right: 4vw;
+  }
+
+  .character-select-title {
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+
+  .character-grid {
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .character-card {
+    width: 18vw;
+    max-width: 120px;
+    padding: 10px 8px;
+    gap: 6px;
+    border-radius: 12px;
+  }
+
+  .character-card-img {
+    width: 18vh;
+    height: 18vh;
+    max-width: 80px;
+    max-height: 80px;
+  }
+
+  .character-confirm {
+    font-size: 0.9rem;
+    margin-top: 6px;
+  }
+
+  .about-content {
+    padding: 10px 20px 16px;
+    max-height: 76vh;
+    max-height: 76dvh;
+  }
+
+  .about-content::before {
+    margin-bottom: 10px;
+  }
+
+  .about-title {
+    font-size: 1.1rem;
+    margin-bottom: 2px;
+  }
+
+  .about-subtitle {
+    font-size: 0.72rem;
+    margin-bottom: 10px;
+  }
+
+  .about-divider {
+    margin-bottom: 8px;
+  }
+
+  .about-text {
+    font-size: 0.76rem;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  .about-links {
+    margin-bottom: 10px;
+    gap: 12px;
+  }
+
+  .about-link {
+    width: 34px;
+    height: 34px;
+  }
+
+  .about-change-character {
+    margin-bottom: 8px;
+    padding: 6px 16px;
+  }
+
+  .about-footer {
+    font-size: 0.65rem;
+  }
+}
+

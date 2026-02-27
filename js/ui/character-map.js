@@ -23,6 +23,7 @@ export const createMapCharacterManager = ({
   let mapCharacterStateId = null;
   let mapCharacterBarkTimers = [];
   let mapCharacterBark = null;
+  let barkRafId = null;
 
   const getStateCenter = (stateId) => {
     const mapApi = getMapApi();
@@ -85,9 +86,30 @@ export const createMapCharacterManager = ({
     setTimeout(() => wisps.forEach((w) => w.remove()), 900);
   };
 
+  const stopBarkTracking = () => {
+    if (barkRafId) {
+      cancelAnimationFrame(barkRafId);
+      barkRafId = null;
+    }
+  };
+
+  const updateBarkPosition = () => {
+    if (!mapCharacterBark || !mapCharacter) {
+      stopBarkTracking();
+      return;
+    }
+    const mapPane = getMapPane();
+    const rect = mapCharacter.getBoundingClientRect();
+    const parentRect = mapPane.getBoundingClientRect();
+    mapCharacterBark.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
+    mapCharacterBark.style.top = `${rect.top - parentRect.top - 8}px`;
+    barkRafId = requestAnimationFrame(updateBarkPosition);
+  };
+
   const hideBark = () => {
     mapCharacterBarkTimers.forEach((t) => clearTimeout(t));
     mapCharacterBarkTimers = [];
+    stopBarkTracking();
     if (mapCharacterBark) {
       mapCharacterBark.remove();
       mapCharacterBark = null;
@@ -96,6 +118,7 @@ export const createMapCharacterManager = ({
 
   const showBark = (text, duration = 4000) => {
     if (mapCharacterBark) {
+      stopBarkTracking();
       mapCharacterBark.remove();
       mapCharacterBark = null;
     }
@@ -110,9 +133,11 @@ export const createMapCharacterManager = ({
     bubble.style.top = `${rect.top - parentRect.top - 8}px`;
     mapPane.appendChild(bubble);
     mapCharacterBark = bubble;
+    barkRafId = requestAnimationFrame(updateBarkPosition);
     mapCharacterBarkTimers.push(
       setTimeout(() => {
         if (mapCharacterBark === bubble) {
+          stopBarkTracking();
           bubble.remove();
           mapCharacterBark = null;
         }
@@ -121,6 +146,7 @@ export const createMapCharacterManager = ({
   };
 
   const remove = () => {
+    stopBarkTracking();
     hideBark();
     if (mapCharacterInterval) {
       clearInterval(mapCharacterInterval);

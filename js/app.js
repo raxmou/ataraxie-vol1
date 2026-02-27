@@ -2,7 +2,6 @@ import {
   getLang,
   setLang,
   t,
-  getDragPhrases,
   getTracksUrl,
   applyStaticTranslations,
 } from "./i18n.js";
@@ -11,10 +10,8 @@ import { createMap, createStateColor } from "./map.js";
 import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
 import { createTextureCanvas } from "./texture-canvas.js";
 import { createHourglassPlayer } from "./hourglass-player.js";
-import { createCharacterDancer } from "./character-dancer.js";
 import { createInfoPaneGesture } from "./info-pane-gesture.js";
 import { createMapGestures } from "./map-gestures.js";
-import { loadThreeModule } from "./three/three-loader.js";
 import {
   initThree as initThreeScene,
   resizeRenderer,
@@ -22,23 +19,17 @@ import {
   applyInertiaRotation,
 } from "./three/three-scene.js";
 import { buildStateMesh, loadBgTexture } from "./three/three-mesh.js";
-import { CHARACTER_MOVE_MAP, getCharacterFrame } from "./ui/character-data.js";
-import {
-  SVG_NS,
-  TEXTURE_FILES,
-  getTextureIndexForState,
-  FINAL_STATE,
-  CHARACTER_STORAGE_KEY,
-  VERSO_IMAGES,
-  PREFERS_REDUCED_MOTION,
-} from "./core/constants.js";
-import { clamp, easeInOutCubic } from "./core/utils.js";
+import { CHARACTER_MOVE_MAP } from "./ui/character-data.js";
+import { FINAL_STATE, CHARACTER_STORAGE_KEY, PREFERS_REDUCED_MOTION } from "./core/constants.js";
+import { easeInOutCubic } from "./core/utils.js";
 import { createAudioReactive } from "./audio/audio-reactive.js";
 import { resolveSigilMap, createSigilManager } from "./map/sigils.js";
 import { createThreeInteraction } from "./three/three-interaction.js";
+import { createCharacterSelect } from "./ui/character-select.js";
+import { createMapCharacterManager } from "./ui/character-map.js";
+import { createStateCharacterManager } from "./ui/character-state.js";
 import {
   revealedStates,
-  questionedStates,
   isStateRevealed,
   hasBeenQuestioned,
   markAsQuestioned,
@@ -105,24 +96,10 @@ let textureCanvas = null;
 let sigilsByState = new Map();
 let hourglassPlayer = null;
 let pendingTrail = null; // Stores {from, to} for deferred trail drawing
-let answeredQuestions = new Map(); // Stores stateId -> {option1, option2, chosen}
+const answeredQuestions = new Map(); // Stores stateId -> {option1, option2, chosen}
 let isMorphing = false;
 let questionTimeout = null;
 let selectedCharacter = null;
-// Map view character (SVG image on trail layer)
-let mapCharacter = null;
-let mapCharacterFrameIdx = 0;
-let mapCharacterInterval = null;
-let mapCharacterStateId = null;
-let mapCharacterBarkTimers = [];
-let mapCharacterBark = null;
-// State view character (HTML img in info pane)
-let stateCharacter = null;
-let stateCharFrameIdx = 0;
-let stateCharInterval = null;
-let stateCharFloatRAF = null;
-let stateCharFloatStart = 0;
-let stateCharDragging = false;
 let infoPaneGesture = null;
 let mapGestures = null;
 
@@ -149,6 +126,45 @@ const threeInteraction = createThreeInteraction({
   getThreeApi: () => threeApi,
 });
 threeInteraction.init();
+
+const mapCharMgr = createMapCharacterManager({
+  svg,
+  getMapApi: () => mapApi,
+  getFullViewBox: () => fullViewBox,
+  getSelectedCharacter: () => selectedCharacter,
+  getExplorationTrails: () => explorationTrails,
+  getExplorationOrder: () => explorationOrder,
+  getMapPane: () => mapPane,
+});
+const {
+  create: createMapCharacter,
+  remove: removeMapCharacter,
+  renderTrails,
+  drawTrailSegment,
+  updatePosition: updateMapCharacterPosition,
+  showBark: showMapCharacterBark,
+  hideBark: hideMapCharacterBark,
+  getStateCenter,
+  getMarkerRadius,
+} = mapCharMgr;
+
+const charSelect = createCharacterSelect({
+  characterSelect,
+  characterCards,
+  characterConfirm,
+  svg,
+  getStateCenter,
+  getMarkerRadius,
+});
+
+const stateCharMgr = createStateCharacterManager({
+  app,
+  getHourglassPlayer: () => hourglassPlayer,
+  getActiveAudio: () => activeAudio,
+  getAboutModal: () => aboutModal,
+});
+const showStateCharacter = () => stateCharMgr.show(selectedCharacter);
+const hideStateCharacter = () => stateCharMgr.hide();
 
 const setupTrackPlayer = (container, audio) => {
   if (!container || !(audio instanceof HTMLAudioElement)) return;
@@ -703,27 +719,27 @@ const showTrackShrine = (title, artist, track, audio, infoOptions = {}) => {
     }
     if (String(activeStateId) === "11") {
       const tryBark = () => {
-        if (!stateCharacter) return setTimeout(tryBark, 300);
+        const charEl = stateCharMgr.element;
+        if (!charEl) return setTimeout(tryBark, 300);
         const bubble = document.createElement("div");
         bubble.className = "state-character-bubble";
         bubble.textContent = t("bark.finale");
-        stateCharacter.parentElement.appendChild(bubble);
+        charEl.parentElement.appendChild(bubble);
         const positionBubble = () => {
-          const rect = stateCharacter.getBoundingClientRect();
-          const parentRect = (stateCharacter.offsetParent || app).getBoundingClientRect();
+          const rect = charEl.getBoundingClientRect();
+          const parentRect = (charEl.offsetParent || app).getBoundingClientRect();
           bubble.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
           bubble.style.top = `${rect.top - parentRect.top - 12}px`;
         };
         positionBubble();
-        // Hook into the floating animation sync loop
-        const origSync = stateCharacter._syncOverlays;
-        stateCharacter._syncOverlays = () => {
+        const origSync = charEl._syncOverlays;
+        charEl._syncOverlays = () => {
           if (origSync) origSync();
           if (bubble.parentElement) positionBubble();
         };
         setTimeout(() => {
           bubble.remove();
-          stateCharacter._syncOverlays = origSync;
+          charEl._syncOverlays = origSync;
         }, 8000);
       };
       setTimeout(tryBark, 1500);
@@ -1168,845 +1184,6 @@ const hideAboutModal = () => {
   }
 };
 
-const showCharacterSelect = () => {
-  if (characterSelect) {
-    const card = characterSelect.querySelector(".character-select-card");
-    characterCards.forEach((c) => c.classList.remove("is-selected"));
-    if (characterConfirm) characterConfirm.hidden = true;
-    if (card) card.classList.remove("is-card-visible");
-    characterSelect.classList.add("is-logo-intro");
-    characterSelect.setAttribute("aria-hidden", "false");
-    const delay = prefersReducedMotion ? 0 : 4800;
-    setTimeout(() => {
-      characterSelect.classList.remove("is-logo-intro");
-      if (card) card.classList.add("is-card-visible");
-    }, delay);
-  }
-};
-
-const hideCharacterSelect = () => {
-  if (characterSelect) {
-    characterSelect.style.transition = "none";
-    characterSelect.setAttribute("aria-hidden", "true");
-    characterSelect.classList.remove("is-flying-out", "is-bg-fading");
-    // Re-enable transitions after the hide is painted
-    requestAnimationFrame(() => {
-      characterSelect.style.transition = "";
-    });
-  }
-};
-
-const flyCharacterToMap = (character) =>
-  new Promise((resolve) => {
-    const selectedCard = document.querySelector(".character-card.is-selected");
-    const cardImg = selectedCard?.querySelector(".character-card-img");
-    if (!cardImg || !characterSelect || !svg) {
-      hideCharacterSelect();
-      return resolve();
-    }
-
-    const stateCenter = getStateCenter("1");
-    const ctm = svg.getScreenCTM();
-    if (!stateCenter || !ctm) {
-      hideCharacterSelect();
-      return resolve();
-    }
-
-    const targetScreenX = stateCenter.x * ctm.a + ctm.e;
-    const targetScreenY = stateCenter.y * ctm.d + ctm.f;
-    const targetSize = Math.max(16, getMarkerRadius() * 8 * ctm.a);
-
-    const srcRect = cardImg.getBoundingClientRect();
-    const startX = srcRect.left;
-    const startY = srcRect.top;
-    const startW = srcRect.width;
-    const startH = srcRect.height;
-
-    const flyer = document.createElement("img");
-    flyer.className = "character-flyer";
-    flyer.src = cardImg.src;
-    flyer.style.left = startX + "px";
-    flyer.style.top = startY + "px";
-    flyer.style.width = startW + "px";
-    flyer.style.height = startH + "px";
-    document.body.appendChild(flyer);
-
-    const frames = CHARACTER_MOVE_MAP[character]?.hipshake || [];
-    let frameIdx = 0;
-    const hipshakeInterval =
-      frames.length > 0
-        ? setInterval(() => {
-            frameIdx = (frameIdx + 1) % frames.length;
-            flyer.src = frames[frameIdx];
-          }, 125)
-        : null;
-
-    characterSelect.classList.add("is-flying-out");
-
-    setTimeout(() => characterSelect.classList.add("is-bg-fading"), 250);
-
-    const flightDelay = 300;
-    const flightDuration = 800;
-
-    const endX = targetScreenX - targetSize / 2;
-    const endY = targetScreenY - targetSize / 2;
-
-    const cpx = (startX + endX) / 2;
-    const arcHeight = Math.abs(endX - startX) * 0.3;
-    const cpy = Math.min(startY, endY) - arcHeight;
-
-    setTimeout(() => {
-      const t0 = performance.now();
-      const step = (now) => {
-        const elapsed = now - t0;
-        const raw = Math.min(elapsed / flightDuration, 1);
-        const t = easeInOutCubic(raw);
-        const u = 1 - t;
-
-        const bx = u * u * startX + 2 * u * t * cpx + t * t * endX;
-        const by = u * u * startY + 2 * u * t * cpy + t * t * endY;
-        const w = startW + (targetSize - startW) * t;
-        const h = startH + (targetSize - startH) * t;
-        const glowSize = 6 + 18 * t;
-        const glowAlpha = 0.4 + 0.5 * t;
-
-        flyer.style.left = bx + "px";
-        flyer.style.top = by + "px";
-        flyer.style.width = w + "px";
-        flyer.style.height = h + "px";
-        flyer.style.filter = `drop-shadow(0 0 ${glowSize}px rgba(189,255,0,${glowAlpha}))`;
-
-        if (raw < 1) {
-          requestAnimationFrame(step);
-        } else {
-          if (hipshakeInterval) clearInterval(hipshakeInterval);
-          flyer.classList.add("character-flyer--landed");
-          hideCharacterSelect();
-
-          setTimeout(() => {
-            flyer.remove();
-            resolve();
-          }, 300);
-        }
-      };
-      requestAnimationFrame(step);
-    }, flightDelay);
-  });
-
-const updateCharacterAvatar = () => {};
-
-const waitForCharacterSelection = () =>
-  new Promise((resolve) => {
-    showCharacterSelect();
-
-    // Hipshake frame cycling on hover
-    const hoverIntervals = new Map();
-    const HIPSHAKE_FPS = 8;
-
-    const startHipshake = (card) => {
-      const character = card.dataset.character;
-      const frames = CHARACTER_MOVE_MAP[character]?.hipshake;
-      if (!frames || frames.length === 0) return;
-      const img = card.querySelector(".character-card-img");
-      if (!img) return;
-      let frameIdx = 0;
-      img.src = frames[0];
-      const interval = setInterval(() => {
-        frameIdx = (frameIdx + 1) % frames.length;
-        img.src = frames[frameIdx];
-      }, 1000 / HIPSHAKE_FPS);
-      hoverIntervals.set(card, interval);
-    };
-
-    const stopHipshake = (card) => {
-      const character = card.dataset.character;
-      const interval = hoverIntervals.get(card);
-      if (interval != null) {
-        clearInterval(interval);
-        hoverIntervals.delete(card);
-      }
-      const img = card.querySelector(".character-card-img");
-      if (img) img.src = getCharacterFrame(character, 0);
-    };
-
-    const handleMouseEnter = (e) => startHipshake(e.currentTarget);
-    const handleMouseLeave = (e) => stopHipshake(e.currentTarget);
-
-    const selectCard = (card) => {
-      characterCards.forEach((c) => c.classList.remove("is-selected"));
-      card.classList.add("is-selected");
-      if (characterConfirm) characterConfirm.hidden = false;
-    };
-
-    const handleCardClick = (e) => {
-      const card = e.currentTarget;
-      selectCard(card);
-    };
-
-    const handleConfirm = () => {
-      const selected = document.querySelector(".character-card.is-selected");
-      if (!selected) return;
-      const character = selected.dataset.character;
-      selectedCharacter = character;
-      localStorage.setItem(CHARACTER_STORAGE_KEY, character);
-      cleanup();
-      updateCharacterAvatar();
-      if (prefersReducedMotion) {
-        hideCharacterSelect();
-        resolve(character);
-      } else {
-        const hipFrames = CHARACTER_MOVE_MAP[character]?.hipshake || [];
-        Promise.all(
-          hipFrames.map(
-            (src) =>
-              new Promise((r) => {
-                const i = new Image();
-                i.onload = i.onerror = r;
-                i.src = src;
-              }),
-          ),
-        ).then(() => flyCharacterToMap(character).then(() => resolve(character)));
-      }
-    };
-
-    const cleanup = () => {
-      characterCards.forEach((c) => {
-        c.removeEventListener("click", handleCardClick);
-        c.removeEventListener("mouseenter", handleMouseEnter);
-        c.removeEventListener("mouseleave", handleMouseLeave);
-        stopHipshake(c);
-      });
-      characterConfirm?.removeEventListener("click", handleConfirm);
-    };
-
-    characterCards.forEach((card) => {
-      card.addEventListener("click", handleCardClick);
-      card.addEventListener("mouseenter", handleMouseEnter);
-      card.addEventListener("mouseleave", handleMouseLeave);
-    });
-    characterConfirm?.addEventListener("click", handleConfirm);
-  });
-
-const getStateCenter = (stateId) => {
-  const bounds = mapApi?.getStateBounds(stateId);
-  if (!bounds) return null;
-  return {
-    x: (bounds.minX + bounds.maxX) / 2,
-    y: (bounds.minY + bounds.maxY) / 2,
-  };
-};
-
-const getMarkerRadius = () => {
-  if (!fullViewBox) return 3;
-  return Math.min(fullViewBox.width, fullViewBox.height) * 0.005;
-};
-
-const renderTrails = () => {
-  const layer = mapApi?.getTrailLayer();
-  if (!layer) return;
-
-  const hadCharacter = !!mapCharacter;
-
-  while (layer.firstChild) layer.removeChild(layer.firstChild);
-  if (hadCharacter) mapCharacter = null;
-
-  const r = getMarkerRadius();
-
-  // Draw all existing trail lines
-  explorationTrails.forEach(({ from, to }) => {
-    const fromCenter = getStateCenter(from);
-    const toCenter = getStateCenter(to);
-    if (!fromCenter || !toCenter) return;
-
-    const mid = mapApi.getSharedBorderMidpoint(from, to);
-    let d;
-    if (mid) {
-      d = `M ${fromCenter.x} ${fromCenter.y} Q ${mid.x} ${mid.y} ${toCenter.x} ${toCenter.y}`;
-    } else {
-      const mx = (fromCenter.x + toCenter.x) / 2;
-      const my = (fromCenter.y + toCenter.y) / 2;
-      const dx = toCenter.x - fromCenter.x;
-      const dy = toCenter.y - fromCenter.y;
-      const offset = Math.sqrt(dx * dx + dy * dy) * 0.15;
-      d = `M ${fromCenter.x} ${fromCenter.y} Q ${mx + (-dy * offset) / Math.sqrt(dx * dx + dy * dy)} ${my + (dx * offset) / Math.sqrt(dx * dx + dy * dy)} ${toCenter.x} ${toCenter.y}`;
-    }
-
-    const path = document.createElementNS(SVG_NS, "path");
-    path.setAttribute("d", d);
-    path.classList.add("trail-line");
-    layer.appendChild(path);
-  });
-
-  // Draw markers for all discovered states
-  explorationOrder.forEach((stateId, i) => {
-    const center = getStateCenter(stateId);
-    if (!center) return;
-
-    const circle = document.createElementNS(SVG_NS, "circle");
-    circle.setAttribute("cx", center.x);
-    circle.setAttribute("cy", center.y);
-    circle.setAttribute("r", r);
-    circle.classList.add("trail-marker");
-    if (i === 0) circle.classList.add("trail-marker--origin");
-    layer.appendChild(circle);
-  });
-
-  if (hadCharacter && selectedCharacter) {
-    createMapCharacter();
-  }
-};
-
-const drawTrailSegment = (fromStateId, toStateId) => {
-  const layer = mapApi?.getTrailLayer();
-  if (!layer) return;
-
-  const fromCenter = getStateCenter(fromStateId);
-  const toCenter = getStateCenter(toStateId);
-  if (!fromCenter || !toCenter) return;
-
-  const r = getMarkerRadius();
-  const mid = mapApi.getSharedBorderMidpoint(fromStateId, toStateId);
-
-  let d;
-  if (mid) {
-    d = `M ${fromCenter.x} ${fromCenter.y} Q ${mid.x} ${mid.y} ${toCenter.x} ${toCenter.y}`;
-  } else {
-    const mx = (fromCenter.x + toCenter.x) / 2;
-    const my = (fromCenter.y + toCenter.y) / 2;
-    const dx = toCenter.x - fromCenter.x;
-    const dy = toCenter.y - fromCenter.y;
-    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const offset = dist * 0.15;
-    d = `M ${fromCenter.x} ${fromCenter.y} Q ${mx + (-dy * offset) / dist} ${my + (dx * offset) / dist} ${toCenter.x} ${toCenter.y}`;
-  }
-
-  const path = document.createElementNS(SVG_NS, "path");
-  path.setAttribute("d", d);
-  path.classList.add("trail-line");
-  layer.appendChild(path);
-
-  // Animate the line and marker appearing
-  if (!prefersReducedMotion) {
-    path.classList.add("trail-line--appear");
-
-    setTimeout(() => {
-      const circle = document.createElementNS(SVG_NS, "circle");
-      circle.setAttribute("cx", toCenter.x);
-      circle.setAttribute("cy", toCenter.y);
-      circle.setAttribute("r", r);
-      circle.classList.add("trail-marker", "trail-marker--appear");
-      layer.appendChild(circle);
-      if (mapCharacter) layer.appendChild(mapCharacter);
-    }, 800);
-  } else {
-    const circle = document.createElementNS(SVG_NS, "circle");
-    circle.setAttribute("cx", toCenter.x);
-    circle.setAttribute("cy", toCenter.y);
-    circle.setAttribute("r", r);
-    circle.classList.add("trail-marker");
-    layer.appendChild(circle);
-  }
-
-  if (mapCharacter) layer.appendChild(mapCharacter);
-};
-
-// --- Map View Character (SVG on trail layer) ---
-
-const spawnPuffParticles = (cx, cy, size, layer) => {
-  const SVG_NS = "http://www.w3.org/2000/svg";
-  const count = 7;
-  const drift = size * 0.6;
-  const dur = "700ms";
-  const wisps = [];
-
-  for (let i = 0; i < count; i++) {
-    const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
-    const dx = Math.cos(angle) * drift * (0.6 + Math.random() * 0.4);
-    const dy = Math.sin(angle) * drift * (0.6 + Math.random() * 0.4);
-    const baseR = size * (0.08 + Math.random() * 0.06);
-    const stagger = `${i * 30}ms`;
-
-    const el = document.createElementNS(SVG_NS, "ellipse");
-    el.setAttribute("cx", cx);
-    el.setAttribute("cy", cy);
-    el.setAttribute("rx", baseR);
-    el.setAttribute("ry", baseR * 0.7);
-    el.setAttribute("fill", "rgba(189,255,0,0.35)");
-    el.setAttribute("filter", "url(#puff-blur)");
-    el.classList.add("puff-wisp");
-
-    const attrs = [
-      ["cx", `${cx}`, `${cx + dx}`],
-      ["cy", `${cy}`, `${cy + dy}`],
-      ["rx", `${baseR}`, `${baseR * 2.5}`],
-      ["ry", `${baseR * 0.7}`, `${baseR * 1.8}`],
-      ["opacity", "0.6", "0"],
-    ];
-    for (const [attr, from, to] of attrs) {
-      const anim = document.createElementNS(SVG_NS, "animate");
-      anim.setAttribute("attributeName", attr);
-      anim.setAttribute("from", from);
-      anim.setAttribute("to", to);
-      anim.setAttribute("dur", dur);
-      anim.setAttribute("begin", stagger);
-      anim.setAttribute("fill", "freeze");
-      el.appendChild(anim);
-    }
-    layer.appendChild(el);
-    wisps.push(el);
-  }
-  setTimeout(() => wisps.forEach((w) => w.remove()), 900);
-};
-
-const createMapCharacter = (arriving = false) => {
-  removeMapCharacter();
-  if (!selectedCharacter || !mapApi) return;
-  const moveSet = CHARACTER_MOVE_MAP[selectedCharacter];
-  if (!moveSet?.idle?.length) return;
-
-  const layer = mapApi.getTrailLayer();
-  if (!layer) return;
-
-  const targetState =
-    explorationOrder.length > 0 ? explorationOrder[explorationOrder.length - 1] : "1";
-  const center = getStateCenter(targetState);
-  if (!center) return;
-
-  const size = getMarkerRadius() * 8;
-  const img = document.createElementNS(SVG_NS, "image");
-  img.setAttribute("width", size);
-  img.setAttribute("height", size);
-  img.setAttribute("x", center.x - size / 2);
-  img.setAttribute("y", center.y - size / 2);
-  img.setAttribute("href", moveSet.idle[0]);
-  img.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", moveSet.idle[0]);
-  img.classList.add("map-character");
-
-  const isFirstArrival = arriving && explorationOrder.length <= 1;
-  if (isFirstArrival && !prefersReducedMotion) {
-    spawnPuffParticles(center.x, center.y, size, layer);
-    img.classList.add("map-character--arriving");
-  }
-
-  layer.appendChild(img);
-
-  mapCharacter = img;
-  mapCharacterFrameIdx = 0;
-  mapCharacterStateId = targetState;
-
-  if (isFirstArrival && !prefersReducedMotion) {
-    setTimeout(() => mapCharacter?.classList.remove("map-character--arriving"), 800);
-  }
-
-  mapCharacterInterval = setInterval(() => {
-    mapCharacterFrameIdx = (mapCharacterFrameIdx + 1) % moveSet.idle.length;
-    if (mapCharacter) {
-      const src = moveSet.idle[mapCharacterFrameIdx];
-      mapCharacter.setAttribute("href", src);
-      mapCharacter.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", src);
-    }
-  }, 350);
-};
-
-const hideMapCharacterBark = () => {
-  mapCharacterBarkTimers.forEach((t) => clearTimeout(t));
-  mapCharacterBarkTimers = [];
-  if (mapCharacterBark) {
-    mapCharacterBark.remove();
-    mapCharacterBark = null;
-  }
-};
-
-const showMapCharacterBark = (text, duration = 4000) => {
-  if (mapCharacterBark) {
-    mapCharacterBark.remove();
-    mapCharacterBark = null;
-  }
-  if (!mapCharacter || !svg) return;
-  const rect = mapCharacter.getBoundingClientRect();
-  const parentRect = mapPane.getBoundingClientRect();
-  const bubble = document.createElement("div");
-  bubble.className = "state-character-bubble";
-  bubble.textContent = text;
-  bubble.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
-  bubble.style.top = `${rect.top - parentRect.top - 8}px`;
-  mapPane.appendChild(bubble);
-  mapCharacterBark = bubble;
-  mapCharacterBarkTimers.push(
-    setTimeout(() => {
-      if (mapCharacterBark === bubble) {
-        bubble.remove();
-        mapCharacterBark = null;
-      }
-    }, duration),
-  );
-};
-
-const removeMapCharacter = () => {
-  hideMapCharacterBark();
-  if (mapCharacterInterval) {
-    clearInterval(mapCharacterInterval);
-    mapCharacterInterval = null;
-  }
-  if (mapCharacter) {
-    const layer = mapCharacter.parentNode;
-    if (layer) layer.querySelectorAll(".puff-wisp").forEach((w) => w.remove());
-    mapCharacter.remove();
-    mapCharacter = null;
-  }
-  mapCharacterStateId = null;
-  mapCharacterFrameIdx = 0;
-};
-
-const updateMapCharacterPosition = (toStateId, fromStateId, animate = true) => {
-  if (!mapCharacter) return;
-  const toCenter = getStateCenter(toStateId);
-  if (!toCenter) return;
-
-  const size = parseFloat(mapCharacter.getAttribute("width"));
-
-  if (!animate || prefersReducedMotion || !fromStateId) {
-    mapCharacter.setAttribute("x", toCenter.x - size / 2);
-    mapCharacter.setAttribute("y", toCenter.y - size / 2);
-    mapCharacterStateId = toStateId;
-    return;
-  }
-
-  const fromCenter = getStateCenter(fromStateId);
-  if (!fromCenter) {
-    mapCharacter.setAttribute("x", toCenter.x - size / 2);
-    mapCharacter.setAttribute("y", toCenter.y - size / 2);
-    mapCharacterStateId = toStateId;
-    return;
-  }
-
-  let cp;
-  const mid = mapApi?.getSharedBorderMidpoint(fromStateId, toStateId);
-  if (mid) {
-    cp = mid;
-  } else {
-    const mx = (fromCenter.x + toCenter.x) / 2;
-    const my = (fromCenter.y + toCenter.y) / 2;
-    const dx = toCenter.x - fromCenter.x;
-    const dy = toCenter.y - fromCenter.y;
-    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const offset = dist * 0.15;
-    cp = { x: mx + (-dy * offset) / dist, y: my + (dx * offset) / dist };
-  }
-
-  const duration = 1400;
-  const start = performance.now();
-
-  const step = (now) => {
-    const elapsed = now - start;
-    let t = Math.min(elapsed / duration, 1);
-    t = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
-    const u = 1 - t;
-    const bx = u * u * fromCenter.x + 2 * u * t * cp.x + t * t * toCenter.x;
-    const by = u * u * fromCenter.y + 2 * u * t * cp.y + t * t * toCenter.y;
-
-    mapCharacter.setAttribute("x", bx - size / 2);
-    mapCharacter.setAttribute("y", by - size / 2);
-
-    if (elapsed < duration) {
-      requestAnimationFrame(step);
-    } else {
-      mapCharacterStateId = toStateId;
-    }
-  };
-
-  requestAnimationFrame(step);
-};
-
-// --- State View Character (floating + draggable in info pane) ---
-
-const startStateCharFloat = () => {
-  if (prefersReducedMotion || !stateCharacter) return;
-  stopStateCharFloat();
-  stateCharFloatStart = performance.now();
-  const loop = (now) => {
-    if (!stateCharacter || stateCharDragging) return;
-    const t = (now - stateCharFloatStart) / 1000;
-    const offsetY = Math.sin(t * 0.7) * 12 + Math.sin(t * 1.3) * 6;
-    const offsetX = Math.sin(t * 0.5) * 35 + Math.cos(t * 0.9) * 20;
-    stateCharacter.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
-    if (stateCharacter._syncOverlays) stateCharacter._syncOverlays();
-    stateCharFloatRAF = requestAnimationFrame(loop);
-  };
-  stateCharFloatRAF = requestAnimationFrame(loop);
-};
-
-const stopStateCharFloat = () => {
-  if (stateCharFloatRAF) {
-    cancelAnimationFrame(stateCharFloatRAF);
-    stateCharFloatRAF = null;
-  }
-  if (stateCharacter) {
-    stateCharacter.style.transform = "translate(0, 0)";
-  }
-};
-
-const DRAG_PHRASES = getDragPhrases();
-
-const setupStateCharDrag = (img) => {
-  let grabOffsetX = 0;
-  let grabOffsetY = 0;
-  let dragTimer = null;
-  let bubble = null;
-  let menu = null;
-  let startX = 0;
-  let startY = 0;
-  let pointerIsDown = false;
-  let dragStarted = false;
-  const DRAG_THRESHOLD = 5;
-
-  const positionAboveChar = (el) => {
-    const imgRect = img.getBoundingClientRect();
-    const parentRect = (img.offsetParent || app).getBoundingClientRect();
-    el.style.left = `${imgRect.left - parentRect.left + imgRect.width / 2}px`;
-    el.style.top = `${imgRect.top - parentRect.top - 12}px`;
-  };
-
-  const syncOverlays = () => {
-    if (bubble) positionAboveChar(bubble);
-    if (menu) positionAboveChar(menu);
-  };
-  img._syncOverlays = syncOverlays;
-
-  const showBubble = () => {
-    if (bubble) return;
-    bubble = document.createElement("div");
-    bubble.className = "state-character-bubble";
-    bubble.textContent = DRAG_PHRASES[Math.floor(Math.random() * DRAG_PHRASES.length)];
-    img.parentElement.appendChild(bubble);
-    positionAboveChar(bubble);
-    bubble._updatePos = syncOverlays;
-  };
-
-  const hideBubble = () => {
-    if (bubble) {
-      bubble.remove();
-      bubble = null;
-    }
-  };
-
-  const closeMenu = () => {
-    if (menu) {
-      menu.remove();
-      menu = null;
-    }
-    document.removeEventListener("pointerdown", onOutsideClick, true);
-    document.removeEventListener("keydown", onEscapeKey);
-  };
-
-  const onOutsideClick = (e) => {
-    if (menu && !menu.contains(e.target) && e.target !== img) closeMenu();
-  };
-
-  const onEscapeKey = (e) => {
-    if (e.key === "Escape") closeMenu();
-  };
-
-  const showGestureHelp = () => {
-    closeMenu();
-    hideBubble();
-    bubble = document.createElement("div");
-    bubble.className = "state-character-bubble";
-    bubble.style.whiteSpace = "pre-line";
-    bubble.textContent = t("gesture.hints");
-    img.parentElement.appendChild(bubble);
-    positionAboveChar(bubble);
-    setTimeout(hideBubble, 5000);
-  };
-
-  const toggleMenu = () => {
-    if (menu) {
-      closeMenu();
-      return;
-    }
-    hideBubble();
-
-    menu = document.createElement("div");
-    menu.className = "state-character-menu";
-
-    const isPlaying = hourglassPlayer
-      ? hourglassPlayer.playing
-      : activeAudio && !activeAudio.paused;
-    const playLabel = isPlaying ? t("menu.pause") : t("menu.play");
-    const askMeaning = () => {
-      closeMenu();
-      hideBubble();
-      bubble = document.createElement("div");
-      bubble.className = "state-character-bubble";
-      bubble.textContent = DRAG_PHRASES[Math.floor(Math.random() * DRAG_PHRASES.length)];
-      img.parentElement.appendChild(bubble);
-      positionAboveChar(bubble);
-      setTimeout(hideBubble, 5000);
-    };
-
-    const items = [
-      {
-        label: playLabel,
-        action: () => {
-          if (hourglassPlayer) {
-            hourglassPlayer.togglePlay();
-          } else if (activeAudio) {
-            activeAudio.paused ? activeAudio.play() : activeAudio.pause();
-          }
-        },
-      },
-      {
-        label: t("menu.restart"),
-        action: () => {
-          if (hourglassPlayer) {
-            hourglassPlayer.restart();
-          } else if (activeAudio) {
-            activeAudio.currentTime = 0;
-            activeAudio.play().catch(() => {});
-          }
-        },
-      },
-      { label: t("menu.meaning"), action: askMeaning },
-      { label: t("menu.gestures"), action: showGestureHelp },
-      {
-        label: t("menu.about"),
-        action: () => {
-          aboutModal?.setAttribute("aria-hidden", "false");
-        },
-      },
-    ];
-
-    for (const item of items) {
-      const btn = document.createElement("button");
-      btn.className = "state-character-menu-item";
-      btn.textContent = item.label;
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        closeMenu();
-        item.action();
-      });
-      menu.appendChild(btn);
-    }
-
-    img.parentElement.appendChild(menu);
-    positionAboveChar(menu);
-
-    setTimeout(() => {
-      document.addEventListener("pointerdown", onOutsideClick, true);
-      document.addEventListener("keydown", onEscapeKey);
-    }, 0);
-  };
-
-  const onPointerDown = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    img.setPointerCapture(e.pointerId);
-    startX = e.clientX;
-    startY = e.clientY;
-    pointerIsDown = true;
-    dragStarted = false;
-
-    const rect = img.getBoundingClientRect();
-    grabOffsetX = e.clientX - rect.left - rect.width / 2;
-    grabOffsetY = e.clientY - rect.top - rect.height / 2;
-  };
-
-  const beginDrag = () => {
-    dragStarted = true;
-    stateCharDragging = true;
-    img.classList.add("state-character--dragging");
-    stopStateCharFloat();
-    closeMenu();
-    dragTimer = setTimeout(showBubble, 1000);
-  };
-
-  const onPointerMove = (e) => {
-    if (!pointerIsDown) return;
-    if (dragStarted) {
-      e.preventDefault();
-      const parent = img.offsetParent || app;
-      const parentRect = parent.getBoundingClientRect();
-      const x = e.clientX - parentRect.left - grabOffsetX - img.offsetWidth / 2;
-      const y = e.clientY - parentRect.top - grabOffsetY - img.offsetHeight / 2;
-      img.style.left = `${x}px`;
-      img.style.top = `${y}px`;
-      syncOverlays();
-      return;
-    }
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-    if (Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) beginDrag();
-  };
-
-  const onPointerEnd = (e) => {
-    img.releasePointerCapture(e.pointerId);
-    if (!pointerIsDown) return;
-    pointerIsDown = false;
-    if (!dragStarted) {
-      toggleMenu();
-      return;
-    }
-    stateCharDragging = false;
-    dragStarted = false;
-    img.classList.remove("state-character--dragging");
-    clearTimeout(dragTimer);
-    dragTimer = null;
-    hideBubble();
-    startStateCharFloat();
-  };
-
-  img.addEventListener("pointerdown", onPointerDown);
-  img.addEventListener("pointermove", onPointerMove);
-  img.addEventListener("pointerup", onPointerEnd);
-  img.addEventListener("pointercancel", onPointerEnd);
-};
-
-const showStateCharacter = () => {
-  hideStateCharacter();
-  if (!selectedCharacter || !infoPane) return;
-  const moveSet = CHARACTER_MOVE_MAP[selectedCharacter];
-  if (!moveSet?.idle?.length) return;
-
-  const img = document.createElement("img");
-  img.src = moveSet.idle[0];
-  img.alt = selectedCharacter;
-  img.className = "state-character";
-  img.draggable = false;
-  if (!prefersReducedMotion) img.classList.add("state-character--arriving");
-  app.appendChild(img);
-
-  stateCharacter = img;
-  stateCharFrameIdx = 0;
-
-  if (!prefersReducedMotion) {
-    setTimeout(() => stateCharacter?.classList.remove("state-character--arriving"), 800);
-  }
-
-  stateCharInterval = setInterval(() => {
-    stateCharFrameIdx = (stateCharFrameIdx + 1) % moveSet.idle.length;
-    if (stateCharacter) {
-      stateCharacter.src = moveSet.idle[stateCharFrameIdx];
-    }
-  }, 350);
-
-  setupStateCharDrag(img);
-  startStateCharFloat();
-};
-
-const hideStateCharacter = () => {
-  stopStateCharFloat();
-  stateCharDragging = false;
-  if (stateCharInterval) {
-    clearInterval(stateCharInterval);
-    stateCharInterval = null;
-  }
-  if (stateCharacter) {
-    stateCharacter.remove();
-    stateCharacter = null;
-  }
-  stateCharFrameIdx = 0;
-};
 
 const handleAnswer = (revealedStateId, currentStateId) => {
   // Reveal the selected state
@@ -2215,9 +1392,10 @@ const init = async () => {
     const storedCharacter = localStorage.getItem(CHARACTER_STORAGE_KEY);
     if (storedCharacter && CHARACTER_MOVE_MAP[storedCharacter]) {
       selectedCharacter = storedCharacter;
-      updateCharacterAvatar();
     } else {
-      await waitForCharacterSelection();
+      await charSelect.waitForSelection((char) => {
+        selectedCharacter = char;
+      });
     }
 
     createMapCharacter(true);
@@ -2226,7 +1404,7 @@ const init = async () => {
     if (initialState) {
       selectState(initialState, { pushState: false });
     } else {
-      mapCharacterBarkTimers.push(
+      mapCharMgr.barkTimers.push(
         setTimeout(() => showMapCharacterBark(t("bark.where")), 2000),
         setTimeout(() => showMapCharacterBark(t("bark.discover")), 10000),
       );
@@ -2349,7 +1527,9 @@ aboutChangeCharacter?.addEventListener("click", () => {
   removeMapCharacter();
   localStorage.removeItem(CHARACTER_STORAGE_KEY);
   selectedCharacter = null;
-  waitForCharacterSelection().then(() => createMapCharacter(true));
+  charSelect.waitForSelection((char) => {
+    selectedCharacter = char;
+  }).then(() => createMapCharacter(true));
 });
 
 init();

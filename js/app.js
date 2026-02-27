@@ -9,29 +9,26 @@ import { loadGeoJSON, loadSigils, loadTracks } from "./data.js";
 import { createMap, createStateColor } from "./map.js";
 import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
 import { createTextureCanvas } from "./texture-canvas.js";
-import { createHourglassPlayer } from "./hourglass-player.js";
 import { createInfoPaneGesture } from "./info-pane-gesture.js";
 import { createMapGestures } from "./map-gestures.js";
 import { createThreeMorph } from "./three/three-morph.js";
 import { CHARACTER_MOVE_MAP } from "./ui/character-data.js";
-import { FINAL_STATE, CHARACTER_STORAGE_KEY, PREFERS_REDUCED_MOTION } from "./core/constants.js";
+import { CHARACTER_STORAGE_KEY, PREFERS_REDUCED_MOTION } from "./core/constants.js";
 import { createAudioReactive } from "./audio/audio-reactive.js";
 import { resolveSigilMap, createSigilManager } from "./map/sigils.js";
 import { createThreeInteraction } from "./three/three-interaction.js";
 import { createCharacterSelect } from "./ui/character-select.js";
 import { createMapCharacterManager } from "./ui/character-map.js";
 import { createStateCharacterManager } from "./ui/character-state.js";
+import { createInfoPanel } from "./ui/info-panel.js";
+import { createQuestionModal } from "./ui/question-modal.js";
 import {
   revealedStates,
   isStateRevealed,
   hasBeenQuestioned,
-  markAsQuestioned,
-  revealState,
-  getNeighbors,
   buildStateNeighborMap,
   explorationTrails,
   explorationOrder,
-  addTrail,
 } from "./fog.js";
 
 /* ── request fullscreen on first user gesture (mobile) ── */
@@ -78,17 +75,11 @@ let mapApi = null;
 let stateCounts = new Map();
 let animationToken = 0;
 let transformAnimator = null;
-let lastSelectedViewBox = null;
 let trackByState = new Map();
 let trackById = new Map();
-let activeAudio = null;
 let colorForState = null;
 let textureCanvas = null;
 let sigilsByState = new Map();
-let hourglassPlayer = null;
-let pendingTrail = null; // Stores {from, to} for deferred trail drawing
-const answeredQuestions = new Map(); // Stores stateId -> {option1, option2, chosen}
-let questionTimeout = null;
 let selectedCharacter = null;
 let infoPaneGesture = null;
 let mapGestures = null;
@@ -149,30 +140,40 @@ const charSelect = createCharacterSelect({
 
 const stateCharMgr = createStateCharacterManager({
   app,
-  getHourglassPlayer: () => hourglassPlayer,
-  getActiveAudio: () => activeAudio,
+  getHourglassPlayer: () => infoPanel?.hourglassPlayer,
+  getActiveAudio: () => infoPanel?.activeAudio,
   getAboutModal: () => aboutModal,
 });
 const showStateCharacter = () => stateCharMgr.show(selectedCharacter);
 const hideStateCharacter = () => stateCharMgr.hide();
 
-const setupTrackPlayer = (container, audio) => {
-  if (!container || !(audio instanceof HTMLAudioElement)) return;
+// infoPanel and questionMgr use forward-referenced callbacks (clearSelection, etc.)
+// — safe because callbacks are only invoked at runtime, after all declarations
+const infoPanel = createInfoPanel({
+  infoContent,
+  app,
+  getActiveStateId: () => activeStateId,
+  getGeojsonData: () => geojsonData,
+  getTrackByState: () => trackByState,
+  getTrackById: () => trackById,
+  getStateCharElement: () => stateCharMgr.element,
+  onShowQuestionModal: (stateId) => questionMgr.showQuestionModal(stateId),
+  startAudioReactive,
+  stopAudioReactive,
+});
+const renderInfo = (stateId, opts) => infoPanel.renderInfo(stateId, opts);
 
-  // Dispose previous hourglass player if exists
-  if (hourglassPlayer) {
-    hourglassPlayer.dispose();
-    hourglassPlayer = null;
-  }
-
-  // Create new hourglass player
-  hourglassPlayer = createHourglassPlayer(container, audio);
-
-  // Connect audio reactive events
-  audio.addEventListener("play", () => startAudioReactive(audio));
-  audio.addEventListener("pause", stopAudioReactive);
-  audio.addEventListener("ended", stopAudioReactive);
-};
+const questionMgr = createQuestionModal({
+  infoContent,
+  questionModalEl: questionModal,
+  getStateCounts: () => stateCounts,
+  getTrackByState: () => trackByState,
+  getTrackById: () => trackById,
+  getMapApi: () => mapApi,
+  getTextureCanvas: () => textureCanvas,
+  onClearSelection: () => clearSelection(),
+});
+const hideQuestionModal = () => questionMgr.hideQuestionModal();
 
 const viewbox = createViewBoxAnimator(svg, { prefersReducedMotion });
 
@@ -187,7 +188,7 @@ const threeMorph = createThreeMorph({
   getTrackByState: () => trackByState,
   getTrackById: () => trackById,
   getColorForState: () => colorForState,
-  getHourglassPlayer: () => hourglassPlayer,
+  getHourglassPlayer: () => infoPanel?.hourglassPlayer,
   setSplitLayout: (v) => setSplitLayout(v),
   setAnimating: (v) => setAnimating(v),
   startAmbientBreathing,
@@ -313,293 +314,6 @@ const animateToViewBox = (targetBox, duration, options = {}) => {
   );
 };
 
-const renderInfo = (stateId, infoOptions = {}) => {
-  if (!infoContent) return;
-  const narrativeBackBtn = document.getElementById("narrative-back");
-  if (narrativeBackBtn) narrativeBackBtn.hidden = true;
-  if (!stateId) {
-    infoContent.innerHTML = `<h2 class="info-title">${t("info.explore")}</h2><div class="info-body">${t("info.selectState")}</div>`;
-    if (hourglassPlayer) {
-      hourglassPlayer.dispose();
-      hourglassPlayer = null;
-    }
-    if (activeAudio) {
-      activeAudio.pause();
-      activeAudio = null;
-    }
-    stopAudioReactive();
-    return;
-  }
-  if (!geojsonData) {
-    infoContent.innerHTML = `<div class="info-body">${t("info.loading")}</div>`;
-    return;
-  }
-  const count = stateCounts.get(String(stateId)) ?? 0;
-  const trackId = trackByState.get(String(stateId));
-  const track = trackId ? trackById.get(trackId) : null;
-
-  // Dispose previous player/audio before rendering new state
-  if (hourglassPlayer) {
-    hourglassPlayer.dispose();
-    hourglassPlayer = null;
-  }
-  if (activeAudio) {
-    activeAudio.pause();
-    activeAudio = null;
-  }
-  stopAudioReactive();
-
-  if (!track) {
-    infoContent.innerHTML = `<div class="track-shrine is-empty"><span class="shrine-artist">${t("info.noTrack")}</span></div>`;
-    return;
-  }
-
-  const parts = track.title.split(" - ");
-  const artist = parts[0] || "";
-  const title = parts.slice(1).join(" - ") || track.title;
-  const narrativeLines = track.narrative || [];
-
-  // Revisit — skip narrative, go straight to hourglass with revealed tarot card
-  if (infoOptions.pendingResult) {
-    infoContent.innerHTML = `<audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>`;
-    const audio = infoContent.querySelector(".track-audio");
-    if (audio instanceof HTMLAudioElement) activeAudio = audio;
-    showTrackShrine(title, artist, track, audio, infoOptions);
-    return;
-  }
-
-  // Phase A — Narrative text
-  const linesMarkup = narrativeLines
-    .map((line, i) => {
-      const delay = (i + 1) * 1.2;
-      return `<p class="narrative-line" style="animation-delay: ${delay}s">${line}</p>`;
-    })
-    .join("");
-  const playDelay = (narrativeLines.length + 1) * 1.2;
-  const narrativeMarkup = `
-    <div class="narrative-container">
-      ${linesMarkup}
-      <button class="narrative-play-btn" style="animation-delay: ${playDelay}s" type="button">${track.playLabel || "Play"}</button>
-    </div>
-    <audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>
-  `;
-  infoContent.innerHTML = narrativeMarkup;
-
-  // Prepare audio element (don't play yet)
-  const audio = infoContent.querySelector(".track-audio");
-  if (audio instanceof HTMLAudioElement) {
-    activeAudio = audio;
-  }
-
-  // Play button → transition to Phase B (hourglass)
-  const playBtn = infoContent.querySelector(".narrative-play-btn");
-  if (playBtn) {
-    playBtn.addEventListener("click", () => {
-      // Start audio in user gesture context to satisfy autoplay policy
-      if (audio instanceof HTMLAudioElement) {
-        audio.play().catch(() => {});
-      }
-      const narrativeEl = infoContent.querySelector(".narrative-container");
-      if (narrativeEl) {
-        if (prefersReducedMotion) {
-          narrativeEl.remove();
-          showTrackShrine(title, artist, track, audio, infoOptions);
-        } else {
-          narrativeEl.classList.add("is-fading");
-          const onFadeEnd = (e) => {
-            if (e.animationName !== "narrative-fade-out") return;
-            narrativeEl.removeEventListener("animationend", onFadeEnd);
-            narrativeEl.remove();
-            showTrackShrine(title, artist, track, audio, infoOptions);
-          };
-          narrativeEl.addEventListener("animationend", onFadeEnd);
-        }
-      } else {
-        showTrackShrine(title, artist, track, audio, infoOptions);
-      }
-    });
-  }
-};
-
-const showTrackShrine = (title, artist, track, audio, infoOptions = {}) => {
-  if (!infoContent) return;
-  // Remove any leftover narrative
-  const oldNarrative = infoContent.querySelector(".narrative-container");
-  if (oldNarrative) oldNarrative.remove();
-
-  // Build question/result markup to show alongside hourglass
-  let questionMarkup = "";
-  const { pendingQuestion, pendingResult } = infoOptions;
-  if (pendingResult) {
-    const prev = pendingResult;
-    const chosenLabel = prev.chosenLabel || t("fallback.explore", { id: prev.chosen });
-    const hourglassQuestion = track.hourglassText
-      ? track.hourglassText.replace(/\n/g, "<br>")
-      : t("fallback.direction");
-    questionMarkup = `
-      <div class="question-container tarot-result">
-        <div class="question-prompt tarot-reading">
-          <p class="question-text">${hourglassQuestion}</p>
-        </div>
-        <div class="tarot-spread">
-          <div class="tarot-card tarot-card--static answer-btn--selected">
-            <div class="tarot-card-inner">
-              <div class="tarot-card-back"><div class="tarot-card-back-pattern"></div></div>
-              <div class="tarot-card-front">
-                <div class="tarot-card-border">
-                  <div class="tarot-card-content">
-                    <span class="tarot-card-label">${chosenLabel}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  const shrineMarkup = `<div class="track-shrine is-entering">
-      <div class="shrine-glow"></div>
-      <div class="shrine-stack">
-        <div class="hourglass-player" data-track-player></div>
-        <div class="shrine-meta">
-          <div class="shrine-title">${title}</div>
-          <div class="shrine-artist">${artist}</div>
-        </div>
-      </div>
-      ${questionMarkup}
-    </div>`;
-  infoContent.insertAdjacentHTML("afterbegin", shrineMarkup);
-
-  // Trigger enter animation
-  requestAnimationFrame(() => {
-    const shrine = infoContent.querySelector(".track-shrine");
-    if (shrine) shrine.classList.remove("is-entering");
-  });
-
-  const player = infoContent.querySelector("[data-track-player]");
-  if (audio instanceof HTMLAudioElement) {
-    activeAudio = audio;
-    setupTrackPlayer(player, audio);
-    // If audio is already playing (started during narrative click),
-    // the "play" event already fired before the listener was attached,
-    // so kick off audio-reactive manually.
-    if (!audio.paused) startAudioReactive(audio);
-    const playPromise = audio.play();
-    if (playPromise && typeof playPromise.catch === "function") {
-      playPromise.catch((err) => {
-        console.warn("[audio] Play failed:", err.message);
-      });
-    }
-    if (String(activeStateId) === "11") {
-      const tryBark = () => {
-        const charEl = stateCharMgr.element;
-        if (!charEl) return setTimeout(tryBark, 300);
-        const bubble = document.createElement("div");
-        bubble.className = "state-character-bubble";
-        bubble.textContent = t("bark.finale");
-        charEl.parentElement.appendChild(bubble);
-        const positionBubble = () => {
-          const rect = charEl.getBoundingClientRect();
-          const parentRect = (charEl.offsetParent || app).getBoundingClientRect();
-          bubble.style.left = `${rect.left - parentRect.left + rect.width / 2}px`;
-          bubble.style.top = `${rect.top - parentRect.top - 12}px`;
-        };
-        positionBubble();
-        const origSync = charEl._syncOverlays;
-        charEl._syncOverlays = () => {
-          if (origSync) origSync();
-          if (bubble.parentElement) positionBubble();
-        };
-        setTimeout(() => {
-          bubble.remove();
-          charEl._syncOverlays = origSync;
-        }, 8000);
-      };
-      setTimeout(tryBark, 1500);
-    }
-  }
-
-  // Show question modal immediately if needed
-  if (pendingQuestion) {
-    requestAnimationFrame(() => showQuestionModal(pendingQuestion));
-  }
-
-  // Show back arrow in header
-  const narrativeBackBtn = document.getElementById("narrative-back");
-  if (narrativeBackBtn) {
-    narrativeBackBtn.hidden = false;
-    const handler = () => {
-      narrativeBackBtn.removeEventListener("click", handler);
-      narrativeBackBtn.hidden = true;
-      // Pause audio and dispose player
-      if (activeAudio) {
-        activeAudio.pause();
-        activeAudio.currentTime = 0;
-      }
-      if (hourglassPlayer) {
-        hourglassPlayer.dispose();
-        hourglassPlayer = null;
-      }
-      activeAudio = null;
-      stopAudioReactive();
-      // Re-render narrative (skip animations on revisit)
-      showNarrative(title, artist, track, infoOptions);
-    };
-    narrativeBackBtn.addEventListener("click", handler);
-  }
-};
-
-const showNarrative = (title, artist, track, infoOptions) => {
-  if (!infoContent) return;
-  const narrativeLines = track.narrative || [];
-  const linesMarkup = narrativeLines
-    .map((line) => {
-      return `<p class="narrative-line is-visible">${line}</p>`;
-    })
-    .join("");
-  const narrativeMarkup = `
-    <div class="narrative-container">
-      ${linesMarkup}
-      <button class="narrative-play-btn is-visible" type="button">${track.playLabel || "Play"}</button>
-    </div>
-    <audio class="track-audio" preload="metadata" src="${encodeURI(track.file)}"></audio>
-  `;
-  infoContent.innerHTML = narrativeMarkup;
-
-  const audio = infoContent.querySelector(".track-audio");
-  if (audio instanceof HTMLAudioElement) {
-    activeAudio = audio;
-  }
-
-  const playBtn = infoContent.querySelector(".narrative-play-btn");
-  if (playBtn) {
-    playBtn.addEventListener("click", () => {
-      if (audio instanceof HTMLAudioElement) {
-        audio.play().catch(() => {});
-      }
-      const narrativeEl = infoContent.querySelector(".narrative-container");
-      if (narrativeEl) {
-        if (prefersReducedMotion) {
-          narrativeEl.remove();
-          showTrackShrine(title, artist, track, audio, infoOptions);
-        } else {
-          narrativeEl.classList.add("is-fading");
-          const onFadeEnd = (e) => {
-            if (e.animationName !== "narrative-fade-out") return;
-            narrativeEl.removeEventListener("animationend", onFadeEnd);
-            narrativeEl.remove();
-            showTrackShrine(title, artist, track, audio, infoOptions);
-          };
-          narrativeEl.addEventListener("animationend", onFadeEnd);
-        }
-      } else {
-        showTrackShrine(title, artist, track, audio, infoOptions);
-      }
-    });
-  }
-};
 
 const getMapPaneSize = () => {
   const rect = mapPane?.getBoundingClientRect();
@@ -666,7 +380,7 @@ const selectState = (stateId, options = {}) => {
   // Determine what to show after hourglass appears
   const pendingQuestion = !skipQuestion ? normalized : null;
   const pendingResult =
-    skipQuestion && answeredQuestions.has(normalized) ? answeredQuestions.get(normalized) : null;
+    skipQuestion ? questionMgr.getAnsweredQuestion(normalized) || null : null;
 
   renderInfo(normalized, { pendingQuestion, pendingResult });
 
@@ -689,7 +403,6 @@ const selectState = (stateId, options = {}) => {
       setAnimating(false);
       return;
     }
-    lastSelectedViewBox = target;
     animateToViewBox(target, 200, {
       stateId: normalized,
       useSnapshot: true,
@@ -701,257 +414,6 @@ const selectState = (stateId, options = {}) => {
   });
 };
 
-const showQuestionModal = (stateId) => {
-  // Look up current state's track for hourglassText and choices
-  const sourceTrackId = trackByState.get(String(stateId));
-  const sourceTrack = sourceTrackId ? trackById.get(sourceTrackId) : null;
-  const choices = sourceTrack?.choices || [];
-
-  // Final state (zero crossing point) — no choices, celebrate
-  if (String(stateId) === FINAL_STATE || choices.length === 0) {
-    markAsQuestioned(stateId);
-    celebrateMapCompletion();
-    return;
-  }
-
-  // Gather all unrevealed states (excluding ocean)
-  const allStates = Array.from(stateCounts.keys());
-  const allUnrevealed = allStates.filter((s) => s !== "0" && !isStateRevealed(s));
-
-  // If nothing left to reveal, celebrate
-  if (allUnrevealed.length === 0) {
-    markAsQuestioned(stateId);
-    celebrateMapCompletion();
-    return;
-  }
-
-  // State 11 (Zero Crossing Point) is always the last to be discovered
-  const nonFinal = allUnrevealed.filter((s) => s !== FINAL_STATE);
-
-  // If only state 11 remains, offer it as the sole destination
-  if (nonFinal.length === 0) {
-    // Final state is the only one left
-    const option1 = FINAL_STATE;
-    const option2 = FINAL_STATE;
-    const label1 = choices[0];
-    const label2 = choices[1] || choices[0];
-    const hourglassQuestion = sourceTrack?.hourglassText
-      ? sourceTrack.hourglassText.replace(/\n/g, "<br>")
-      : t("fallback.direction");
-    if (!infoContent) return;
-    const cardMarkup = (answer, label) => `
-          <button class="tarot-card answer-btn" data-answer="${answer}" type="button">
-            <div class="tarot-card-inner">
-              <div class="tarot-card-back"><div class="tarot-card-back-pattern"></div></div>
-              <div class="tarot-card-front">
-                <div class="tarot-card-border">
-                  <div class="tarot-card-content">
-                    <span class="tarot-card-label">${label}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </button>`;
-    const questionMarkup = `
-      <div class="question-container">
-        <div class="question-prompt tarot-reading">
-          <p class="question-text">${hourglassQuestion}</p>
-        </div>
-        <div class="tarot-spread">
-          ${cardMarkup(option1, label1)}
-          ${label2 !== label1 ? cardMarkup(option2, label2) : ""}
-        </div>
-      </div>
-    `;
-    infoContent.insertAdjacentHTML("beforeend", questionMarkup);
-    const answerButtons = infoContent.querySelectorAll(".answer-btn");
-    answerButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        answerButtons.forEach((b) => {
-          b.disabled = true;
-        });
-        btn.classList.add("answer-btn--selected");
-        answerButtons.forEach((b) => {
-          if (b !== btn) b.classList.add("answer-btn--dismissed");
-        });
-        setTimeout(() => {
-          handleAnswer(FINAL_STATE, stateId);
-          const chosenLabel = btn.querySelector(".tarot-card-label")?.textContent || "";
-          answeredQuestions.set(stateId, { option1, option2, chosen: FINAL_STATE, chosenLabel });
-          pendingTrail = { from: stateId, to: FINAL_STATE };
-          const container = infoContent?.querySelector(".question-container");
-          if (container) {
-            const continueBtn = document.createElement("button");
-            continueBtn.className = "answer-btn answer-btn--continue";
-            continueBtn.type = "button";
-            continueBtn.textContent = t("continue.exploring");
-            continueBtn.addEventListener("click", () => {
-              clearSelection();
-            });
-            container.appendChild(continueBtn);
-            setTimeout(() => {
-              continueBtn.scrollIntoView({ behavior: "smooth", block: "end" });
-            }, 650);
-          }
-        }, 1100);
-      });
-    });
-    return;
-  }
-
-  // Prefer direct neighbors, but exclude state 11 — it's reserved for last
-  const neighbors = getNeighbors(stateId);
-  let candidates = neighbors.filter((n) => n !== FINAL_STATE && !isStateRevealed(n));
-
-  // If no unrevealed non-final neighbors, use any non-final unrevealed state
-  if (candidates.length === 0) {
-    candidates = nonFinal;
-  }
-
-  // Always pick exactly 2 distinct unrevealed states
-  const shuffled = candidates.sort(() => Math.random() - 0.5);
-  const option1 = shuffled[0];
-  const option2 = shuffled[1] || option1;
-
-  // Always 2 cards with distinct labels from track choices
-  const label1 = choices[0];
-  const label2 = choices[1];
-
-  // Hourglass text from source track
-  const hourglassQuestion = sourceTrack?.hourglassText
-    ? sourceTrack.hourglassText.replace(/\n/g, "<br>")
-    : t("fallback.direction");
-
-  // Append question to existing info panel content
-  if (!infoContent) return;
-
-  const cardMarkup = (answer, label) => `
-        <button class="tarot-card answer-btn" data-answer="${answer}" type="button">
-          <div class="tarot-card-inner">
-            <div class="tarot-card-back"><div class="tarot-card-back-pattern"></div></div>
-            <div class="tarot-card-front">
-              <div class="tarot-card-border">
-                <div class="tarot-card-content">
-                  <span class="tarot-card-label">${label}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </button>`;
-
-  const questionMarkup = `
-    <div class="question-container">
-      <div class="question-prompt tarot-reading">
-        <p class="question-text">${hourglassQuestion}</p>
-      </div>
-      <div class="tarot-spread">
-        ${cardMarkup(option1, label1)}
-        ${cardMarkup(option2, label2)}
-      </div>
-    </div>
-  `;
-
-  infoContent.insertAdjacentHTML("beforeend", questionMarkup);
-
-  // Add click handlers to answer buttons
-  const answerButtons = infoContent.querySelectorAll(".answer-btn");
-  answerButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const answer = btn.dataset.answer;
-      if (!answer) return;
-      // Disable all buttons immediately
-      answerButtons.forEach((b) => {
-        b.disabled = true;
-      });
-      // Animate: keep selected, dismiss the other
-      btn.classList.add("answer-btn--selected");
-      answerButtons.forEach((b) => {
-        if (b !== btn) b.classList.add("answer-btn--dismissed");
-      });
-      setTimeout(() => {
-        handleAnswer(answer, stateId);
-        // Store answer for revisit rendering (include chosenLabel for revisit display)
-        const chosenLabel = btn.querySelector(".tarot-card-label")?.textContent || "";
-        answeredQuestions.set(stateId, {
-          option1,
-          option2: option2 || option1,
-          chosen: answer,
-          chosenLabel,
-        });
-        // Store pending trail for deferred drawing (when user clicks back or continue)
-        pendingTrail = { from: stateId, to: answer };
-        const container = infoContent?.querySelector(".question-container");
-        if (container) {
-          const continueBtn = document.createElement("button");
-          continueBtn.className = "answer-btn answer-btn--continue";
-          continueBtn.type = "button";
-          continueBtn.textContent = t("continue.exploring");
-          continueBtn.addEventListener("click", () => {
-            clearSelection();
-          });
-          container.appendChild(continueBtn);
-          setTimeout(() => {
-            continueBtn.scrollIntoView({ behavior: "smooth", block: "end" });
-          }, 650);
-        }
-      }, 1100);
-    });
-  });
-};
-
-const hideQuestionModal = () => {
-  // Questions now render in info panel, so this just ensures modal stays hidden
-  if (questionModal) {
-    questionModal.setAttribute("aria-hidden", "true");
-  }
-};
-
-const celebrateMapCompletion = () => {
-  // Show confetti with themed colors
-  if (typeof confetti === "function") {
-    const colors = ["#bdff00", "#e8ffb2", "#b8d982"];
-
-    // Fire multiple bursts for a more celebratory effect
-    const fire = (particleRatio, opts) => {
-      confetti({
-        origin: { y: 0.7 },
-        colors,
-        ...opts,
-        particleCount: Math.floor(200 * particleRatio),
-      });
-    };
-
-    fire(0.25, { spread: 26, startVelocity: 55 });
-    fire(0.2, { spread: 60 });
-    fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
-    fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
-    fire(0.1, { spread: 120, startVelocity: 45 });
-
-    // Additional side bursts after a delay
-    setTimeout(() => {
-      confetti({
-        particleCount: 50,
-        angle: 60,
-        spread: 55,
-        origin: { x: 0 },
-        colors,
-      });
-      confetti({
-        particleCount: 50,
-        angle: 120,
-        spread: 55,
-        origin: { x: 1 },
-        colors,
-      });
-    }, 250);
-  }
-};
-
-const showAboutModal = () => {
-  if (aboutModal) {
-    aboutModal.setAttribute("aria-hidden", "false");
-  }
-};
 
 const hideAboutModal = () => {
   if (aboutModal) {
@@ -960,48 +422,18 @@ const hideAboutModal = () => {
 };
 
 
-const handleAnswer = (revealedStateId, currentStateId) => {
-  // Reveal the selected state
-  revealState(revealedStateId);
-
-  // Mark current state as questioned
-  markAsQuestioned(currentStateId);
-
-  // Record exploration trail
-  addTrail(currentStateId, revealedStateId);
-
-  // Update fog on map
-  if (mapApi?.applyFog) {
-    mapApi.applyFog(revealedStates);
-  }
-  // Update texture canvas
-  if (textureCanvas) {
-    textureCanvas.syncWithSvg();
-  }
-
-  // Trail drawing is deferred until "Continue exploring" click so user sees the animation
-  // Dismissed tarot cards fade to opacity:0 via CSS animation — no DOM removal needed
-};
 
 const clearSelection = (options = {}) => {
-  const stateId = activeStateId;
-  const previousBox = lastSelectedViewBox;
-
   // Draw pending trail if exists (from answered question)
-  if (pendingTrail) {
-    const { from, to } = pendingTrail;
+  const trail = questionMgr.consumePendingTrail();
+  if (trail) {
+    const { from, to } = trail;
     setTimeout(() => {
       drawTrailSegment(from, to);
       updateMapCharacterPosition(to, from, true);
     }, 300);
-    pendingTrail = null; // Clear after drawing
   }
 
-  // Clear question timeout and hide modal
-  if (questionTimeout) {
-    clearTimeout(questionTimeout);
-    questionTimeout = null;
-  }
   hideQuestionModal();
 
   mapApi?.resetFocus();
@@ -1014,7 +446,6 @@ const clearSelection = (options = {}) => {
   activeStateId = null;
   renderInfo(null);
   if (options.pushState !== false) updateUrlState(null);
-  lastSelectedViewBox = null;
 
   setSplitLayout(false);
   setCollapsed(false);
@@ -1287,12 +718,12 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && aboutModal?.getAttribute("aria-hidden") === "false") {
     hideAboutModal();
   }
-  if (event.key === " " && app.classList.contains("is-split") && activeAudio) {
+  if (event.key === " " && app.classList.contains("is-split") && infoPanel.activeAudio) {
     event.preventDefault();
-    if (hourglassPlayer) {
-      hourglassPlayer.togglePlay();
+    if (infoPanel.hourglassPlayer) {
+      infoPanel.hourglassPlayer.togglePlay();
     } else {
-      activeAudio.paused ? activeAudio.play() : activeAudio.pause();
+      infoPanel.activeAudio.paused ? infoPanel.activeAudio.play() : infoPanel.activeAudio.pause();
     }
   }
 });

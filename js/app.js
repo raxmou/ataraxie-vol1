@@ -4,13 +4,13 @@ import {
   t,
   getTracksUrl,
   applyStaticTranslations,
-} from "./i18n.js";
-import { loadGeoJSON, loadSigils, loadTracks } from "./data.js";
-import { createMap, createStateColor } from "./map.js";
-import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
-import { createTextureCanvas } from "./texture-canvas.js";
-import { createInfoPaneGesture } from "./info-pane-gesture.js";
-import { createMapGestures } from "./map-gestures.js";
+} from "./i18n/i18n.js";
+import { loadGeoJSON, loadSigils, loadTracks } from "./data/data.js";
+import { createMap, createStateColor } from "./map/map.js";
+import { createViewBoxAnimator, createTransformAnimator } from "./map/viewbox.js";
+import { createTextureCanvas } from "./map/texture-canvas.js";
+import { createInfoPaneGesture } from "./ui/info-pane-gesture.js";
+import { createMapGestures } from "./map/map-gestures.js";
 import { createThreeMorph } from "./three/three-morph.js";
 import { CHARACTER_MOVE_MAP } from "./ui/character-data.js";
 import { CHARACTER_STORAGE_KEY, PREFERS_REDUCED_MOTION } from "./core/constants.js";
@@ -29,7 +29,7 @@ import {
   buildStateNeighborMap,
   explorationTrails,
   explorationOrder,
-} from "./fog.js";
+} from "./data/fog.js";
 
 /* ── request fullscreen on first user gesture (mobile) ── */
 if (/Mobi|Android/i.test(navigator.userAgent)) {

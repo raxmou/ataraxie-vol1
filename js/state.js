@@ -1,4 +1,4 @@
-import { getLang, setLang, t, applyStaticTranslations } from "./i18n.js";
+import { getLang, setLang, t, applyStaticTranslations } from "./i18n/i18n.js";
 
 const app = document.getElementById("state-app");
 const svg = document.getElementById("state-svg");

@@ -3,7 +3,7 @@
  * State-view character: floating animation, drag interaction, context menu.
  */
 
-import { getDragPhrases, t } from "../i18n.js";
+import { getDragPhrases, t } from "../i18n/i18n.js";
 import { CHARACTER_MOVE_MAP } from "./character-data.js";
 import { PREFERS_REDUCED_MOTION } from "../core/constants.js";
 

@@ -3,7 +3,7 @@
  * Renders textures clipped to state outlines, synced with SVG viewBox.
  */
 
-import { TEXTURE_FILES, getTextureIndexForState } from "./core/constants.js";
+import { TEXTURE_FILES, getTextureIndexForState } from "../core/constants.js";
 
 /**
  * Create a texture canvas renderer.

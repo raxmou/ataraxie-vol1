@@ -1,4 +1,4 @@
-import { easeInOutCubic } from "./core/utils.js";
+import { easeInOutCubic } from "../core/utils.js";
 
 export const createViewBoxAnimator = (svg, options = {}) => {
   const prefersReducedMotion = Boolean(options.prefersReducedMotion);

@@ -1,6 +1,6 @@
 import { forEachCoordinate, geometryToPath } from "./geometry.js";
 import { buildStateEdgeCounts, computeStateOutlines } from "./outline.js";
-import { SVG_NS, TEXTURE_FILES, getTextureIndexForState } from "./core/constants.js";
+import { SVG_NS, TEXTURE_FILES, getTextureIndexForState } from "../core/constants.js";
 
 const goldenAngle = 137.508;
 

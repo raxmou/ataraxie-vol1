@@ -3,7 +3,7 @@
  * Tarot card question system: binary choices, answer handling, map completion celebration.
  */
 
-import { t } from "../i18n.js";
+import { t } from "../i18n/i18n.js";
 import { FINAL_STATE } from "../core/constants.js";
 import {
   revealedStates,
@@ -12,7 +12,7 @@ import {
   getNeighbors,
   revealState,
   addTrail,
-} from "../fog.js";
+} from "../data/fog.js";
 
 export const createQuestionModal = ({
   infoContent,

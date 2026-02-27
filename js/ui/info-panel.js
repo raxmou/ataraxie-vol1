@@ -3,8 +3,8 @@
  * Info panel: narrative text, track shrine with hourglass player, audio lifecycle.
  */
 
-import { t } from "../i18n.js";
-import { createHourglassPlayer } from "../hourglass-player.js";
+import { t } from "../i18n/i18n.js";
+import { createHourglassPlayer } from "../audio/hourglass/hourglass-player.js";
 import { PREFERS_REDUCED_MOTION } from "../core/constants.js";
 
 const prefersReducedMotion = PREFERS_REDUCED_MOTION;

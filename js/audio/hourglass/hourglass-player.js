@@ -3,7 +3,7 @@
  * 1 particle per second of track duration.
  */
 
-import { loadThreeModule } from "./three/three-loader.js";
+import { loadThreeModule } from "../../three/three-loader.js";
 
 const WIDTH = 100;
 const HEIGHT = 160;

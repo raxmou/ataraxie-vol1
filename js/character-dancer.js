@@ -12,7 +12,7 @@ const MOVE_CONFIG = {
   hipshake: { looping: true, kickResponsive: false, weight: 0.4 },
   jump: { looping: false, kickResponsive: true, weight: 0 },
   headbang: { looping: true, kickResponsive: false, weight: 0.35 },
-  stomp: { looping: false, kickResponsive: true, weight: 0 }
+  stomp: { looping: false, kickResponsive: true, weight: 0 },
 };
 
 // Fast timing for one-shot moves (ms per frame)
@@ -42,7 +42,7 @@ const weightedRandom = (moves, weights) => {
  * @returns {{start: Function, stop: Function, dispose: Function, playMove: Function, onKick: Function, setTempo: Function}}
  */
 export const createCharacterDancer = (container, moveSet, bpm = 120) => {
-  if (!container || !moveSet || typeof moveSet !== 'object') {
+  if (!container || !moveSet || typeof moveSet !== "object") {
     console.warn("Invalid dancer parameters");
     return {
       start: () => {},
@@ -50,7 +50,7 @@ export const createCharacterDancer = (container, moveSet, bpm = 120) => {
       dispose: () => {},
       playMove: () => {},
       onKick: () => {},
-      setTempo: () => {}
+      setTempo: () => {},
     };
   }
 
@@ -63,7 +63,7 @@ export const createCharacterDancer = (container, moveSet, bpm = 120) => {
       dispose: () => {},
       playMove: () => {},
       onKick: () => {},
-      setTempo: () => {}
+      setTempo: () => {},
     };
   }
 
@@ -73,7 +73,7 @@ export const createCharacterDancer = (container, moveSet, bpm = 120) => {
   img.alt = "Dancing character";
 
   // State
-  let currentMove = 'idle';
+  let currentMove = "idle";
   let currentFrame = 0;
   let animationTimeout = null;
   let isDisposed = false;
@@ -102,7 +102,7 @@ export const createCharacterDancer = (container, moveSet, bpm = 120) => {
     // Check if move exists
     if (!moveSet[moveType] || !Array.isArray(moveSet[moveType]) || moveSet[moveType].length === 0) {
       console.warn(`Move '${moveType}' not found in moveSet, falling back to idle`);
-      moveType = 'idle';
+      moveType = "idle";
     }
 
     // Clear existing animation
@@ -172,7 +172,7 @@ export const createCharacterDancer = (container, moveSet, bpm = 120) => {
 
     if (ambientMoves.length === 0) {
       // Fallback to idle if no ambient moves available
-      playMove('idle');
+      playMove("idle");
       return;
     }
 
@@ -202,9 +202,9 @@ export const createCharacterDancer = (container, moveSet, bpm = 120) => {
     }
 
     // Add kick flash effect
-    container.classList.add('is-kicking');
+    container.classList.add("is-kicking");
     setTimeout(() => {
-      container.classList.remove('is-kicking');
+      container.classList.remove("is-kicking");
     }, 80);
 
     // Random kick move selection
@@ -246,9 +246,8 @@ export const createCharacterDancer = (container, moveSet, bpm = 120) => {
       }
     }
 
-    const startMove = ambientMoves.length > 0
-      ? weightedRandom(ambientMoves, ambientWeights)
-      : 'idle'; // Fallback only if no ambient moves available
+    const startMove =
+      ambientMoves.length > 0 ? weightedRandom(ambientMoves, ambientWeights) : "idle"; // Fallback only if no ambient moves available
 
     playMove(startMove);
   };
@@ -268,7 +267,7 @@ export const createCharacterDancer = (container, moveSet, bpm = 120) => {
     }
 
     // Reset to idle frame 1
-    currentMove = 'idle';
+    currentMove = "idle";
     currentFrame = 0;
     img.src = moveSet.idle[0];
     delete container.dataset.currentMove;
@@ -281,7 +280,7 @@ export const createCharacterDancer = (container, moveSet, bpm = 120) => {
    * @param {number} newBpm - New beats per minute
    */
   const setTempo = (newBpm) => {
-    if (typeof newBpm !== 'number' || newBpm <= 0) return;
+    if (typeof newBpm !== "number" || newBpm <= 0) return;
     currentBpm = newBpm;
 
     // If currently playing a looping move, restart with new timing
@@ -324,6 +323,6 @@ export const createCharacterDancer = (container, moveSet, bpm = 120) => {
     dispose,
     playMove,
     onKick,
-    setTempo
+    setTempo,
   };
 };

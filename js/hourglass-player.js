@@ -3,6 +3,8 @@
  * 1 particle per second of track duration.
  */
 
+import { loadThreeModule } from "./three/three-loader.js";
+
 const WIDTH = 100;
 const HEIGHT = 160;
 const CENTER_X = WIDTH / 2;
@@ -29,14 +31,6 @@ const PACKING_EFFICIENCY = 0.35; // Physics packing in triangular shape is ~35% 
 // Detect reduced motion preference
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// Three.js lazy-load (same CDN as app.js)
-const THREE_URL = "https://unpkg.com/three@0.164.1/build/three.module.js";
-let threeModulePromise = null;
-const loadThreeModule = () => {
-  if (!threeModulePromise) threeModulePromise = import(THREE_URL);
-  return threeModulePromise;
-};
-
 /**
  * Build a procedural 3D hourglass overlay.
  * @param {HTMLElement} wrapper - The .hourglass-container element
@@ -56,8 +50,13 @@ const initHourglass3D = async (wrapper) => {
   const scene = new THREE.Scene();
   const fov = 20;
   const vFov = (fov * Math.PI) / 180;
-  const camDist = (160 / 2) / Math.tan(vFov / 2);
-  const camera = new THREE.PerspectiveCamera(fov, wrapper.clientWidth / wrapper.clientHeight, 1, camDist * 3);
+  const camDist = 160 / 2 / Math.tan(vFov / 2);
+  const camera = new THREE.PerspectiveCamera(
+    fov,
+    wrapper.clientWidth / wrapper.clientHeight,
+    1,
+    camDist * 3,
+  );
   camera.position.set(0, 0, camDist);
   camera.lookAt(0, 0, 0);
 
@@ -230,7 +229,7 @@ const getTriangleBounds = (y, isTop, holeHalfWidth = 0) => {
 const getWallNormal = (isTop, isLeft) => {
   // Calculate normal from wall slope
   const dx = isLeft ? -BASE_HALF_WIDTH : BASE_HALF_WIDTH;
-  const dy = isTop ? (TOP_APEX_Y - TOP_BASE_Y) : (BOTTOM_BASE_Y - BOTTOM_APEX_Y);
+  const dy = isTop ? TOP_APEX_Y - TOP_BASE_Y : BOTTOM_BASE_Y - BOTTOM_APEX_Y;
   const len = Math.sqrt(dx * dx + dy * dy);
   // Normal points inward
   if (isTop) {
@@ -418,32 +417,32 @@ export const createHourglassPlayer = (container, audio) => {
   let three3d = null; // 3D hourglass overlay (set async)
 
   // Rotation state
-  let rotationAngle = 0;        // Current visual rotation (degrees)
-  let isRotating = false;       // Rotation drag state
-  let rotationStartAngle = 0;   // Angle when drag started
-  let pointerStartAngle = 0;    // Pointer angle when drag started
-  let userPaused = false;       // Track if user manually paused
+  let rotationAngle = 0; // Current visual rotation (degrees)
+  let isRotating = false; // Rotation drag state
+  let rotationStartAngle = 0; // Angle when drag started
+  let pointerStartAngle = 0; // Pointer angle when drag started
+  let userPaused = false; // Track if user manually paused
 
   // Playback speed state
-  let playbackSpeed = 1;           // Current speed: -2 to 2
-  let shakeHistory = [];           // Recent rotation direction changes (timestamps)
-  let lastRotationDirection = 0;   // 1 = clockwise, -1 = counter-clockwise
-  let lastRotationAngle = 0;       // Previous angle for direction detection
-  let isShaking = false;           // Shake boost active
-  let shakeDecayTimer = null;      // Timer to reset shake boost
+  let playbackSpeed = 1; // Current speed: -2 to 2
+  let shakeHistory = []; // Recent rotation direction changes (timestamps)
+  let lastRotationDirection = 0; // 1 = clockwise, -1 = counter-clockwise
+  let lastRotationAngle = 0; // Previous angle for direction detection
+  let isShaking = false; // Shake boost active
+  let shakeDecayTimer = null; // Timer to reset shake boost
 
   // Shake detection constants
-  const SHAKE_WINDOW = 500;           // ms to detect shake pattern
-  const SHAKE_MIN_CHANGES = 2;        // Min direction reversals needed
-  const SHAKE_BOOST_DURATION = 2000;  // How long x2 lasts (ms)
+  const SHAKE_WINDOW = 500; // ms to detect shake pattern
+  const SHAKE_MIN_CHANGES = 2; // Min direction reversals needed
+  const SHAKE_BOOST_DURATION = 2000; // How long x2 lasts (ms)
 
   // Snap-on-release
   let isSnapping = false;
   let snapStartAngle = 0;
   let snapTargetAngle = 0;
   let snapStartTime = 0;
-  const SNAP_DURATION = 200;            // ms
-  const SNAP_RELEASE_THRESHOLD = 20;    // degrees from detent to trigger snap
+  const SNAP_DURATION = 200; // ms
+  const SNAP_RELEASE_THRESHOLD = 20; // degrees from detent to trigger snap
 
   // Particle size and hole width (calculated when duration is known)
   let particleRadius = 3;
@@ -455,7 +454,7 @@ export const createHourglassPlayer = (container, audio) => {
   let reversedBuffer = null;
   let reverseSource = null;
   let reverseStartCtxTime = 0; // AudioContext.currentTime when reverse started
-  let reverseStartOffset = 0;  // Offset in reversed buffer when started
+  let reverseStartOffset = 0; // Offset in reversed buffer when started
   let isPlayingReversed = false;
 
   const ensureAudioContext = () => {
@@ -479,7 +478,7 @@ export const createHourglassPlayer = (container, audio) => {
       reversedBuffer = ctx.createBuffer(
         original.numberOfChannels,
         original.length,
-        original.sampleRate
+        original.sampleRate,
       );
       for (let ch = 0; ch < original.numberOfChannels; ch++) {
         const fwd = original.getChannelData(ch);
@@ -510,7 +509,9 @@ export const createHourglassPlayer = (container, audio) => {
 
   const stopReversePlayback = () => {
     if (reverseSource) {
-      try { reverseSource.stop(); } catch (_) {}
+      try {
+        reverseSource.stop();
+      } catch (_) {}
       reverseSource.disconnect();
       reverseSource = null;
     }
@@ -577,13 +578,13 @@ export const createHourglassPlayer = (container, audio) => {
 
     if (normalized <= 90) {
       // 0° to 90°: x1 → x0
-      return 1 - (normalized / 90);
+      return 1 - normalized / 90;
     } else if (normalized <= 180) {
       // 90° to 180°: x0 → x-1
       return -((normalized - 90) / 90);
     } else if (normalized <= 270) {
       // 180° to 270°: x-1 → x0
-      return -1 + ((normalized - 180) / 90);
+      return -1 + (normalized - 180) / 90;
     } else {
       // 270° to 360°: x0 → x1
       return (normalized - 270) / 90;
@@ -606,7 +607,7 @@ export const createHourglassPlayer = (container, audio) => {
 
       // Clean old entries outside the window
       const now = performance.now();
-      shakeHistory = shakeHistory.filter(t => now - t < SHAKE_WINDOW);
+      shakeHistory = shakeHistory.filter((t) => now - t < SHAKE_WINDOW);
 
       // Check if enough reversals in window
       if (shakeHistory.length >= SHAKE_MIN_CHANGES) {
@@ -1422,7 +1423,10 @@ export const createHourglassPlayer = (container, audio) => {
 
   const showRetryIfNeeded = () => {
     if (disposed) return;
-    if (particles.length === 0 || (audio.paused && !userPaused && !isPlayingReversed && audio.currentTime === 0)) {
+    if (
+      particles.length === 0 ||
+      (audio.paused && !userPaused && !isPlayingReversed && audio.currentTime === 0)
+    ) {
       retryBtn.hidden = false;
     }
   };
@@ -1451,7 +1455,10 @@ export const createHourglassPlayer = (container, audio) => {
 
   // Event handlers
   const updateTime = () => {
-    scrubZone.setAttribute("aria-valuenow", String(Math.round((audio.currentTime / audio.duration) * 100) || 0));
+    scrubZone.setAttribute(
+      "aria-valuenow",
+      String(Math.round((audio.currentTime / audio.duration) * 100) || 0),
+    );
   };
 
   const updateDuration = () => {
@@ -1534,7 +1541,7 @@ export const createHourglassPlayer = (container, audio) => {
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
       const distFromCenter = Math.sqrt(
-        Math.pow(clientX - centerX, 2) + Math.pow(clientY - centerY, 2)
+        Math.pow(clientX - centerX, 2) + Math.pow(clientY - centerY, 2),
       );
       const minRotationRadius = Math.min(rect.width, rect.height) * 0.15;
 
@@ -1567,7 +1574,7 @@ export const createHourglassPlayer = (container, audio) => {
     detectShake(newAngle);
 
     // Magnetic snap detents at 0°, 90°, 180°, 270°
-    const SNAP_THRESHOLD = 6;  // degrees — zone of influence
+    const SNAP_THRESHOLD = 6; // degrees — zone of influence
     const SNAP_STRENGTH = 0.35; // 0 = no pull, 1 = hard snap
     const normalized = ((newAngle % 360) + 360) % 360;
     const detents = [0, 90, 180, 270];
@@ -1634,7 +1641,11 @@ export const createHourglassPlayer = (container, audio) => {
   audio.addEventListener("loadedmetadata", updateDuration);
   audio.addEventListener("durationchange", updateDuration);
   audio.addEventListener("error", () => {
-    console.warn("[hourglass] Audio failed to load:", audio.error?.message || "unknown error", audio.src);
+    console.warn(
+      "[hourglass] Audio failed to load:",
+      audio.error?.message || "unknown error",
+      audio.src,
+    );
   });
 
   // Initial state
@@ -1646,20 +1657,27 @@ export const createHourglassPlayer = (container, audio) => {
 
   // Launch 3D overlay (non-blocking, SVG fallback on failure)
   if (!prefersReducedMotion) {
-    initHourglass3D(wrapper).then((api) => {
-      if (disposed) { api?.dispose(); return; }
-      three3d = api;
-      if (three3d) {
-        frameEl.style.display = "none";
-        wrapper.insertBefore(three3d.canvas, scrubZone);
-      }
-    }).catch(() => {});
+    initHourglass3D(wrapper)
+      .then((api) => {
+        if (disposed) {
+          api?.dispose();
+          return;
+        }
+        three3d = api;
+        if (three3d) {
+          frameEl.style.display = "none";
+          wrapper.insertBefore(three3d.canvas, scrubZone);
+        }
+      })
+      .catch(() => {});
   }
 
   // API
   return {
     /** Current effective playback speed (-2 … 2). */
-    get speed() { return userPaused ? 0 : playbackSpeed; },
+    get speed() {
+      return userPaused ? 0 : playbackSpeed;
+    },
 
     /** Toggle play/pause, matching the hourglass click behavior. */
     togglePlay() {
@@ -1675,7 +1693,9 @@ export const createHourglassPlayer = (container, audio) => {
     },
 
     /** Whether audio is currently playing (forward or reverse). */
-    get playing() { return !audio.paused || isPlayingReversed; },
+    get playing() {
+      return !audio.paused || isPlayingReversed;
+    },
 
     /** Reset track to beginning with full hourglass. */
     restart() {
@@ -1697,8 +1717,14 @@ export const createHourglassPlayer = (container, audio) => {
       if (shakeDecayTimer) clearTimeout(shakeDecayTimer);
       if (retryTimeout) clearTimeout(retryTimeout);
       stopReversePlayback();
-      if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
-      if (three3d) { three3d.dispose(); three3d = null; }
+      if (audioCtx) {
+        audioCtx.close().catch(() => {});
+        audioCtx = null;
+      }
+      if (three3d) {
+        three3d.dispose();
+        three3d = null;
+      }
 
       window.removeEventListener("mousemove", handleScrubMove);
       window.removeEventListener("touchmove", handleScrubMove);

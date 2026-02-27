@@ -11,17 +11,14 @@
  * @param {number}   [opts.maxZoomRatio=1.0]   — max viewBox width as fraction of full
  * @returns {{ enable, disable, reset, destroy, getUserViewBox }}
  */
-export function createMapGestures(svg, {
-  getFullViewBox,
-  getViewBox,
-  setViewBox,
-  minZoomRatio = 0.15,
-  maxZoomRatio = 1.0,
-} = {}) {
+export function createMapGestures(
+  svg,
+  { getFullViewBox, getViewBox, setViewBox, minZoomRatio = 0.15, maxZoomRatio = 1.0 } = {},
+) {
   let enabled = false;
-  let userViewBox = null;      // last user pan/zoom position (to restore after state view)
-  const pointers = new Map();  // pointerId → { x, y }
-  let dragStart = null;        // { vbx, vby } at gesture start
+  let userViewBox = null; // last user pan/zoom position (to restore after state view)
+  const pointers = new Map(); // pointerId → { x, y }
+  let dragStart = null; // { vbx, vby } at gesture start
   let pinchStartDist = 0;
   let pinchStartWidth = 0;
   let pinchMidSVG = null;
@@ -39,8 +36,8 @@ export function createMapGestures(svg, {
     const rect = svg.getBoundingClientRect();
     if (!vb || !rect.width || !rect.height) return { x: 0, y: 0 };
     return {
-      x: vb.x + (sx - rect.left) / rect.width * vb.width,
-      y: vb.y + (sy - rect.top) / rect.height * vb.height,
+      x: vb.x + ((sx - rect.left) / rect.width) * vb.width,
+      y: vb.y + ((sy - rect.top) / rect.height) * vb.height,
     };
   };
 
@@ -75,9 +72,15 @@ export function createMapGestures(svg, {
         return;
       }
       const vb = getViewBox();
-      if (!vb) { momentumId = null; return; }
+      if (!vb) {
+        momentumId = null;
+        return;
+      }
       const full = getFullViewBox();
-      if (!full) { momentumId = null; return; }
+      if (!full) {
+        momentumId = null;
+        return;
+      }
       // Convert pixel velocity to SVG units
       const rect = svg.getBoundingClientRect();
       const scale = vb.width / rect.width;
@@ -146,7 +149,7 @@ export function createMapGestures(svg, {
       lastMoveTime = now;
       lastDelta = { x: dx, y: dy };
       if (dt > 0) {
-        velocity = { x: dx / dt * 16, y: dy / dt * 16 }; // normalize to ~frame
+        velocity = { x: (dx / dt) * 16, y: (dy / dt) * 16 }; // normalize to ~frame
       }
       const next = clamp({
         ...vb,
@@ -184,7 +187,9 @@ export function createMapGestures(svg, {
   const onPointerUp = (e) => {
     if (!pointers.has(e.pointerId)) return;
     pointers.delete(e.pointerId);
-    try { svg.releasePointerCapture(e.pointerId); } catch (_) {}
+    try {
+      svg.releasePointerCapture(e.pointerId);
+    } catch (_) {}
 
     if (pointers.size === 0) {
       const elapsed = performance.now() - pointerDownTime;

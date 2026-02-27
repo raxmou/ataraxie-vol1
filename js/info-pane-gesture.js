@@ -7,12 +7,10 @@
  * @param {number}   [opts.peekHeight=60]
  * @param {number}   [opts.landscapePeekWidth=40]
  */
-export function createInfoPaneGesture(infoPane, {
-  onMinimize,
-  onMaximize,
-  peekHeight = 60,
-  landscapePeekWidth = 40,
-} = {}) {
+export function createInfoPaneGesture(
+  infoPane,
+  { onMinimize, onMaximize, peekHeight = 60, landscapePeekWidth = 40 } = {},
+) {
   const handle = infoPane.querySelector(".info-pane-handle");
   let minimized = false;
   let disposed = false;
@@ -24,8 +22,7 @@ export function createInfoPaneGesture(infoPane, {
   let maxTravel = 0;
   let axis = ""; // "y" or "x"
 
-  const isLandscape = () =>
-    matchMedia("(max-width: 900px) and (orientation: landscape)").matches;
+  const isLandscape = () => matchMedia("(max-width: 900px) and (orientation: landscape)").matches;
 
   // ── Portrait: vertical swipe on handle ──
 
@@ -182,6 +179,8 @@ export function createInfoPaneGesture(infoPane, {
     minimize,
     maximize,
     toggle,
-    get isMinimized() { return minimized; },
+    get isMinimized() {
+      return minimized;
+    },
   };
 }

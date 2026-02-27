@@ -1,0 +1,26 @@
+{
+  "name": "map",
+  "version": "1.0.0",
+  "description": "A vanilla JavaScript single-page map viewer that renders GeoJSON grids with interactive state selection and animations.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/raxmou/ataraxie-vol1.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/raxmou/ataraxie-vol1/issues"
+  },
+  "homepage": "https://github.com/raxmou/ataraxie-vol1#readme",
+  "devDependencies": {
+    "eslint": "^10.0.2",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.1"
+  }
+}

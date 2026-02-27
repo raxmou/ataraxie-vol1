@@ -1,4 +1,11 @@
-import { getLang, setLang, t, getDragPhrases, getTracksUrl, applyStaticTranslations } from "./i18n.js";
+import {
+  getLang,
+  setLang,
+  t,
+  getDragPhrases,
+  getTracksUrl,
+  applyStaticTranslations,
+} from "./i18n.js";
 import { loadGeoJSON, loadSigils, loadTracks } from "./data.js";
 import { createMap, createStateColor } from "./map.js";
 import { createViewBoxAnimator, createTransformAnimator } from "./viewbox.js";
@@ -7,6 +14,18 @@ import { createHourglassPlayer } from "./hourglass-player.js";
 import { createCharacterDancer } from "./character-dancer.js";
 import { createInfoPaneGesture } from "./info-pane-gesture.js";
 import { createMapGestures } from "./map-gestures.js";
+import { loadThreeModule } from "./three/three-loader.js";
+import { CHARACTER_MOVE_MAP, getCharacterFrame } from "./ui/character-data.js";
+import {
+  SVG_NS,
+  TEXTURE_FILES,
+  getTextureIndexForState,
+  FINAL_STATE,
+  CHARACTER_STORAGE_KEY,
+  VERSO_IMAGES,
+  PREFERS_REDUCED_MOTION,
+} from "./core/constants.js";
+import { clamp, easeInOutCubic, hash2, valueNoise2D, fbmNoise2D } from "./core/utils.js";
 import {
   revealedStates,
   questionedStates,
@@ -31,7 +50,6 @@ if (/Mobi|Android/i.test(navigator.userAgent)) {
   document.addEventListener("pointerdown", goFS, { once: true });
 }
 
-const svgNS = "http://www.w3.org/2000/svg";
 const sigilLayerId = "map-sigils";
 
 const app = document.getElementById("app");
@@ -59,10 +77,7 @@ const sigilsUrl = app?.dataset.sigils;
 const tracksUrl = app?.dataset.tracks;
 const shouldPreloadSnapshots = app?.dataset.preloadSnapshots === "true";
 
-const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const THREE_URL = "https://unpkg.com/three@0.164.1/build/three.module.js";
-const SVG_LOADER_URL =
-  "https://unpkg.com/three@0.164.1/examples/jsm/loaders/SVGLoader.js?module";
+const prefersReducedMotion = PREFERS_REDUCED_MOTION;
 
 let geojsonData = null;
 let activeStateId = null;
@@ -75,8 +90,6 @@ let lastSelectedViewBox = null;
 let trackByState = new Map();
 let trackById = new Map();
 let activeAudio = null;
-let threeModulePromise = null;
-let svgLoaderPromise = null;
 let threeApi = null;
 let threeInitPromise = null;
 let colorForState = null;
@@ -127,52 +140,12 @@ let infoPaneGesture = null;
 let mapGestures = null;
 const mobileMediaQuery = matchMedia("(max-width: 900px)");
 
-const stateTextureFiles = [
-  "assets/textures/VISUALWORKS1 6.png",
-  "assets/textures/VISUALWORKS14 1.png",
-  "assets/textures/VISUALWORKS23.png",
-  "assets/textures/VISUALWORKS25 2.png",
-  "assets/textures/VISUALWORKS32 2.png",
-  "assets/textures/VISUALWORKS33 1.png",
-  "assets/textures/VISUALWORKS36 1.png",
-  "assets/textures/VISUALWORKS41 1.png",
-  "assets/textures/VISUALWORKS54 1.png",
-  "assets/textures/VISUALWORKS57 1.png",
-  "assets/textures/VISUALWORKS58 1.png",
-];
-
-const getTextureIndexForState = (stateId) =>
-  Number(stateId) - 1;
-
-const formatTime = (value) => {
-  if (!Number.isFinite(value)) return "--:--";
-  const minutes = Math.floor(value / 60);
-  const seconds = Math.floor(value % 60);
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-};
-
-const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
-
-const loadThreeModule = () => {
-  if (!threeModulePromise) {
-    threeModulePromise = import(THREE_URL);
-  }
-  return threeModulePromise;
-};
-
-const loadSvgLoader = () => {
-  if (!svgLoaderPromise) {
-    svgLoaderPromise = import(SVG_LOADER_URL);
-  }
-  return svgLoaderPromise;
-};
-
 const loadBgTexture = (stateId, THREE) => {
   const index = getTextureIndexForState(stateId);
   if (bgTextureCache.has(index)) return Promise.resolve(bgTextureCache.get(index));
   return new Promise((resolve) => {
     const loader = new THREE.TextureLoader();
-    const url = encodeURI(stateTextureFiles[index]);
+    const url = encodeURI(TEXTURE_FILES[index]);
     loader.load(
       url,
       (texture) => {
@@ -185,7 +158,7 @@ const loadBgTexture = (stateId, THREE) => {
       (err) => {
         console.warn("Failed to load texture:", url, err);
         resolve(null);
-      }
+      },
     );
   });
 };
@@ -197,11 +170,8 @@ const getSigilBaseSize = () => {
 
 const resolveSigilMap = (payload) => {
   if (!payload || typeof payload !== "object") return new Map();
-  const entries =
-    payload.states && typeof payload.states === "object" ? payload.states : payload;
-  return new Map(
-    Object.entries(entries || {}).map(([stateId, href]) => [String(stateId), href])
-  );
+  const entries = payload.states && typeof payload.states === "object" ? payload.states : payload;
+  return new Map(Object.entries(entries || {}).map(([stateId, href]) => [String(stateId), href]));
 };
 
 const clearSigilLayer = () => {
@@ -280,11 +250,11 @@ const showHoverSigil = (stateId) => {
 const renderSigilLayer = () => {
   clearSigilLayer();
   if (!svg || !mapApi || !sigilsByState.size) return;
-  const layer = document.createElementNS(svgNS, "g");
+  const layer = document.createElementNS(SVG_NS, "g");
   layer.setAttribute("id", sigilLayerId);
   layer.classList.add("sigil-layer", "sigil-layer--hover");
   layer.setAttribute("aria-hidden", "true");
-  const image = document.createElementNS(svgNS, "image");
+  const image = document.createElementNS(SVG_NS, "image");
   image.classList.add("sigil");
   image.setAttribute("preserveAspectRatio", "xMidYMid meet");
   layer.appendChild(image);
@@ -318,10 +288,10 @@ const renderFocusSigil = (stateId) => {
   const size = getSigilBaseSize();
   const centerX = (bounds.minX + bounds.maxX) / 2;
   const centerY = (bounds.minY + bounds.maxY) / 2;
-  const layer = document.createElementNS(svgNS, "g");
+  const layer = document.createElementNS(SVG_NS, "g");
   layer.classList.add("sigil-layer", "sigil-layer--focus");
   layer.setAttribute("aria-hidden", "true");
-  const image = document.createElementNS(svgNS, "image");
+  const image = document.createElementNS(SVG_NS, "image");
   const resolvedHref = encodeURI(href);
   image.setAttribute("href", resolvedHref);
   image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", resolvedHref);
@@ -387,7 +357,6 @@ const stopAudioReactive = () => {
   audioAnimationFrame = null;
   resetAudioVisuals();
   startAmbientBreathing();
-
 };
 
 const startAmbientBreathing = () => {
@@ -397,21 +366,32 @@ const startAmbientBreathing = () => {
     const is3d = mapPane?.classList.contains("is-3d");
     if (is3d && threeApi?.mesh) {
       const {
-        terrainData, terrainTopZ, terrainBaseHeight,
-        terrainMaxHeight, terrainHeights, terrainNeighbors,
+        terrainData,
+        terrainTopZ,
+        terrainBaseHeight,
+        terrainMaxHeight,
+        terrainHeights,
+        terrainNeighbors,
       } = threeApi.mesh.userData || {};
       if (Array.isArray(terrainData) && terrainBaseHeight != null) {
         const rawHeights = new Float32Array(terrainData.length);
         terrainData.forEach((cell, index) => {
           rawHeights[index] = computeBreathingHeight(
-            cell, ambientTime, terrainBaseHeight, terrainMaxHeight
+            cell,
+            ambientTime,
+            terrainBaseHeight,
+            terrainMaxHeight,
           );
         });
         terrainData.forEach((cell, index) => {
           const neighbors = terrainNeighbors ? terrainNeighbors[index] : null;
-          let nSum = 0, nCount = 0;
+          let nSum = 0,
+            nCount = 0;
           if (neighbors && neighbors.length) {
-            neighbors.forEach((ni) => { nSum += rawHeights[ni]; nCount++; });
+            neighbors.forEach((ni) => {
+              nSum += rawHeights[ni];
+              nCount++;
+            });
           }
           const nAvg = nCount ? nSum / nCount : rawHeights[index];
           const smoothed = rawHeights[index] * 0.7 + nAvg * 0.3;
@@ -481,7 +461,8 @@ const startAudioReactive = (audio) => {
     const totalBins = audioData.length;
     const lowEnd = Math.max(1, Math.floor(totalBins * 0.2));
     const highStart = Math.floor(totalBins * 0.7);
-    let lowSum = 0, highSum = 0;
+    let lowSum = 0,
+      highSum = 0;
     for (let i = 0; i < lowEnd; i++) lowSum += audioData[i];
     for (let i = highStart; i < totalBins; i++) highSum += audioData[i];
     const low = lowSum / (lowEnd * 255);
@@ -494,8 +475,13 @@ const startAudioReactive = (audio) => {
     const is3d = mapPane?.classList.contains("is-3d");
     if (is3d && threeApi?.mesh) {
       const {
-        terrainData, terrainTopZ, terrainBaseHeight, terrainMaxHeight,
-        terrainNeighbors, terrainHeights, terrainEnergy,
+        terrainData,
+        terrainTopZ,
+        terrainBaseHeight,
+        terrainMaxHeight,
+        terrainNeighbors,
+        terrainHeights,
+        terrainEnergy,
       } = threeApi.mesh.userData || {};
 
       if (Array.isArray(terrainData) && terrainBaseHeight != null && terrainMaxHeight != null) {
@@ -505,7 +491,10 @@ const startAudioReactive = (audio) => {
         // Pass 1: ambient breathing + Gaussian audio response per cell
         terrainData.forEach((cell, index) => {
           const breathe = computeBreathingHeight(
-            cell, audioTime, terrainBaseHeight, terrainMaxHeight
+            cell,
+            audioTime,
+            terrainBaseHeight,
+            terrainMaxHeight,
           );
           const audioAmp = computeAudioResponse(cell, audioData, maxBin);
           rawHeights[index] = breathe + audioAmp * terrainMaxHeight * cell.weight * 0.7;
@@ -521,7 +510,9 @@ const startAudioReactive = (audio) => {
             const neighbors = terrainNeighbors ? terrainNeighbors[index] : null;
             if (!neighbors || !neighbors.length) return;
             let ne = 0;
-            neighbors.forEach((ni) => { ne += terrainEnergy[ni]; });
+            neighbors.forEach((ni) => {
+              ne += terrainEnergy[ni];
+            });
             rawHeights[index] += (ne / neighbors.length) * 0.12;
           });
         }
@@ -529,9 +520,13 @@ const startAudioReactive = (audio) => {
         // Pass 3: spatial smooth + per-cell attack/decay envelope
         terrainData.forEach((cell, index) => {
           const neighbors = terrainNeighbors ? terrainNeighbors[index] : null;
-          let nSum = 0, nCount = 0;
+          let nSum = 0,
+            nCount = 0;
           if (neighbors && neighbors.length) {
-            neighbors.forEach((ni) => { nSum += rawHeights[ni]; nCount++; });
+            neighbors.forEach((ni) => {
+              nSum += rawHeights[ni];
+              nCount++;
+            });
           }
           const nAvg = nCount ? nSum / nCount : rawHeights[index];
           const smoothed = rawHeights[index] * 0.6 + nAvg * 0.4;
@@ -799,7 +794,7 @@ const getGeometryCellInfo = (geometry) => {
       acc.height += item.height;
       return acc;
     },
-    { x: 0, y: 0, width: 0, height: 0 }
+    { x: 0, y: 0, width: 0, height: 0 },
   );
   return {
     centroid: { x: weighted.x, y: weighted.y },
@@ -808,52 +803,10 @@ const getGeometryCellInfo = (geometry) => {
   };
 };
 
-const hash2 = (x, y) => {
-  const value = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
-  return value - Math.floor(value);
-};
-
-const valueNoise2D = (x, y) => {
-  const ix = Math.floor(x);
-  const iy = Math.floor(y);
-  const fx = x - ix;
-  const fy = y - iy;
-  const sx = fx * fx * (3 - 2 * fx);
-  const sy = fy * fy * (3 - 2 * fy);
-  const v00 = hash2(ix, iy);
-  const v10 = hash2(ix + 1, iy);
-  const v01 = hash2(ix, iy + 1);
-  const v11 = hash2(ix + 1, iy + 1);
-  return (v00 + (v10 - v00) * sx) * (1 - sy)
-       + (v01 + (v11 - v01) * sx) * sy;
-};
-
-const fbmNoise2D = (x, y, octaves = 3) => {
-  let value = 0, amp = 0.5, freq = 1, max = 0;
-  for (let i = 0; i < octaves; i++) {
-    value += valueNoise2D(x * freq, y * freq) * amp;
-    max += amp;
-    amp *= 0.5;
-    freq *= 2.0;
-  }
-  return value / max;
-};
-
 const computeBreathingHeight = (cell, time, baseHeight, maxHeight) => {
-  const breath = fbmNoise2D(
-    cell.x * 0.8 + time * 0.12,
-    cell.y * 0.8 + time * 0.09,
-    2
-  );
-  const ripple = fbmNoise2D(
-    cell.x * 2.5 + time * 0.35,
-    cell.y * 2.5 - time * 0.28,
-    2
-  );
-  const shimmer = valueNoise2D(
-    cell.x * 6.0 + time * 0.8,
-    cell.y * 6.0 + time * 0.6
-  );
+  const breath = fbmNoise2D(cell.x * 0.8 + time * 0.12, cell.y * 0.8 + time * 0.09, 2);
+  const ripple = fbmNoise2D(cell.x * 2.5 + time * 0.35, cell.y * 2.5 - time * 0.28, 2);
+  const shimmer = valueNoise2D(cell.x * 6.0 + time * 0.8, cell.y * 6.0 + time * 0.6);
   const envelope = 0.5 + 0.5 * Math.sin(time * 0.4 + cell.breathePhase);
   const combined = breath * 0.6 + ripple * 0.25 + shimmer * 0.15;
   const breatheAmp = maxHeight * 0.3 * cell.weight;
@@ -866,7 +819,8 @@ const computeAudioResponse = (cell, audioData, maxBin) => {
   const sigmaSq2 = 2 * sigma * sigma;
   const lo = Math.max(0, Math.floor(centerBin - sigma * 2));
   const hi = Math.min(maxBin, Math.ceil(centerBin + sigma * 2));
-  let wSum = 0, wTotal = 0;
+  let wSum = 0,
+    wTotal = 0;
   for (let b = lo; b <= hi; b++) {
     const d = b - centerBin;
     const g = Math.exp(-(d * d) / sigmaSq2);
@@ -880,7 +834,7 @@ const computeAudioResponse = (cell, audioData, maxBin) => {
 const buildStateMesh = (stateId, THREE) => {
   if (!geojsonData) return null;
   const features = geojsonData.features.filter(
-    (feature) => String((feature.properties || {}).state ?? "0") === String(stateId)
+    (feature) => String((feature.properties || {}).state ?? "0") === String(stateId),
   );
   const shapes = [];
   const polygons = [];
@@ -1041,9 +995,19 @@ const buildStateMesh = (stateId, THREE) => {
       const sensitivity = 0.8 + hash2(x * 8.3, y * 3.1) * 0.4;
       const breathePhase = hash2(x * 2.7, y * 9.1) * Math.PI * 2;
       terrainData.push({
-        meshes, x, y, xNorm, weight, gridX, gridY,
-        freqCenter, freqWidth,
-        attackSpeed, decaySpeed, sensitivity, breathePhase,
+        meshes,
+        x,
+        y,
+        xNorm,
+        weight,
+        gridX,
+        gridY,
+        freqCenter,
+        freqWidth,
+        attackSpeed,
+        decaySpeed,
+        sensitivity,
+        breathePhase,
       });
     });
     terrainNeighbors = terrainData.map(() => []);
@@ -1164,7 +1128,7 @@ const buildStateMesh = (stateId, THREE) => {
     const planeH = planeW * 0.5;
     const backPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(planeW, planeH),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.FrontSide })
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.FrontSide }),
     );
     backPlane.rotation.y = Math.PI;
     backPlane.position.z = scaledBounds.min.z - 0.02;
@@ -1172,25 +1136,7 @@ const buildStateMesh = (stateId, THREE) => {
     versoBackPlane = backPlane;
 
     // Random image on a separate plane, offset away from the state shape
-    const versoImages = [
-      "5b1a4325b73c31889926ea89564b9e04.jpg",
-      "northlandscapes-iceland-tidal-glitch-01.jpg",
-      "1000_F_248110301_ON8MMUUAmDMyUSd4x2BblieSpquwdOXr.jpg",
-      "Capture-d'écran-2017-02-23-à-08.53.06-1160x769.png",
-      "image (4).jpg",
-      "cc7f66c4172364926f5d0ccc3ba8f2e0.jpg",
-      "image (3).jpg",
-      "1699px-Montreal_-_QC_-_Habitat67_1024x1024.webp",
-      "image (2).jpg",
-      "3cb0f15caf4d1063bdb183058bcd63e4.jpg",
-      "image (1).jpg",
-      "7b5bd5915220765cab0fbb32c88079e7.jpg",
-      "1450280498071oliver-astrologo-architectural-photography-giuseppe-perugini-ruins-casa-sperimentale-designboom-01.avif",
-      "nglkicvkojb91.png",
-      "KI-X4010.jpg",
-      "images.jpg",
-    ];
-    const imgFile = versoImages[Math.floor(Math.random() * versoImages.length)];
+    const imgFile = VERSO_IMAGES[Math.floor(Math.random() * VERSO_IMAGES.length)];
     const imgLoader = new THREE.TextureLoader();
     imgLoader.load("assets/images/" + imgFile, (imgTex) => {
       imgTex.colorSpace = THREE.SRGBColorSpace;
@@ -1199,7 +1145,7 @@ const buildStateMesh = (stateId, THREE) => {
       const imgH = imgW * aspect;
       const imgPlane = new THREE.Mesh(
         new THREE.PlaneGeometry(imgW, imgH),
-        new THREE.MeshBasicMaterial({ map: imgTex, transparent: true, side: THREE.FrontSide })
+        new THREE.MeshBasicMaterial({ map: imgTex, transparent: true, side: THREE.FrontSide }),
       );
       imgPlane.rotation.y = Math.PI;
       // Position well outside the state shape — offset to the side
@@ -1244,12 +1190,10 @@ const startThreeRender = () => {
     if (threeApi.mesh && !isThreeDragging && !isMorphing) {
       const speed = hourglassPlayer ? hourglassPlayer.speed : 1;
       threeApi.mesh.rotation.z += 0.002 * speed;
-      const inertia = applyInertiaRotation(
-        threeApi.mesh,
-        stateInertiaX,
-        stateInertiaY,
-        { min: -1.6, max: -0.2 }
-      );
+      const inertia = applyInertiaRotation(threeApi.mesh, stateInertiaX, stateInertiaY, {
+        min: -1.6,
+        max: -0.2,
+      });
       stateInertiaX = inertia.x;
       stateInertiaY = inertia.y;
     }
@@ -1315,8 +1259,6 @@ const showState3D = async (stateId) => {
     }
   });
 };
-
-const easeInOutCubic = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 const morphTo3D = (duration = 500) => {
   return new Promise((resolve) => {
@@ -1456,11 +1398,12 @@ let pointerStartY = 0;
 let pointerTotalDisplacement = 0;
 
 const raycastVersoLinks = (event) => {
-  if (!threeApi?.mesh?.userData?.backPlane || !threeApi.mesh.userData.versoLinks?.length) return null;
+  if (!threeApi?.mesh?.userData?.backPlane || !threeApi.mesh.userData.versoLinks?.length)
+    return null;
   const rect = stateCanvas.getBoundingClientRect();
   const mouse = new threeApi.THREE.Vector2(
     ((event.clientX - rect.left) / rect.width) * 2 - 1,
-    -((event.clientY - rect.top) / rect.height) * 2 + 1
+    -((event.clientY - rect.top) / rect.height) * 2 + 1,
   );
   const raycaster = new threeApi.THREE.Raycaster();
   raycaster.setFromCamera(mouse, threeApi.camera);
@@ -1655,7 +1598,7 @@ const animateToViewBox = (targetBox, duration, options = {}) => {
     { x: 0, y: 0, scale: 1 },
     transform,
     prefersReducedMotion ? 0 : duration,
-    finish
+    finish,
   );
 };
 
@@ -1664,8 +1607,7 @@ const renderInfo = (stateId, infoOptions = {}) => {
   const narrativeBackBtn = document.getElementById("narrative-back");
   if (narrativeBackBtn) narrativeBackBtn.hidden = true;
   if (!stateId) {
-    infoContent.innerHTML =
-      `<h2 class="info-title">${t("info.explore")}</h2><div class="info-body">${t("info.selectState")}</div>`;
+    infoContent.innerHTML = `<h2 class="info-title">${t("info.explore")}</h2><div class="info-body">${t("info.selectState")}</div>`;
     if (hourglassPlayer) {
       hourglassPlayer.dispose();
       hourglassPlayer = null;
@@ -1716,10 +1658,12 @@ const renderInfo = (stateId, infoOptions = {}) => {
   }
 
   // Phase A — Narrative text
-  const linesMarkup = narrativeLines.map((line, i) => {
-    const delay = (i + 1) * 1.2;
-    return `<p class="narrative-line" style="animation-delay: ${delay}s">${line}</p>`;
-  }).join("");
+  const linesMarkup = narrativeLines
+    .map((line, i) => {
+      const delay = (i + 1) * 1.2;
+      return `<p class="narrative-line" style="animation-delay: ${delay}s">${line}</p>`;
+    })
+    .join("");
   const playDelay = (narrativeLines.length + 1) * 1.2;
   const narrativeMarkup = `
     <div class="narrative-container">
@@ -1899,9 +1843,11 @@ const showTrackShrine = (title, artist, track, audio, infoOptions = {}) => {
 const showNarrative = (title, artist, track, infoOptions) => {
   if (!infoContent) return;
   const narrativeLines = track.narrative || [];
-  const linesMarkup = narrativeLines.map((line) => {
-    return `<p class="narrative-line is-visible">${line}</p>`;
-  }).join("");
+  const linesMarkup = narrativeLines
+    .map((line) => {
+      return `<p class="narrative-line is-visible">${line}</p>`;
+    })
+    .join("");
   const narrativeMarkup = `
     <div class="narrative-container">
       ${linesMarkup}
@@ -2008,9 +1954,8 @@ const selectState = (stateId, options = {}) => {
 
   // Determine what to show after hourglass appears
   const pendingQuestion = !skipQuestion ? normalized : null;
-  const pendingResult = skipQuestion && answeredQuestions.has(normalized)
-    ? answeredQuestions.get(normalized)
-    : null;
+  const pendingResult =
+    skipQuestion && answeredQuestions.has(normalized) ? answeredQuestions.get(normalized) : null;
 
   renderInfo(normalized, { pendingQuestion, pendingResult });
 
@@ -2052,7 +1997,6 @@ const showQuestionModal = (stateId) => {
   const choices = sourceTrack?.choices || [];
 
   // Final state (zero crossing point) — no choices, celebrate
-  const FINAL_STATE = "11";
   if (String(stateId) === FINAL_STATE || choices.length === 0) {
     markAsQuestioned(stateId);
     celebrateMapCompletion();
@@ -2108,11 +2052,13 @@ const showQuestionModal = (stateId) => {
         </div>
       </div>
     `;
-    infoContent.insertAdjacentHTML('beforeend', questionMarkup);
+    infoContent.insertAdjacentHTML("beforeend", questionMarkup);
     const answerButtons = infoContent.querySelectorAll(".answer-btn");
     answerButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
-        answerButtons.forEach((b) => { b.disabled = true; });
+        answerButtons.forEach((b) => {
+          b.disabled = true;
+        });
         btn.classList.add("answer-btn--selected");
         answerButtons.forEach((b) => {
           if (b !== btn) b.classList.add("answer-btn--dismissed");
@@ -2122,16 +2068,18 @@ const showQuestionModal = (stateId) => {
           const chosenLabel = btn.querySelector(".tarot-card-label")?.textContent || "";
           answeredQuestions.set(stateId, { option1, option2, chosen: FINAL_STATE, chosenLabel });
           pendingTrail = { from: stateId, to: FINAL_STATE };
-          const container = infoContent?.querySelector('.question-container');
+          const container = infoContent?.querySelector(".question-container");
           if (container) {
-            const continueBtn = document.createElement('button');
-            continueBtn.className = 'answer-btn answer-btn--continue';
-            continueBtn.type = 'button';
+            const continueBtn = document.createElement("button");
+            continueBtn.className = "answer-btn answer-btn--continue";
+            continueBtn.type = "button";
             continueBtn.textContent = t("continue.exploring");
-            continueBtn.addEventListener('click', () => { clearSelection(); });
+            continueBtn.addEventListener("click", () => {
+              clearSelection();
+            });
             container.appendChild(continueBtn);
             setTimeout(() => {
-              continueBtn.scrollIntoView({ behavior: 'smooth', block: 'end' });
+              continueBtn.scrollIntoView({ behavior: "smooth", block: "end" });
             }, 650);
           }
         }, 1100);
@@ -2192,7 +2140,7 @@ const showQuestionModal = (stateId) => {
     </div>
   `;
 
-  infoContent.insertAdjacentHTML('beforeend', questionMarkup);
+  infoContent.insertAdjacentHTML("beforeend", questionMarkup);
 
   // Add click handlers to answer buttons
   const answerButtons = infoContent.querySelectorAll(".answer-btn");
@@ -2201,7 +2149,9 @@ const showQuestionModal = (stateId) => {
       const answer = btn.dataset.answer;
       if (!answer) return;
       // Disable all buttons immediately
-      answerButtons.forEach((b) => { b.disabled = true; });
+      answerButtons.forEach((b) => {
+        b.disabled = true;
+      });
       // Animate: keep selected, dismiss the other
       btn.classList.add("answer-btn--selected");
       answerButtons.forEach((b) => {
@@ -2211,21 +2161,26 @@ const showQuestionModal = (stateId) => {
         handleAnswer(answer, stateId);
         // Store answer for revisit rendering (include chosenLabel for revisit display)
         const chosenLabel = btn.querySelector(".tarot-card-label")?.textContent || "";
-        answeredQuestions.set(stateId, { option1, option2: option2 || option1, chosen: answer, chosenLabel });
+        answeredQuestions.set(stateId, {
+          option1,
+          option2: option2 || option1,
+          chosen: answer,
+          chosenLabel,
+        });
         // Store pending trail for deferred drawing (when user clicks back or continue)
         pendingTrail = { from: stateId, to: answer };
-        const container = infoContent?.querySelector('.question-container');
+        const container = infoContent?.querySelector(".question-container");
         if (container) {
-          const continueBtn = document.createElement('button');
-          continueBtn.className = 'answer-btn answer-btn--continue';
-          continueBtn.type = 'button';
+          const continueBtn = document.createElement("button");
+          continueBtn.className = "answer-btn answer-btn--continue";
+          continueBtn.type = "button";
           continueBtn.textContent = t("continue.exploring");
-          continueBtn.addEventListener('click', () => {
+          continueBtn.addEventListener("click", () => {
             clearSelection();
           });
           container.appendChild(continueBtn);
           setTimeout(() => {
-            continueBtn.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            continueBtn.scrollIntoView({ behavior: "smooth", block: "end" });
           }, 650);
         }
       }, 1100);
@@ -2279,7 +2234,6 @@ const celebrateMapCompletion = () => {
       });
     }, 250);
   }
-
 };
 
 const showAboutModal = () => {
@@ -2294,151 +2248,6 @@ const hideAboutModal = () => {
   }
 };
 
-const CHARACTER_STORAGE_KEY = "ataraxie-character";
-
-// Character move sets: maps character -> move type -> frame paths
-const CHARACTER_MOVE_MAP = {
-  demon: {
-    idle: [
-      "assets/characters/demon/idle/frame1.svg",
-      "assets/characters/demon/idle/frame2.svg",
-      "assets/characters/demon/idle/frame3.svg"
-    ],
-    stomp: [
-      "assets/characters/demon/stomp/frame1.svg",
-      "assets/characters/demon/stomp/frame2.svg",
-      "assets/characters/demon/stomp/frame3.svg"
-    ],
-    armwave: [
-      "assets/characters/demon/armwave/frame1.svg",
-      "assets/characters/demon/armwave/frame2.svg",
-      "assets/characters/demon/armwave/frame3.svg",
-      "assets/characters/demon/armwave/frame4.svg",
-      "assets/characters/demon/armwave/frame5.svg"
-    ],
-    turn: [
-      "assets/characters/demon/turn/frame1.svg",
-      "assets/characters/demon/turn/frame2.svg",
-      "assets/characters/demon/turn/frame3.svg",
-      "assets/characters/demon/turn/frame4.svg",
-      "assets/characters/demon/turn/frame5.svg",
-      "assets/characters/demon/turn/frame6.svg"
-    ],
-    hipshake: [
-      "assets/characters/demon/hipshake/frame1.svg",
-      "assets/characters/demon/hipshake/frame2.svg",
-      "assets/characters/demon/hipshake/frame3.svg",
-      "assets/characters/demon/hipshake/frame4.svg"
-    ],
-    jump: [
-      "assets/characters/demon/jump/frame1.svg",
-      "assets/characters/demon/jump/frame2.svg",
-      "assets/characters/demon/jump/frame3.svg",
-      "assets/characters/demon/jump/frame4.svg"
-    ],
-    headbang: [
-      "assets/characters/demon/headbang/frame1.svg",
-      "assets/characters/demon/headbang/frame2.svg",
-      "assets/characters/demon/headbang/frame3.svg"
-    ]
-  },
-  succube: {
-    idle: [
-      "assets/characters/succube/idle/frame1.svg",
-      "assets/characters/succube/idle/frame2.svg",
-      "assets/characters/succube/idle/frame3.svg"
-    ],
-    stomp: [
-      "assets/characters/succube/stomp/frame1.svg",
-      "assets/characters/succube/stomp/frame2.svg",
-      "assets/characters/succube/stomp/frame3.svg"
-    ],
-    armwave: [
-      "assets/characters/succube/armwave/frame1.svg",
-      "assets/characters/succube/armwave/frame2.svg",
-      "assets/characters/succube/armwave/frame3.svg",
-      "assets/characters/succube/armwave/frame4.svg",
-      "assets/characters/succube/armwave/frame5.svg"
-    ],
-    turn: [
-      "assets/characters/succube/turn/frame1.svg",
-      "assets/characters/succube/turn/frame2.svg",
-      "assets/characters/succube/turn/frame3.svg",
-      "assets/characters/succube/turn/frame4.svg",
-      "assets/characters/succube/turn/frame5.svg",
-      "assets/characters/succube/turn/frame6.svg"
-    ],
-    hipshake: [
-      "assets/characters/succube/hipshake/frame1.svg",
-      "assets/characters/succube/hipshake/frame2.svg",
-      "assets/characters/succube/hipshake/frame3.svg",
-      "assets/characters/succube/hipshake/frame4.svg"
-    ],
-    jump: [
-      "assets/characters/succube/jump/frame1.svg",
-      "assets/characters/succube/jump/frame2.svg",
-      "assets/characters/succube/jump/frame3.svg",
-      "assets/characters/succube/jump/frame4.svg"
-    ],
-    headbang: [
-      "assets/characters/succube/headbang/frame1.svg",
-      "assets/characters/succube/headbang/frame2.svg",
-      "assets/characters/succube/headbang/frame3.svg"
-    ]
-  },
-  gargoyle: {
-    idle: [
-      "assets/characters/gargoyle/idle/frame1.svg",
-      "assets/characters/gargoyle/idle/frame2.svg",
-      "assets/characters/gargoyle/idle/frame3.svg"
-    ],
-    stomp: [
-      "assets/characters/gargoyle/stomp/frame1.svg",
-      "assets/characters/gargoyle/stomp/frame2.svg",
-      "assets/characters/gargoyle/stomp/frame3.svg"
-    ],
-    armwave: [
-      "assets/characters/gargoyle/armwave/frame1.svg",
-      "assets/characters/gargoyle/armwave/frame2.svg",
-      "assets/characters/gargoyle/armwave/frame3.svg",
-      "assets/characters/gargoyle/armwave/frame4.svg",
-      "assets/characters/gargoyle/armwave/frame5.svg"
-    ],
-    turn: [
-      "assets/characters/gargoyle/turn/frame1.svg",
-      "assets/characters/gargoyle/turn/frame2.svg",
-      "assets/characters/gargoyle/turn/frame3.svg",
-      "assets/characters/gargoyle/turn/frame4.svg",
-      "assets/characters/gargoyle/turn/frame5.svg",
-      "assets/characters/gargoyle/turn/frame6.svg"
-    ],
-    hipshake: [
-      "assets/characters/gargoyle/hipshake/frame1.svg",
-      "assets/characters/gargoyle/hipshake/frame2.svg",
-      "assets/characters/gargoyle/hipshake/frame3.svg",
-      "assets/characters/gargoyle/hipshake/frame4.svg"
-    ],
-    jump: [
-      "assets/characters/gargoyle/jump/frame1.svg",
-      "assets/characters/gargoyle/jump/frame2.svg",
-      "assets/characters/gargoyle/jump/frame3.svg",
-      "assets/characters/gargoyle/jump/frame4.svg"
-    ],
-    headbang: [
-      "assets/characters/gargoyle/headbang/frame1.svg",
-      "assets/characters/gargoyle/headbang/frame2.svg",
-      "assets/characters/gargoyle/headbang/frame3.svg"
-    ]
-  }
-};
-
-// Helper for backward compatibility (question dialogs, character select use frame 1)
-const getCharacterFrame = (character, frameIndex = 0) => {
-  const moveSet = CHARACTER_MOVE_MAP[character];
-  if (!moveSet || !moveSet.idle) return "";
-  return moveSet.idle[frameIndex] || moveSet.idle[0];
-};
-
 const showCharacterSelect = () => {
   if (characterSelect) {
     const card = characterSelect.querySelector(".character-select-card");
@@ -2447,7 +2256,6 @@ const showCharacterSelect = () => {
     if (card) card.classList.remove("is-card-visible");
     characterSelect.classList.add("is-logo-intro");
     characterSelect.setAttribute("aria-hidden", "false");
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const delay = prefersReducedMotion ? 0 : 4800;
     setTimeout(() => {
       characterSelect.classList.remove("is-logo-intro");
@@ -2462,97 +2270,108 @@ const hideCharacterSelect = () => {
     characterSelect.setAttribute("aria-hidden", "true");
     characterSelect.classList.remove("is-flying-out", "is-bg-fading");
     // Re-enable transitions after the hide is painted
-    requestAnimationFrame(() => { characterSelect.style.transition = ""; });
+    requestAnimationFrame(() => {
+      characterSelect.style.transition = "";
+    });
   }
 };
 
-const flyCharacterToMap = (character) => new Promise((resolve) => {
-  const selectedCard = document.querySelector(".character-card.is-selected");
-  const cardImg = selectedCard?.querySelector(".character-card-img");
-  if (!cardImg || !characterSelect || !svg) { hideCharacterSelect(); return resolve(); }
+const flyCharacterToMap = (character) =>
+  new Promise((resolve) => {
+    const selectedCard = document.querySelector(".character-card.is-selected");
+    const cardImg = selectedCard?.querySelector(".character-card-img");
+    if (!cardImg || !characterSelect || !svg) {
+      hideCharacterSelect();
+      return resolve();
+    }
 
-  const stateCenter = getStateCenter("1");
-  const ctm = svg.getScreenCTM();
-  if (!stateCenter || !ctm) { hideCharacterSelect(); return resolve(); }
+    const stateCenter = getStateCenter("1");
+    const ctm = svg.getScreenCTM();
+    if (!stateCenter || !ctm) {
+      hideCharacterSelect();
+      return resolve();
+    }
 
-  const targetScreenX = stateCenter.x * ctm.a + ctm.e;
-  const targetScreenY = stateCenter.y * ctm.d + ctm.f;
-  const targetSize = Math.max(16, getMarkerRadius() * 8 * ctm.a);
+    const targetScreenX = stateCenter.x * ctm.a + ctm.e;
+    const targetScreenY = stateCenter.y * ctm.d + ctm.f;
+    const targetSize = Math.max(16, getMarkerRadius() * 8 * ctm.a);
 
-  const srcRect = cardImg.getBoundingClientRect();
-  const startX = srcRect.left;
-  const startY = srcRect.top;
-  const startW = srcRect.width;
-  const startH = srcRect.height;
+    const srcRect = cardImg.getBoundingClientRect();
+    const startX = srcRect.left;
+    const startY = srcRect.top;
+    const startW = srcRect.width;
+    const startH = srcRect.height;
 
-  const flyer = document.createElement("img");
-  flyer.className = "character-flyer";
-  flyer.src = cardImg.src;
-  flyer.style.left = startX + "px";
-  flyer.style.top = startY + "px";
-  flyer.style.width = startW + "px";
-  flyer.style.height = startH + "px";
-  document.body.appendChild(flyer);
+    const flyer = document.createElement("img");
+    flyer.className = "character-flyer";
+    flyer.src = cardImg.src;
+    flyer.style.left = startX + "px";
+    flyer.style.top = startY + "px";
+    flyer.style.width = startW + "px";
+    flyer.style.height = startH + "px";
+    document.body.appendChild(flyer);
 
-  const frames = CHARACTER_MOVE_MAP[character]?.hipshake || [];
-  let frameIdx = 0;
-  const hipshakeInterval = frames.length > 0
-    ? setInterval(() => { frameIdx = (frameIdx + 1) % frames.length; flyer.src = frames[frameIdx]; }, 125)
-    : null;
+    const frames = CHARACTER_MOVE_MAP[character]?.hipshake || [];
+    let frameIdx = 0;
+    const hipshakeInterval =
+      frames.length > 0
+        ? setInterval(() => {
+            frameIdx = (frameIdx + 1) % frames.length;
+            flyer.src = frames[frameIdx];
+          }, 125)
+        : null;
 
-  characterSelect.classList.add("is-flying-out");
+    characterSelect.classList.add("is-flying-out");
 
-  setTimeout(() => characterSelect.classList.add("is-bg-fading"), 250);
+    setTimeout(() => characterSelect.classList.add("is-bg-fading"), 250);
 
-  const flightDelay = 300;
-  const flightDuration = 800;
+    const flightDelay = 300;
+    const flightDuration = 800;
 
-  const easeInOutCubic = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const endX = targetScreenX - targetSize / 2;
+    const endY = targetScreenY - targetSize / 2;
 
-  const endX = targetScreenX - targetSize / 2;
-  const endY = targetScreenY - targetSize / 2;
+    const cpx = (startX + endX) / 2;
+    const arcHeight = Math.abs(endX - startX) * 0.3;
+    const cpy = Math.min(startY, endY) - arcHeight;
 
-  const cpx = (startX + endX) / 2;
-  const arcHeight = Math.abs(endX - startX) * 0.3;
-  const cpy = Math.min(startY, endY) - arcHeight;
+    setTimeout(() => {
+      const t0 = performance.now();
+      const step = (now) => {
+        const elapsed = now - t0;
+        const raw = Math.min(elapsed / flightDuration, 1);
+        const t = easeInOutCubic(raw);
+        const u = 1 - t;
 
-  setTimeout(() => {
-    const t0 = performance.now();
-    const step = (now) => {
-      const elapsed = now - t0;
-      const raw = Math.min(elapsed / flightDuration, 1);
-      const t = easeInOutCubic(raw);
-      const u = 1 - t;
+        const bx = u * u * startX + 2 * u * t * cpx + t * t * endX;
+        const by = u * u * startY + 2 * u * t * cpy + t * t * endY;
+        const w = startW + (targetSize - startW) * t;
+        const h = startH + (targetSize - startH) * t;
+        const glowSize = 6 + 18 * t;
+        const glowAlpha = 0.4 + 0.5 * t;
 
-      const bx = u * u * startX + 2 * u * t * cpx + t * t * endX;
-      const by = u * u * startY + 2 * u * t * cpy + t * t * endY;
-      const w = startW + (targetSize - startW) * t;
-      const h = startH + (targetSize - startH) * t;
-      const glowSize = 6 + 18 * t;
-      const glowAlpha = 0.4 + 0.5 * t;
+        flyer.style.left = bx + "px";
+        flyer.style.top = by + "px";
+        flyer.style.width = w + "px";
+        flyer.style.height = h + "px";
+        flyer.style.filter = `drop-shadow(0 0 ${glowSize}px rgba(189,255,0,${glowAlpha}))`;
 
-      flyer.style.left = bx + "px";
-      flyer.style.top = by + "px";
-      flyer.style.width = w + "px";
-      flyer.style.height = h + "px";
-      flyer.style.filter = `drop-shadow(0 0 ${glowSize}px rgba(189,255,0,${glowAlpha}))`;
+        if (raw < 1) {
+          requestAnimationFrame(step);
+        } else {
+          if (hipshakeInterval) clearInterval(hipshakeInterval);
+          flyer.classList.add("character-flyer--landed");
+          hideCharacterSelect();
 
-      if (raw < 1) {
-        requestAnimationFrame(step);
-      } else {
-        if (hipshakeInterval) clearInterval(hipshakeInterval);
-        flyer.classList.add("character-flyer--landed");
-        hideCharacterSelect();
-
-        setTimeout(() => {
-          flyer.remove();
-          resolve();
-        }, 300);
-      }
-    };
-    requestAnimationFrame(step);
-  }, flightDelay);
-});
+          setTimeout(() => {
+            flyer.remove();
+            resolve();
+          }, 300);
+        }
+      };
+      requestAnimationFrame(step);
+    }, flightDelay);
+  });
 
 const updateCharacterAvatar = () => {};
 
@@ -2617,9 +2436,16 @@ const waitForCharacterSelection = () =>
         resolve(character);
       } else {
         const hipFrames = CHARACTER_MOVE_MAP[character]?.hipshake || [];
-        Promise.all(hipFrames.map(src => new Promise(r => {
-          const i = new Image(); i.onload = i.onerror = r; i.src = src;
-        }))).then(() => flyCharacterToMap(character).then(() => resolve(character)));
+        Promise.all(
+          hipFrames.map(
+            (src) =>
+              new Promise((r) => {
+                const i = new Image();
+                i.onload = i.onerror = r;
+                i.src = src;
+              }),
+          ),
+        ).then(() => flyCharacterToMap(character).then(() => resolve(character)));
       }
     };
 
@@ -2682,10 +2508,10 @@ const renderTrails = () => {
       const dx = toCenter.x - fromCenter.x;
       const dy = toCenter.y - fromCenter.y;
       const offset = Math.sqrt(dx * dx + dy * dy) * 0.15;
-      d = `M ${fromCenter.x} ${fromCenter.y} Q ${mx + -dy * offset / Math.sqrt(dx * dx + dy * dy)} ${my + dx * offset / Math.sqrt(dx * dx + dy * dy)} ${toCenter.x} ${toCenter.y}`;
+      d = `M ${fromCenter.x} ${fromCenter.y} Q ${mx + (-dy * offset) / Math.sqrt(dx * dx + dy * dy)} ${my + (dx * offset) / Math.sqrt(dx * dx + dy * dy)} ${toCenter.x} ${toCenter.y}`;
     }
 
-    const path = document.createElementNS(svgNS, "path");
+    const path = document.createElementNS(SVG_NS, "path");
     path.setAttribute("d", d);
     path.classList.add("trail-line");
     layer.appendChild(path);
@@ -2696,7 +2522,7 @@ const renderTrails = () => {
     const center = getStateCenter(stateId);
     if (!center) return;
 
-    const circle = document.createElementNS(svgNS, "circle");
+    const circle = document.createElementNS(SVG_NS, "circle");
     circle.setAttribute("cx", center.x);
     circle.setAttribute("cy", center.y);
     circle.setAttribute("r", r);
@@ -2734,7 +2560,7 @@ const drawTrailSegment = (fromStateId, toStateId) => {
     d = `M ${fromCenter.x} ${fromCenter.y} Q ${mx + (-dy * offset) / dist} ${my + (dx * offset) / dist} ${toCenter.x} ${toCenter.y}`;
   }
 
-  const path = document.createElementNS(svgNS, "path");
+  const path = document.createElementNS(SVG_NS, "path");
   path.setAttribute("d", d);
   path.classList.add("trail-line");
   layer.appendChild(path);
@@ -2744,7 +2570,7 @@ const drawTrailSegment = (fromStateId, toStateId) => {
     path.classList.add("trail-line--appear");
 
     setTimeout(() => {
-      const circle = document.createElementNS(svgNS, "circle");
+      const circle = document.createElementNS(SVG_NS, "circle");
       circle.setAttribute("cx", toCenter.x);
       circle.setAttribute("cy", toCenter.y);
       circle.setAttribute("r", r);
@@ -2753,7 +2579,7 @@ const drawTrailSegment = (fromStateId, toStateId) => {
       if (mapCharacter) layer.appendChild(mapCharacter);
     }, 800);
   } else {
-    const circle = document.createElementNS(svgNS, "circle");
+    const circle = document.createElementNS(SVG_NS, "circle");
     circle.setAttribute("cx", toCenter.x);
     circle.setAttribute("cy", toCenter.y);
     circle.setAttribute("r", r);
@@ -2767,7 +2593,7 @@ const drawTrailSegment = (fromStateId, toStateId) => {
 // --- Map View Character (SVG on trail layer) ---
 
 const spawnPuffParticles = (cx, cy, size, layer) => {
-  const svgNS = "http://www.w3.org/2000/svg";
+  const SVG_NS = "http://www.w3.org/2000/svg";
   const count = 7;
   const drift = size * 0.6;
   const dur = "700ms";
@@ -2780,7 +2606,7 @@ const spawnPuffParticles = (cx, cy, size, layer) => {
     const baseR = size * (0.08 + Math.random() * 0.06);
     const stagger = `${i * 30}ms`;
 
-    const el = document.createElementNS(svgNS, "ellipse");
+    const el = document.createElementNS(SVG_NS, "ellipse");
     el.setAttribute("cx", cx);
     el.setAttribute("cy", cy);
     el.setAttribute("rx", baseR);
@@ -2797,7 +2623,7 @@ const spawnPuffParticles = (cx, cy, size, layer) => {
       ["opacity", "0.6", "0"],
     ];
     for (const [attr, from, to] of attrs) {
-      const anim = document.createElementNS(svgNS, "animate");
+      const anim = document.createElementNS(SVG_NS, "animate");
       anim.setAttribute("attributeName", attr);
       anim.setAttribute("from", from);
       anim.setAttribute("to", to);
@@ -2809,7 +2635,7 @@ const spawnPuffParticles = (cx, cy, size, layer) => {
     layer.appendChild(el);
     wisps.push(el);
   }
-  setTimeout(() => wisps.forEach(w => w.remove()), 900);
+  setTimeout(() => wisps.forEach((w) => w.remove()), 900);
 };
 
 const createMapCharacter = (arriving = false) => {
@@ -2821,14 +2647,13 @@ const createMapCharacter = (arriving = false) => {
   const layer = mapApi.getTrailLayer();
   if (!layer) return;
 
-  const targetState = explorationOrder.length > 0
-    ? explorationOrder[explorationOrder.length - 1]
-    : "1";
+  const targetState =
+    explorationOrder.length > 0 ? explorationOrder[explorationOrder.length - 1] : "1";
   const center = getStateCenter(targetState);
   if (!center) return;
 
   const size = getMarkerRadius() * 8;
-  const img = document.createElementNS(svgNS, "image");
+  const img = document.createElementNS(SVG_NS, "image");
   img.setAttribute("width", size);
   img.setAttribute("height", size);
   img.setAttribute("x", center.x - size / 2);
@@ -2864,13 +2689,19 @@ const createMapCharacter = (arriving = false) => {
 };
 
 const hideMapCharacterBark = () => {
-  mapCharacterBarkTimers.forEach(t => clearTimeout(t));
+  mapCharacterBarkTimers.forEach((t) => clearTimeout(t));
   mapCharacterBarkTimers = [];
-  if (mapCharacterBark) { mapCharacterBark.remove(); mapCharacterBark = null; }
+  if (mapCharacterBark) {
+    mapCharacterBark.remove();
+    mapCharacterBark = null;
+  }
 };
 
 const showMapCharacterBark = (text, duration = 4000) => {
-  if (mapCharacterBark) { mapCharacterBark.remove(); mapCharacterBark = null; }
+  if (mapCharacterBark) {
+    mapCharacterBark.remove();
+    mapCharacterBark = null;
+  }
   if (!mapCharacter || !svg) return;
   const rect = mapCharacter.getBoundingClientRect();
   const parentRect = mapPane.getBoundingClientRect();
@@ -2881,7 +2712,14 @@ const showMapCharacterBark = (text, duration = 4000) => {
   bubble.style.top = `${rect.top - parentRect.top - 8}px`;
   mapPane.appendChild(bubble);
   mapCharacterBark = bubble;
-  mapCharacterBarkTimers.push(setTimeout(() => { if (mapCharacterBark === bubble) { bubble.remove(); mapCharacterBark = null; } }, duration));
+  mapCharacterBarkTimers.push(
+    setTimeout(() => {
+      if (mapCharacterBark === bubble) {
+        bubble.remove();
+        mapCharacterBark = null;
+      }
+    }, duration),
+  );
 };
 
 const removeMapCharacter = () => {
@@ -2892,7 +2730,7 @@ const removeMapCharacter = () => {
   }
   if (mapCharacter) {
     const layer = mapCharacter.parentNode;
-    if (layer) layer.querySelectorAll(".puff-wisp").forEach(w => w.remove());
+    if (layer) layer.querySelectorAll(".puff-wisp").forEach((w) => w.remove());
     mapCharacter.remove();
     mapCharacter = null;
   }
@@ -3027,11 +2865,17 @@ const setupStateCharDrag = (img) => {
   };
 
   const hideBubble = () => {
-    if (bubble) { bubble.remove(); bubble = null; }
+    if (bubble) {
+      bubble.remove();
+      bubble = null;
+    }
   };
 
   const closeMenu = () => {
-    if (menu) { menu.remove(); menu = null; }
+    if (menu) {
+      menu.remove();
+      menu = null;
+    }
     document.removeEventListener("pointerdown", onOutsideClick, true);
     document.removeEventListener("keydown", onEscapeKey);
   };
@@ -3057,13 +2901,18 @@ const setupStateCharDrag = (img) => {
   };
 
   const toggleMenu = () => {
-    if (menu) { closeMenu(); return; }
+    if (menu) {
+      closeMenu();
+      return;
+    }
     hideBubble();
 
     menu = document.createElement("div");
     menu.className = "state-character-menu";
 
-    const isPlaying = hourglassPlayer ? hourglassPlayer.playing : (activeAudio && !activeAudio.paused);
+    const isPlaying = hourglassPlayer
+      ? hourglassPlayer.playing
+      : activeAudio && !activeAudio.paused;
     const playLabel = isPlaying ? t("menu.pause") : t("menu.play");
     const askMeaning = () => {
       closeMenu();
@@ -3077,18 +2926,46 @@ const setupStateCharDrag = (img) => {
     };
 
     const items = [
-      { label: playLabel, action: () => { if (hourglassPlayer) { hourglassPlayer.togglePlay(); } else if (activeAudio) { activeAudio.paused ? activeAudio.play() : activeAudio.pause(); } }},
-      { label: t("menu.restart"), action: () => { if (hourglassPlayer) { hourglassPlayer.restart(); } else if (activeAudio) { activeAudio.currentTime = 0; activeAudio.play().catch(() => {}); } }},
+      {
+        label: playLabel,
+        action: () => {
+          if (hourglassPlayer) {
+            hourglassPlayer.togglePlay();
+          } else if (activeAudio) {
+            activeAudio.paused ? activeAudio.play() : activeAudio.pause();
+          }
+        },
+      },
+      {
+        label: t("menu.restart"),
+        action: () => {
+          if (hourglassPlayer) {
+            hourglassPlayer.restart();
+          } else if (activeAudio) {
+            activeAudio.currentTime = 0;
+            activeAudio.play().catch(() => {});
+          }
+        },
+      },
       { label: t("menu.meaning"), action: askMeaning },
       { label: t("menu.gestures"), action: showGestureHelp },
-      { label: t("menu.about"), action: () => { aboutModal?.setAttribute("aria-hidden", "false"); }},
+      {
+        label: t("menu.about"),
+        action: () => {
+          aboutModal?.setAttribute("aria-hidden", "false");
+        },
+      },
     ];
 
     for (const item of items) {
       const btn = document.createElement("button");
       btn.className = "state-character-menu-item";
       btn.textContent = item.label;
-      btn.addEventListener("click", (e) => { e.stopPropagation(); closeMenu(); item.action(); });
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeMenu();
+        item.action();
+      });
       menu.appendChild(btn);
     }
 
@@ -3317,7 +3194,9 @@ const init = async () => {
   ) {
     mobileWarning.setAttribute("aria-hidden", "false");
     await new Promise((resolve) => {
-      document.getElementById("mobile-warning-dismiss").addEventListener("click", resolve, { once: true });
+      document
+        .getElementById("mobile-warning-dismiss")
+        .addEventListener("click", resolve, { once: true });
     });
     sessionStorage.setItem("ataraxie-mobile-warned", "1");
     mobileWarning.setAttribute("aria-hidden", "true");
@@ -3401,7 +3280,7 @@ const init = async () => {
     if (textureCanvas && fullViewBox) {
       textureCanvas.render(revealedStates, fullViewBox);
     }
-    
+
     renderTrails();
     renderSigilLayer();
     renderInfo(null);
@@ -3438,8 +3317,7 @@ const init = async () => {
     setSplitLayout(true);
     setLoading(false);
     if (infoContent) {
-      infoContent.innerHTML =
-        `<h2 class="info-title">${t("error.title")}</h2><div class="info-body">${t("error.body")}</div>`;
+      infoContent.innerHTML = `<h2 class="info-title">${t("error.title")}</h2><div class="info-body">${t("error.body")}</div>`;
     }
   }
 };
@@ -3538,7 +3416,11 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === " " && app.classList.contains("is-split") && activeAudio) {
     event.preventDefault();
-    if (hourglassPlayer) { hourglassPlayer.togglePlay(); } else { activeAudio.paused ? activeAudio.play() : activeAudio.pause(); }
+    if (hourglassPlayer) {
+      hourglassPlayer.togglePlay();
+    } else {
+      activeAudio.paused ? activeAudio.play() : activeAudio.pause();
+    }
   }
 });
 

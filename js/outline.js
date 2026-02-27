@@ -4,6 +4,8 @@
  * Interior edges are shared by two cells (count === 2) and are filtered out.
  */
 
+import { ringToPath } from "./geometry.js";
+
 const edgeKey = (a, b) => {
   const ka = `${a[0]},${a[1]}`;
   const kb = `${b[0]},${b[1]}`;
@@ -75,17 +77,6 @@ const chainEdges = (edges) => {
   }
 
   return rings;
-};
-
-const ringToPath = (ring) => {
-  if (!ring.length) return "";
-  const [firstX, firstY] = ring[0];
-  let d = `M ${firstX} ${firstY}`;
-  for (let i = 1; i < ring.length; i += 1) {
-    const [x, y] = ring[i];
-    d += ` L ${x} ${y}`;
-  }
-  return `${d} Z`;
 };
 
 /**

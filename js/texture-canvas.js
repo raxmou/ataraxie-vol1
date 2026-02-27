@@ -3,22 +3,7 @@
  * Renders textures clipped to state outlines, synced with SVG viewBox.
  */
 
-const textureFiles = [
-  "assets/textures/VISUALWORKS1 6.png",
-  "assets/textures/VISUALWORKS14 1.png",
-  "assets/textures/VISUALWORKS23.png",
-  "assets/textures/VISUALWORKS25 2.png",
-  "assets/textures/VISUALWORKS32 2.png",
-  "assets/textures/VISUALWORKS33 1.png",
-  "assets/textures/VISUALWORKS36 1.png",
-  "assets/textures/VISUALWORKS41 1.png",
-  "assets/textures/VISUALWORKS54 1.png",
-  "assets/textures/VISUALWORKS57 1.png",
-  "assets/textures/VISUALWORKS58 1.png",
-];
-
-const getTextureIndexForState = (stateId) =>
-  Number(stateId) - 1;
+import { TEXTURE_FILES, getTextureIndexForState } from "./core/constants.js";
 
 /**
  * Create a texture canvas renderer.
@@ -59,7 +44,7 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
    * Load all texture images.
    */
   const loadTextures = async () => {
-    const promises = textureFiles.map((url, index) => {
+    const promises = TEXTURE_FILES.map((url, index) => {
       return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {

@@ -110,7 +110,9 @@ body::before {
   justify-content: center;
   background: radial-gradient(circle at top, rgba(16, 20, 10, 0.97), rgba(6, 8, 4, 0.99));
   z-index: 12;
-  transition: opacity 0.4s ease, gap 0.9s ease;
+  transition:
+    opacity 0.4s ease,
+    gap 0.9s ease;
   gap: 10vh;
   padding: 24px 0;
 }
@@ -122,8 +124,9 @@ body::before {
   max-height: 25vh;
   height: auto;
   filter: drop-shadow(0 0 5px rgba(189, 255, 0, 0.05));
-  transition: max-height 0.9s cubic-bezier(0.4, 0, 0.2, 1),
-              width 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    max-height 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.9s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Word elements start clipped (reveal L→R) */
@@ -149,20 +152,36 @@ body::before {
 /* ── Engrave keyframes ── */
 
 @keyframes engrave-word {
-  from { clip-path: inset(0 100% 0 0); }
-  to   { clip-path: inset(0 0% 0 0); }
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0% 0 0);
+  }
 }
 
 @keyframes engrave-fade {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes logo-engrave-glow {
-  0%   { filter: drop-shadow(0 0 5px rgba(189, 255, 0, 0.05)); }
-  40%  { filter: drop-shadow(0 0 20px rgba(189, 255, 0, 0.2)); }
-  85%  { filter: drop-shadow(0 0 50px rgba(189, 255, 0, 0.45)); }
-  100% { filter: drop-shadow(0 0 30px rgba(189, 255, 0, 0.25)); }
+  0% {
+    filter: drop-shadow(0 0 5px rgba(189, 255, 0, 0.05));
+  }
+  40% {
+    filter: drop-shadow(0 0 20px rgba(189, 255, 0, 0.2));
+  }
+  85% {
+    filter: drop-shadow(0 0 50px rgba(189, 255, 0, 0.45));
+  }
+  100% {
+    filter: drop-shadow(0 0 30px rgba(189, 255, 0, 0.25));
+  }
 }
 
 /* ── Trigger animations when character-select is visible ── */
@@ -236,7 +255,10 @@ body::before {
   max-height: 0;
   overflow: hidden;
   pointer-events: none;
-  transition: opacity 0.7s ease 0.1s, transform 0.7s ease 0.1s, max-height 0.9s ease;
+  transition:
+    opacity 0.7s ease 0.1s,
+    transform 0.7s ease 0.1s,
+    max-height 0.9s ease;
 }
 
 .character-select-card.is-card-visible {
@@ -309,7 +331,10 @@ body::before {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
-  transition: border-color 0.3s ease 0.2s, background 0.3s ease 0.2s, box-shadow 0.3s ease 0.2s;
+  transition:
+    border-color 0.3s ease 0.2s,
+    background 0.3s ease 0.2s,
+    box-shadow 0.3s ease 0.2s;
 }
 
 .character-select.is-flying-out .character-card.is-selected .character-card-img {
@@ -324,7 +349,9 @@ body::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .character-flyer { display: none; }
+  .character-flyer {
+    display: none;
+  }
 }
 
 .character-select-title {
@@ -372,7 +399,9 @@ body::before {
 
 .character-card.is-selected {
   border-color: #bdff00;
-  box-shadow: 0 0 24px rgba(189, 255, 0, 0.35), inset 0 0 16px rgba(189, 255, 0, 0.08);
+  box-shadow:
+    0 0 24px rgba(189, 255, 0, 0.35),
+    inset 0 0 16px rgba(189, 255, 0, 0.08);
 }
 
 .character-card-img {
@@ -407,7 +436,10 @@ body::before {
   text-transform: uppercase;
   color: rgba(189, 255, 0, 0.7);
   cursor: pointer;
-  transition: color 0.25s ease, text-shadow 0.25s ease, opacity 0.3s ease;
+  transition:
+    color 0.25s ease,
+    text-shadow 0.25s ease,
+    opacity 0.3s ease;
   margin-top: 28px;
 }
 
@@ -470,7 +502,6 @@ body::before {
   outline: 2px solid rgba(189, 255, 0, 0.9);
   outline-offset: 2px;
 }
-
 
 .question-modal {
   position: fixed;
@@ -564,7 +595,6 @@ body::before {
   z-index: 0;
 }
 
-
 .arc-title {
   position: absolute;
   top: 20px;
@@ -582,7 +612,6 @@ body::before {
 #app.is-split .arc-title {
   opacity: 0;
 }
-
 
 .texture-canvas {
   position: absolute;
@@ -625,7 +654,9 @@ body::before {
   transform: scale(0.7);
   transform-origin: center;
   transform-box: fill-box;
-  transition: opacity 420ms ease, transform 420ms ease;
+  transition:
+    opacity 420ms ease,
+    transform 420ms ease;
   display: none;
 }
 
@@ -660,7 +691,6 @@ body::before {
 #app.is-split .sigil-layer--focus {
   opacity: 1;
 }
-
 
 .state-3d-stack {
   position: absolute;
@@ -748,7 +778,9 @@ body::before {
   text-transform: uppercase;
   font-family: "Sinistre Regular", "Trebuchet MS", sans-serif;
   cursor: pointer;
-  transition: color 160ms ease, background 160ms ease;
+  transition:
+    color 160ms ease,
+    background 160ms ease;
 }
 
 .toggle-button svg {
@@ -810,9 +842,13 @@ body::before {
   border: 1px solid rgba(189, 255, 0, 0.12);
   border-right: none;
   border-radius: 16px 0 0 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(189, 255, 0, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(189, 255, 0, 0.08);
   transform: translateX(24px);
-  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  transition:
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
   z-index: 4;
 }
 
@@ -880,7 +916,9 @@ body::before {
   align-items: center;
   justify-content: center;
   padding: 4px 8px;
-  transition: color 0.2s ease, transform 0.2s ease;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
   margin-left: auto;
 }
 
@@ -904,14 +942,13 @@ body::before {
   color: #e8ffb2;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(189, 255, 0, 0.7);
-  background:
-    linear-gradient(
-      180deg,
-      rgba(45, 55, 30, 0.95) 0%,
-      rgba(20, 26, 14, 0.98) 45%,
-      rgba(12, 16, 8, 0.98) 55%,
-      rgba(25, 32, 18, 0.95) 100%
-    );
+  background: linear-gradient(
+    180deg,
+    rgba(45, 55, 30, 0.95) 0%,
+    rgba(20, 26, 14, 0.98) 45%,
+    rgba(12, 16, 8, 0.98) 55%,
+    rgba(25, 32, 18, 0.95) 100%
+  );
   box-shadow:
     inset 0 1px 0 rgba(189, 255, 0, 0.2),
     inset 0 -1px 0 rgba(0, 0, 0, 0.3),
@@ -919,7 +956,9 @@ body::before {
   border-radius: 999px;
   padding: 8px 14px;
   cursor: pointer;
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
   margin-bottom: 18px;
 }
 
@@ -1124,7 +1163,9 @@ body::before {
   cursor: pointer;
   padding: 0;
   animation: continue-appear 600ms ease both;
-  transition: color 0.25s ease, text-shadow 0.25s ease;
+  transition:
+    color 0.25s ease,
+    text-shadow 0.25s ease;
 }
 
 .answer-btn--continue::after {
@@ -1214,8 +1255,12 @@ body::before {
   animation: tarot-deal-in 500ms ease forwards;
 }
 
-.tarot-card:nth-child(1) { animation-delay: 200ms; }
-.tarot-card:nth-child(2) { animation-delay: 450ms; }
+.tarot-card:nth-child(1) {
+  animation-delay: 200ms;
+}
+.tarot-card:nth-child(2) {
+  animation-delay: 450ms;
+}
 
 @keyframes tarot-deal-in {
   from {
@@ -1429,13 +1474,20 @@ body::before {
 }
 
 @keyframes tarot-select-pulse {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.06); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 @keyframes tarot-selected-glow {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow:
       0 0 20px rgba(189, 255, 0, 0.3),
       0 0 40px rgba(189, 255, 0, 0.15);
@@ -1459,14 +1511,28 @@ body::before {
 }
 
 @keyframes tarot-dismiss {
-  0%   { opacity: 1; width: 140px; }
-  40%  { opacity: 0; width: 140px; }
-  100% { opacity: 0; width: 0; margin: 0; }
+  0% {
+    opacity: 1;
+    width: 140px;
+  }
+  40% {
+    opacity: 0;
+    width: 140px;
+  }
+  100% {
+    opacity: 0;
+    width: 0;
+    margin: 0;
+  }
 }
 
 @keyframes tarot-dismiss-flip {
-  from { transform: rotateY(0deg); }
-  to { transform: rotateY(180deg); }
+  from {
+    transform: rotateY(0deg);
+  }
+  to {
+    transform: rotateY(180deg);
+  }
 }
 
 /* Static result card — revisited state, shown face-up immediately */
@@ -1520,9 +1586,19 @@ body::before {
 }
 
 @keyframes tarot-dismiss-mobile {
-  0%   { opacity: 1; height: 200px; }
-  40%  { opacity: 0; height: 200px; }
-  100% { opacity: 0; height: 0; margin: 0; }
+  0% {
+    opacity: 1;
+    height: 200px;
+  }
+  40% {
+    opacity: 0;
+    height: 200px;
+  }
+  100% {
+    opacity: 0;
+    height: 0;
+    margin: 0;
+  }
 }
 
 /* ── Tarot reduced motion ── */
@@ -1598,8 +1674,15 @@ body::before {
 }
 
 @keyframes shrine-pulse {
-  0%, 100% { opacity: 0.7; transform: translate(-50%, -55%) scale(1); }
-  50%      { opacity: 1;   transform: translate(-50%, -55%) scale(1.08); }
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: translate(-50%, -55%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -55%) scale(1.08);
+  }
 }
 
 .shrine-meta {
@@ -1631,7 +1714,9 @@ body::before {
 }
 
 .track-shrine {
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
 }
 
 /* ── Narrative text (pre-play phase) ── */
@@ -1647,7 +1732,7 @@ body::before {
 
 .narrative-container::before,
 .narrative-container::after {
-  content: '';
+  content: "";
   flex: 1 0 0px;
 }
 
@@ -1675,7 +1760,9 @@ body::before {
   cursor: pointer;
   opacity: 0;
   animation: narrative-reveal 600ms ease forwards;
-  transition: color 0.25s ease, text-shadow 0.25s ease;
+  transition:
+    color 0.25s ease,
+    text-shadow 0.25s ease;
   align-self: center;
 }
 
@@ -1708,7 +1795,9 @@ body::before {
   color: rgba(189, 255, 0, 0.5);
   cursor: pointer;
   padding: 4px 8px;
-  transition: color 0.2s ease, transform 0.2s ease;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
   line-height: 1;
 }
 
@@ -1775,7 +1864,6 @@ body::before {
   height: auto;
   filter: drop-shadow(0 10px 20px rgba(6, 8, 4, 0.55));
 }
-
 
 .track-player {
   display: grid;
@@ -1895,7 +1983,9 @@ body::before {
   #app.is-split .info-pane {
     padding: 20px;
     transform: translateY(0);
-    transition: opacity var(--transition-fast), transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition:
+      opacity var(--transition-fast),
+      transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
   }
 
@@ -2032,8 +2122,12 @@ body::before {
 }
 
 @keyframes trail-line-in {
-  0%   { opacity: 0; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 
 .trail-marker {
@@ -2178,8 +2272,14 @@ body::before {
 }
 
 @keyframes bubble-appear {
-  0% { opacity: 0; transform: translate(-50%, -100%) scale(0.8); }
-  100% { opacity: 1; transform: translate(-50%, -100%) scale(1); }
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -100%) scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
 }
 
 .state-character-menu {
@@ -2283,7 +2383,9 @@ body::before {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  transition: color 0.2s ease, background 0.2s ease;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease;
 }
 
 .about-close:hover {
@@ -2492,8 +2594,13 @@ body::before {
 }
 
 @keyframes hg-breathe {
-  0%, 100% { filter: drop-shadow(0 0 5px rgba(189, 255, 0, 0.12)); }
-  50% { filter: drop-shadow(0 0 9px rgba(189, 255, 0, 0.22)); }
+  0%,
+  100% {
+    filter: drop-shadow(0 0 5px rgba(189, 255, 0, 0.12));
+  }
+  50% {
+    filter: drop-shadow(0 0 9px rgba(189, 255, 0, 0.22));
+  }
 }
 
 .hourglass-container:hover .hourglass-frame {
@@ -2569,7 +2676,9 @@ body::before {
   cursor: pointer;
   color: rgba(189, 255, 0, 0.35);
   z-index: 5;
-  transition: color 0.2s ease, transform 0.2s ease;
+  transition:
+    color 0.2s ease,
+    transform 0.2s ease;
   line-height: 0;
 }
 
@@ -2581,7 +2690,6 @@ body::before {
 .hourglass-retry[hidden] {
   display: none;
 }
-
 
 @media (max-width: 900px) {
   .hourglass-container {
@@ -2638,10 +2746,18 @@ body::before {
 }
 
 @keyframes rotate-phone {
-  0%   { transform: rotate(0deg); }
-  30%  { transform: rotate(-90deg); }
-  60%  { transform: rotate(-90deg); }
-  100% { transform: rotate(0deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  30% {
+    transform: rotate(-90deg);
+  }
+  60% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
 }
 
 .rotate-text {
@@ -2720,7 +2836,9 @@ body::before {
   text-transform: uppercase;
   color: rgba(189, 255, 0, 0.6);
   cursor: pointer;
-  transition: color 0.25s ease, text-shadow 0.25s ease;
+  transition:
+    color 0.25s ease,
+    text-shadow 0.25s ease;
 }
 
 .mobile-warning-dismiss::after {
@@ -2857,7 +2975,9 @@ body::before {
 
   #app.is-split .info-pane {
     transform: translateX(0);
-    transition: opacity var(--transition-fast), transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition:
+      opacity var(--transition-fast),
+      transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     will-change: transform;
   }
 
@@ -2935,9 +3055,10 @@ body::before {
     width: min(30vw, 280px);
     flex-shrink: 0;
     margin-right: 0;
-    transition: max-height 0.9s cubic-bezier(0.4, 0, 0.2, 1),
-                width 0.9s cubic-bezier(0.4, 0, 0.2, 1),
-                margin 0.9s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      max-height 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+      width 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+      margin 0.9s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* Card collapses width too so logo stays centered when hidden */
@@ -2947,7 +3068,10 @@ body::before {
     overflow: hidden;
     opacity: 0;
     transform: translateX(20px);
-    transition: opacity 0.7s ease 0.1s, transform 0.7s ease 0.1s, max-width 0.9s ease;
+    transition:
+      opacity 0.7s ease 0.1s,
+      transform 0.7s ease 0.1s,
+      max-width 0.9s ease;
   }
 
   .character-select-card.is-card-visible {

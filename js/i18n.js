@@ -10,8 +10,8 @@ const STRINGS = {
   },
   "about.changeCharacter": { fr: "Changer de personnage", en: "Change character" },
   "about.madeBy": {
-    fr: "Site cr\u00e9\u00e9 et open sourc\u00e9 par <a href=\"https://instagram.com/rax_mou\" target=\"_blank\" rel=\"noopener noreferrer\">rax</a>",
-    en: "Website created & open sourced by <a href=\"https://instagram.com/rax_mou\" target=\"_blank\" rel=\"noopener noreferrer\">rax</a>",
+    fr: 'Site cr\u00e9\u00e9 et open sourc\u00e9 par <a href="https://instagram.com/rax_mou" target="_blank" rel="noopener noreferrer">rax</a>',
+    en: 'Website created & open sourced by <a href="https://instagram.com/rax_mou" target="_blank" rel="noopener noreferrer">rax</a>',
   },
   "about.noAi": {
     fr: "Aucune IA n\u2019a \u00e9t\u00e9 bless\u00e9e durant la cr\u00e9ation",
@@ -142,8 +142,7 @@ export const t = (key, vars) => {
   return str;
 };
 
-export const getDragPhrases = () =>
-  getLang() === "en" ? DRAG_PHRASES_EN : DRAG_PHRASES_FR;
+export const getDragPhrases = () => (getLang() === "en" ? DRAG_PHRASES_EN : DRAG_PHRASES_FR);
 
 export const getTracksUrl = (baseUrl) => {
   if (!baseUrl || getLang() !== "en") return baseUrl;

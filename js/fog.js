@@ -7,7 +7,7 @@ export const revealedStates = new Set(["1"]);
 export const questionedStates = new Set();
 
 // Exploration trail data
-export const explorationTrails = [];   // [{ from: string, to: string }]
+export const explorationTrails = []; // [{ from: string, to: string }]
 export const explorationOrder = ["1"]; // Discovery sequence (state "1" is the origin)
 
 export const addTrail = (fromStateId, toStateId) => {

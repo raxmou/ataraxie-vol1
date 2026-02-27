@@ -1,4 +1,4 @@
-const ringToPath = (ring) => {
+export const ringToPath = (ring) => {
   if (!ring.length) return "";
   const [firstX, firstY] = ring[0];
   let d = `M ${firstX} ${firstY}`;
@@ -32,9 +32,7 @@ export const geometryToPath = (geometry) => {
     return geometry.coordinates.map(ringToPath).join(" ");
   }
   if (geometry.type === "MultiPolygon") {
-    return geometry.coordinates
-      .map((polygon) => polygon.map(ringToPath).join(" "))
-      .join(" ");
+    return geometry.coordinates.map((polygon) => polygon.map(ringToPath).join(" ")).join(" ");
   }
   return "";
 };

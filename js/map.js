@@ -1,25 +1,8 @@
 import { forEachCoordinate, geometryToPath } from "./geometry.js";
 import { buildStateEdgeCounts, computeStateOutlines } from "./outline.js";
+import { SVG_NS, TEXTURE_FILES, getTextureIndexForState } from "./core/constants.js";
 
-const svgNS = "http://www.w3.org/2000/svg";
 const goldenAngle = 137.508;
-
-const textureFiles = [
-  "assets/textures/VISUALWORKS1 6.png",
-  "assets/textures/VISUALWORKS14 1.png",
-  "assets/textures/VISUALWORKS23.png",
-  "assets/textures/VISUALWORKS25 2.png",
-  "assets/textures/VISUALWORKS32 2.png",
-  "assets/textures/VISUALWORKS33 1.png",
-  "assets/textures/VISUALWORKS36 1.png",
-  "assets/textures/VISUALWORKS41 1.png",
-  "assets/textures/VISUALWORKS54 1.png",
-  "assets/textures/VISUALWORKS57 1.png",
-  "assets/textures/VISUALWORKS58 1.png",
-];
-
-const getTextureIndexForState = (stateId) =>
-  Number(stateId) - 1;
 
 export const createStateColor = (options = {}) => {
   const oceanColor = options.oceanColor || "#1b2212";
@@ -59,20 +42,20 @@ export const createMap = ({ svg, geojson, colorForState }) => {
 
   while (svg.firstChild) svg.removeChild(svg.firstChild);
 
-  const baseGroup = document.createElementNS(svgNS, "g");
+  const baseGroup = document.createElementNS(SVG_NS, "g");
   baseGroup.setAttribute("id", "map-base");
-  const defs = document.createElementNS(svgNS, "defs");
+  const defs = document.createElementNS(SVG_NS, "defs");
   baseGroup.appendChild(defs);
 
   // Create all texture patterns upfront (6 patterns shared by all states)
-  textureFiles.forEach((texture, i) => {
-    const pattern = document.createElementNS(svgNS, "pattern");
+  TEXTURE_FILES.forEach((texture, i) => {
+    const pattern = document.createElementNS(SVG_NS, "pattern");
     pattern.setAttribute("id", `texture-${i}`);
     pattern.setAttribute("patternUnits", "userSpaceOnUse");
     pattern.setAttribute("width", "256");
     pattern.setAttribute("height", "256");
 
-    const image = document.createElementNS(svgNS, "image");
+    const image = document.createElementNS(SVG_NS, "image");
     image.setAttribute("href", texture);
     image.setAttribute("width", "256");
     image.setAttribute("height", "256");
@@ -81,23 +64,23 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     defs.appendChild(pattern);
   });
 
-  const puffFilter = document.createElementNS(svgNS, "filter");
+  const puffFilter = document.createElementNS(SVG_NS, "filter");
   puffFilter.setAttribute("id", "puff-blur");
-  const feBlur = document.createElementNS(svgNS, "feGaussianBlur");
+  const feBlur = document.createElementNS(SVG_NS, "feGaussianBlur");
   feBlur.setAttribute("stdDeviation", "2");
   puffFilter.appendChild(feBlur);
   defs.appendChild(puffFilter);
 
-  const cellGroup = document.createElementNS(svgNS, "g");
+  const cellGroup = document.createElementNS(SVG_NS, "g");
   cellGroup.setAttribute("id", "map-cells");
-  const borderGroup = document.createElementNS(svgNS, "g");
+  const borderGroup = document.createElementNS(SVG_NS, "g");
   borderGroup.setAttribute("id", "map-borders");
-  const focusGroup = document.createElementNS(svgNS, "g");
+  const focusGroup = document.createElementNS(SVG_NS, "g");
   focusGroup.setAttribute("id", "map-focus");
-  const snapshotGroup = document.createElementNS(svgNS, "g");
+  const snapshotGroup = document.createElementNS(SVG_NS, "g");
   snapshotGroup.setAttribute("id", "map-snapshot");
   snapshotGroup.setAttribute("visibility", "hidden");
-  const trailGroup = document.createElementNS(svgNS, "g");
+  const trailGroup = document.createElementNS(SVG_NS, "g");
   trailGroup.setAttribute("id", "map-trails");
 
   baseGroup.appendChild(cellGroup);
@@ -140,7 +123,6 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     if (x > state.maxX) state.maxX = x;
     if (y > state.maxY) state.maxY = y;
   };
-
 
   const edgeMap = new Map();
   const edgeKey = (a, b) => {
@@ -190,7 +172,7 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     const pathData = geometryToPath(geometry);
     if (!pathData) return;
 
-    const path = document.createElementNS(svgNS, "path");
+    const path = document.createElementNS(SVG_NS, "path");
     path.setAttribute("d", pathData);
     const fill = colorForState(stateId, isOcean);
     if (isOcean) {
@@ -208,7 +190,6 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     stateCells.get(stateId).push(path);
 
     fragment.appendChild(path);
-
   });
 
   cellGroup.appendChild(fragment);
@@ -219,7 +200,7 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     const statesArray = Array.from(entry.states).map((s) => String(s));
     if (statesArray.length > 1) {
       const [a, b] = entry.coords;
-      const path = document.createElementNS(svgNS, "path");
+      const path = document.createElementNS(SVG_NS, "path");
       path.setAttribute("d", `M ${a[0]} ${a[1]} L ${b[0]} ${b[1]}`);
       path.classList.add("state-border");
       if (statesArray.includes("0")) {
@@ -288,15 +269,15 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     if (!boundsForState || !Number.isFinite(boundsForState.minX)) return null;
     const width = Math.max(1, boundsForState.maxX - boundsForState.minX);
     const height = Math.max(1, boundsForState.maxY - boundsForState.minY);
-    const wrapper = document.createElementNS(svgNS, "svg");
+    const wrapper = document.createElementNS(SVG_NS, "svg");
     wrapper.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     wrapper.setAttribute(
       "viewBox",
-      `${boundsForState.minX} ${boundsForState.minY} ${width} ${height}`
+      `${boundsForState.minX} ${boundsForState.minY} ${width} ${height}`,
     );
     wrapper.setAttribute("width", `${width}`);
     wrapper.setAttribute("height", `${height}`);
-    const group = document.createElementNS(svgNS, "g");
+    const group = document.createElementNS(SVG_NS, "g");
     const nodes = stateCells.get(String(stateId)) || [];
     nodes.forEach((node) => {
       const clone = node.cloneNode(true);
@@ -354,7 +335,7 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     clearSnapshot();
     const snapshot = getSnapshotForState(stateId);
     if (!snapshot) return false;
-    const image = document.createElementNS(svgNS, "image");
+    const image = document.createElementNS(SVG_NS, "image");
     image.setAttribute("href", snapshot.url);
     image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", snapshot.url);
     image.setAttribute("x", `${snapshot.x}`);
@@ -447,9 +428,7 @@ export const createMap = ({ svg, geojson, colorForState }) => {
     stateBorderMap.forEach((paths, stateId) => {
       paths.forEach((path) => {
         const adjacentStates = path.dataset.states.split(",");
-        const allRevealed = adjacentStates.every(
-          (s) => s === "0" || revealedStates.has(s)
-        );
+        const allRevealed = adjacentStates.every((s) => s === "0" || revealedStates.has(s));
         path.classList.toggle("is-fogged", !allRevealed);
       });
     });

@@ -75,6 +75,6 @@ export const createKickDetector = (threshold = 0.15, cooldown = 300) => {
     detectKick,
     reset,
     setThreshold,
-    setCooldown
+    setCooldown,
   };
 };

@@ -15,6 +15,13 @@ import { createCharacterDancer } from "./character-dancer.js";
 import { createInfoPaneGesture } from "./info-pane-gesture.js";
 import { createMapGestures } from "./map-gestures.js";
 import { loadThreeModule } from "./three/three-loader.js";
+import {
+  initThree as initThreeScene,
+  resizeRenderer,
+  disposeThreeObject,
+  applyInertiaRotation,
+} from "./three/three-scene.js";
+import { buildStateMesh, loadBgTexture } from "./three/three-mesh.js";
 import { CHARACTER_MOVE_MAP, getCharacterFrame } from "./ui/character-data.js";
 import {
   SVG_NS,
@@ -50,32 +57,32 @@ if (/Mobi|Android/i.test(navigator.userAgent)) {
   document.addEventListener("pointerdown", goFS, { once: true });
 }
 
-const sigilLayerId = "map-sigils";
+import {
+  app,
+  svg,
+  mapPane,
+  infoPane,
+  infoContent,
+  backButton,
+  loadingScreen,
+  loadingProgress,
+  questionModal,
+  aboutModal,
+  aboutClose,
+  characterSelect,
+  characterConfirm,
+  characterCards,
+  aboutChangeCharacter,
+  stateCanvas,
+  threeStack,
+  dataUrl,
+  sigilsUrl,
+  tracksUrl,
+  shouldPreloadSnapshots,
+  mobileMediaQuery,
+} from "./core/dom-refs.js";
 
-const app = document.getElementById("app");
-const svg = document.getElementById("map-svg");
-const mapPane = document.querySelector("#app .map-pane");
-const infoPane = document.getElementById("info-pane");
-const infoContent = document.getElementById("state-content");
-const backButton = document.getElementById("state-back");
-const loadingScreen = document.getElementById("loading-screen");
-const loadingProgress = document.getElementById("loading-progress");
-const questionModal = document.getElementById("question-modal");
-const questionText = document.getElementById("question-text");
-const answerBtn1 = document.getElementById("answer-btn-1");
-const answerBtn2 = document.getElementById("answer-btn-2");
-const aboutModal = document.getElementById("about-modal");
-const aboutClose = document.getElementById("about-close");
-const characterSelect = document.getElementById("character-select");
-const characterConfirm = document.getElementById("character-confirm");
-const characterCards = document.querySelectorAll(".character-card[data-character]");
-const aboutChangeCharacter = document.getElementById("about-change-character");
-const stateCanvas = document.getElementById("state-3d-canvas");
-const threeStack = document.getElementById("state-3d-stack");
-const dataUrl = app?.dataset.geojson;
-const sigilsUrl = app?.dataset.sigils;
-const tracksUrl = app?.dataset.tracks;
-const shouldPreloadSnapshots = app?.dataset.preloadSnapshots === "true";
+const sigilLayerId = "map-sigils";
 
 const prefersReducedMotion = PREFERS_REDUCED_MOTION;
 
@@ -120,7 +127,6 @@ let stateInertiaX = 0;
 let stateInertiaY = 0;
 let isMorphing = false;
 let questionTimeout = null;
-let bgTextureCache = new Map();
 let selectedCharacter = null;
 // Map view character (SVG image on trail layer)
 let mapCharacter = null;
@@ -138,30 +144,6 @@ let stateCharFloatStart = 0;
 let stateCharDragging = false;
 let infoPaneGesture = null;
 let mapGestures = null;
-const mobileMediaQuery = matchMedia("(max-width: 900px)");
-
-const loadBgTexture = (stateId, THREE) => {
-  const index = getTextureIndexForState(stateId);
-  if (bgTextureCache.has(index)) return Promise.resolve(bgTextureCache.get(index));
-  return new Promise((resolve) => {
-    const loader = new THREE.TextureLoader();
-    const url = encodeURI(TEXTURE_FILES[index]);
-    loader.load(
-      url,
-      (texture) => {
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        bgTextureCache.set(index, texture);
-        resolve(texture);
-      },
-      undefined,
-      (err) => {
-        console.warn("Failed to load texture:", url, err);
-        resolve(null);
-      },
-    );
-  });
-};
 
 const getSigilBaseSize = () => {
   const baseBox = mapApi?.fullViewBox;
@@ -571,45 +553,6 @@ const setupTrackPlayer = (container, audio) => {
 
 const viewbox = createViewBoxAnimator(svg, { prefersReducedMotion });
 
-const disposeThreeObject = (object) => {
-  if (!object) return;
-  object.traverse((child) => {
-    if (child.geometry) child.geometry.dispose();
-    if (child.material) {
-      if (Array.isArray(child.material)) {
-        child.material.forEach((material) => material.dispose());
-      } else {
-        child.material.dispose();
-      }
-    }
-  });
-};
-
-const applyInertiaRotation = (mesh, inertiaX, inertiaY, clampX, damping = 0.92) => {
-  if (!mesh) return { x: inertiaX, y: inertiaY };
-  if (Math.abs(inertiaX) < 0.0001 && Math.abs(inertiaY) < 0.0001) {
-    return { x: 0, y: 0 };
-  }
-  const nextX = mesh.rotation.x + inertiaX;
-  mesh.rotation.x = Math.max(clampX.min, Math.min(clampX.max, nextX));
-  mesh.rotation.y += inertiaY;
-  let nextInertiaX = inertiaX * damping;
-  let nextInertiaY = inertiaY * damping;
-  if (Math.abs(nextInertiaX) < 0.0001) nextInertiaX = 0;
-  if (Math.abs(nextInertiaY) < 0.0001) nextInertiaY = 0;
-  return { x: nextInertiaX, y: nextInertiaY };
-};
-
-const resizeRenderer = (api, canvas) => {
-  if (!api || !canvas) return;
-  const rect = canvas.getBoundingClientRect();
-  if (!rect.width || !rect.height) return;
-  api.renderer.setPixelRatio(window.devicePixelRatio || 1);
-  api.renderer.setSize(rect.width, rect.height, false);
-  api.camera.aspect = rect.width / rect.height;
-  api.camera.updateProjectionMatrix();
-};
-
 const resizeThree = () => {
   resizeRenderer(threeApi, stateCanvas);
 };
@@ -617,191 +560,14 @@ const resizeThree = () => {
 const initThree = async () => {
   if (threeInitPromise) return threeInitPromise;
   threeInitPromise = (async () => {
-    if (!stateCanvas) return null;
-    const THREE = await loadThreeModule();
-    const renderer = new THREE.WebGLRenderer({
-      canvas: stateCanvas,
-      antialias: true,
-      alpha: true,
-    });
-    renderer.setClearColor(0x000000, 0);
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
-    camera.position.set(0, 0, 4.5);
-    camera.lookAt(0, 0, 0);
-    const hemi = new THREE.HemisphereLight(0xe8ffb2, 0x0b0e07, 0.7);
-    scene.add(hemi);
-    const ambient = new THREE.AmbientLight(0x1b240f, 0.45);
-    scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0xffffff, 1.1);
-    dir.position.set(4, 3, 6);
-    scene.add(dir);
-    const rim = new THREE.DirectionalLight(0x6b7f2c, 0.65);
-    rim.position.set(-4, -3, 2);
-    scene.add(rim);
-    threeApi = { THREE, renderer, scene, camera, mesh: null, frameId: null };
-    resizeThree();
+    const api = await initThreeScene(stateCanvas);
+    if (api) threeApi = api;
     return threeApi;
   })();
   return threeInitPromise;
 };
 
-const buildShapesFromGeometry = (geometry, THREE) => {
-  const shapes = [];
-  if (!geometry) return shapes;
-  const ringToPath = (ring, PathCtor) => {
-    const path = new PathCtor();
-    ring.forEach((coord, index) => {
-      const x = coord[0];
-      const y = -coord[1];
-      if (index === 0) path.moveTo(x, y);
-      else path.lineTo(x, y);
-    });
-    return path;
-  };
-  const addPolygon = (coords) => {
-    if (!coords.length) return;
-    const shape = ringToPath(coords[0], THREE.Shape);
-    for (let i = 1; i < coords.length; i += 1) {
-      shape.holes.push(ringToPath(coords[i], THREE.Path));
-    }
-    shapes.push(shape);
-  };
-  if (geometry.type === "Polygon") {
-    addPolygon(geometry.coordinates || []);
-  } else if (geometry.type === "MultiPolygon") {
-    (geometry.coordinates || []).forEach((polygon) => addPolygon(polygon));
-  }
-  return shapes;
-};
 
-const collectPolygonsFromGeometry = (geometry) => {
-  const polygons = [];
-  if (!geometry) return polygons;
-  const ringToPoints = (ring) =>
-    ring.map((coord) => ({
-      x: coord[0],
-      y: -coord[1],
-    }));
-  const addPolygon = (coords) => {
-    if (!coords.length) return;
-    const outer = ringToPoints(coords[0]);
-    const holes = coords.slice(1).map(ringToPoints);
-    polygons.push({ outer, holes });
-  };
-  if (geometry.type === "Polygon") {
-    addPolygon(geometry.coordinates || []);
-  } else if (geometry.type === "MultiPolygon") {
-    (geometry.coordinates || []).forEach((polygon) => addPolygon(polygon));
-  }
-  return polygons;
-};
-
-const isPointInRing = (x, y, ring) => {
-  if (!ring || ring.length < 3) return false;
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i].x;
-    const yi = ring[i].y;
-    const xj = ring[j].x;
-    const yj = ring[j].y;
-    const intersects = yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-};
-
-const isPointInPolygon = (x, y, polygon) => {
-  if (!polygon || !isPointInRing(x, y, polygon.outer)) return false;
-  return !(polygon.holes || []).some((hole) => isPointInRing(x, y, hole));
-};
-
-const isPointInAnyPolygon = (x, y, polygons) =>
-  (polygons || []).some((polygon) => isPointInPolygon(x, y, polygon));
-
-const getRingCentroid = (ring) => {
-  if (!ring || ring.length < 3) return null;
-  let area = 0;
-  let cx = 0;
-  let cy = 0;
-  for (let i = 0; i < ring.length; i += 1) {
-    const next = (i + 1) % ring.length;
-    const x0 = ring[i][0];
-    const y0 = -ring[i][1];
-    const x1 = ring[next][0];
-    const y1 = -ring[next][1];
-    const cross = x0 * y1 - x1 * y0;
-    area += cross;
-    cx += (x0 + x1) * cross;
-    cy += (y0 + y1) * cross;
-  }
-  area *= 0.5;
-  if (Math.abs(area) < 1e-6) {
-    let sumX = 0;
-    let sumY = 0;
-    ring.forEach((coord) => {
-      sumX += coord[0];
-      sumY += -coord[1];
-    });
-    const count = ring.length || 1;
-    return { x: sumX / count, y: sumY / count, area: 0 };
-  }
-  return { x: cx / (6 * area), y: cy / (6 * area), area: Math.abs(area) };
-};
-
-const getGeometryCellInfo = (geometry) => {
-  if (!geometry) return null;
-  const addInfo = (ring) => {
-    const centroid = getRingCentroid(ring);
-    if (!centroid) return null;
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    ring.forEach((coord) => {
-      const x = coord[0];
-      const y = -coord[1];
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-    });
-    return {
-      centroid,
-      width: maxX - minX,
-      height: maxY - minY,
-      area: centroid.area,
-    };
-  };
-  const collect = [];
-  if (geometry.type === "Polygon") {
-    const info = addInfo((geometry.coordinates || [])[0] || []);
-    if (info) collect.push(info);
-  } else if (geometry.type === "MultiPolygon") {
-    (geometry.coordinates || []).forEach((polygon) => {
-      const info = addInfo((polygon || [])[0] || []);
-      if (info) collect.push(info);
-    });
-  }
-  if (!collect.length) return null;
-  const totalArea = collect.reduce((sum, item) => sum + (item.area || 0), 0) || 1;
-  const weighted = collect.reduce(
-    (acc, item) => {
-      const weight = (item.area || 0) / totalArea;
-      acc.x += item.centroid.x * weight;
-      acc.y += item.centroid.y * weight;
-      acc.width += item.width;
-      acc.height += item.height;
-      return acc;
-    },
-    { x: 0, y: 0, width: 0, height: 0 },
-  );
-  return {
-    centroid: { x: weighted.x, y: weighted.y },
-    width: weighted.width / collect.length,
-    height: weighted.height / collect.length,
-  };
-};
 
 const computeBreathingHeight = (cell, time, baseHeight, maxHeight) => {
   const breath = fbmNoise2D(cell.x * 0.8 + time * 0.12, cell.y * 0.8 + time * 0.09, 2);
@@ -831,357 +597,6 @@ const computeAudioResponse = (cell, audioData, maxBin) => {
   return Math.pow(amp, 1.8) * cell.sensitivity;
 };
 
-const buildStateMesh = (stateId, THREE) => {
-  if (!geojsonData) return null;
-  const features = geojsonData.features.filter(
-    (feature) => String((feature.properties || {}).state ?? "0") === String(stateId),
-  );
-  const shapes = [];
-  const polygons = [];
-  const cells = [];
-  features.forEach((feature) => {
-    shapes.push(...buildShapesFromGeometry(feature.geometry, THREE));
-    polygons.push(...collectPolygonsFromGeometry(feature.geometry));
-    const info = getGeometryCellInfo(feature.geometry);
-    if (info) cells.push(info);
-  });
-  if (!shapes.length) return null;
-  const geometry = new THREE.ExtrudeGeometry(shapes, {
-    depth: 2.0,
-    bevelEnabled: true,
-    bevelThickness: 0.12,
-    bevelSize: 0.1,
-    bevelSegments: 2,
-  });
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
-  const box = geometry.boundingBox;
-  let centerX = 0;
-  let centerY = 0;
-  let scale = 1;
-  if (box) {
-    const sizeX = box.max.x - box.min.x;
-    const sizeY = box.max.y - box.min.y;
-    const sizeZ = box.max.z - box.min.z;
-    centerX = (box.max.x + box.min.x) / 2;
-    centerY = (box.max.y + box.min.y) / 2;
-    const centerZ = (box.max.z + box.min.z) / 2;
-    geometry.translate(-centerX, -centerY, -centerZ);
-    const maxSize = Math.max(sizeX, sizeY, sizeZ || 0.25);
-    scale = maxSize > 0 ? 2.4 / maxSize : 1;
-    geometry.scale(scale, scale, scale);
-  }
-  geometry.computeBoundingBox();
-  const scaledBounds = geometry.boundingBox;
-  let depthRatio = null;
-  if (scaledBounds) {
-    const sizeX = scaledBounds.max.x - scaledBounds.min.x;
-    const sizeY = scaledBounds.max.y - scaledBounds.min.y;
-    const sizeZ = scaledBounds.max.z - scaledBounds.min.z;
-    const denom = Math.max(sizeX, sizeY, 1e-6);
-    depthRatio = sizeZ / denom;
-    // Recompute UVs based on transformed geometry bounds for texture mapping
-    const uvAttr = geometry.getAttribute("uv");
-    const posAttr = geometry.getAttribute("position");
-    if (uvAttr && posAttr) {
-      const uvArray = uvAttr.array;
-      const posArray = posAttr.array;
-      for (let i = 0; i < posAttr.count; i++) {
-        const x = posArray[i * 3];
-        const y = posArray[i * 3 + 1];
-        // Map position to UV in [0,1] range based on bounding box
-        const u = (x - scaledBounds.min.x) / sizeX;
-        const v = (y - scaledBounds.min.y) / sizeY;
-        uvArray[i * 2] = u;
-        uvArray[i * 2 + 1] = v;
-      }
-      uvAttr.needsUpdate = true;
-    }
-  }
-  const transformPoint = (point) => ({
-    x: (point.x - centerX) * scale,
-    y: (point.y - centerY) * scale,
-  });
-  const transformedPolygons = polygons.map((polygon) => ({
-    outer: polygon.outer.map(transformPoint),
-    holes: (polygon.holes || []).map((hole) => hole.map(transformPoint)),
-  }));
-  const baseColorValue = colorForState ? colorForState(stateId, false) : "#bdff00";
-  const baseColor = new THREE.Color(baseColorValue);
-  const sideColor = baseColor.clone().multiplyScalar(0.6);
-  const faceMaterial = new THREE.MeshStandardMaterial({
-    color: baseColor,
-    roughness: 0.35,
-    metalness: 0.08,
-    flatShading: false,
-    emissive: baseColor.clone().multiplyScalar(0.2),
-    emissiveIntensity: 0.2,
-  });
-  const sideMaterial = new THREE.MeshStandardMaterial({
-    color: sideColor,
-    roughness: 0.75,
-    metalness: 0.1,
-    emissive: sideColor.clone().multiplyScalar(0.2),
-    emissiveIntensity: 0.2,
-  });
-  const mesh = new THREE.Mesh(geometry, [faceMaterial, sideMaterial]);
-
-  let terrainGroup = null;
-  const terrainData = [];
-  let terrainBaseHeight = null;
-  let terrainMaxHeight = null;
-  let terrainTopZ = null;
-  let terrainRangeX = null;
-  let terrainRangeY = null;
-  let terrainSize = null;
-  let terrainNeighbors = null;
-  let terrainHeights = null;
-  let terrainEnergy = null;
-  if (scaledBounds && cells.length) {
-    const avgWidth = cells.reduce((sum, item) => sum + item.width, 0) / cells.length;
-    const avgHeight = cells.reduce((sum, item) => sum + item.height, 0) / cells.length;
-    terrainSize = Math.max(0.02, Math.min(avgWidth, avgHeight) * scale * 0.7);
-    const terrainMat = new THREE.LineBasicMaterial({
-      color: 0xbdff00,
-      transparent: true,
-      opacity: 0.85,
-    });
-    terrainGroup = new THREE.Group();
-    terrainGroup.frustumCulled = false;
-    terrainGroup.renderOrder = 2;
-    const minX = scaledBounds.min.x;
-    const minY = scaledBounds.min.y;
-    terrainRangeX = scaledBounds.max.x - scaledBounds.min.x || 1;
-    terrainRangeY = scaledBounds.max.y - scaledBounds.min.y || 1;
-    terrainTopZ = scaledBounds.max.z + 0.08;
-    terrainBaseHeight = 0.04;
-    terrainMaxHeight = 0.7;
-    const gridSize = terrainSize * 1.4;
-    const grid = new Map();
-    features.forEach((feature) => {
-      const info = getGeometryCellInfo(feature.geometry);
-      if (!info) return;
-      const shapesForCell = buildShapesFromGeometry(feature.geometry, THREE);
-      if (!shapesForCell.length) return;
-      const x = (info.centroid.x - centerX) * scale;
-      const y = (info.centroid.y - centerY) * scale;
-      const xNorm = (x - minX) / terrainRangeX;
-      const gridX = gridSize > 0 ? Math.round(x / gridSize) : 0;
-      const gridY = gridSize > 0 ? Math.round(y / gridSize) : 0;
-      const key = `${gridX},${gridY}`;
-      if (!grid.has(key)) grid.set(key, []);
-      const weight = 0.15 + hash2(x, y) * 0.85;
-      const meshes = shapesForCell.map((shape) => {
-        const cellGeometry = new THREE.ExtrudeGeometry([shape], {
-          depth: 1,
-          bevelEnabled: false,
-        });
-        cellGeometry.translate(-centerX, -centerY, 0);
-        cellGeometry.scale(scale, scale, 1);
-        const edgeGeometry = new THREE.EdgesGeometry(cellGeometry, 1);
-        cellGeometry.dispose();
-        const cellEdges = new THREE.LineSegments(edgeGeometry, terrainMat);
-        cellEdges.position.z = terrainTopZ;
-        cellEdges.scale.z = terrainBaseHeight;
-        terrainGroup.add(cellEdges);
-        return cellEdges;
-      });
-      const cellIndex = terrainData.length;
-      grid.get(key).push(cellIndex);
-      const freqCenter = xNorm * 0.93 + hash2(x * 3.1, y * 7.3) * 0.07;
-      const freqWidth = 0.05 + hash2(x * 5.7, y * 2.3) * 0.06;
-      const attackSpeed = 0.5 + hash2(x * 1.3, y * 4.7) * 0.4;
-      const decaySpeed = 0.08 + hash2(x * 6.1, y * 1.9) * 0.17;
-      const sensitivity = 0.8 + hash2(x * 8.3, y * 3.1) * 0.4;
-      const breathePhase = hash2(x * 2.7, y * 9.1) * Math.PI * 2;
-      terrainData.push({
-        meshes,
-        x,
-        y,
-        xNorm,
-        weight,
-        gridX,
-        gridY,
-        freqCenter,
-        freqWidth,
-        attackSpeed,
-        decaySpeed,
-        sensitivity,
-        breathePhase,
-      });
-    });
-    terrainNeighbors = terrainData.map(() => []);
-    terrainData.forEach((cell, index) => {
-      for (let dx = -1; dx <= 1; dx += 1) {
-        for (let dy = -1; dy <= 1; dy += 1) {
-          if (dx === 0 && dy === 0) continue;
-          const key = `${cell.gridX + dx},${cell.gridY + dy}`;
-          const indices = grid.get(key);
-          if (!indices) continue;
-          indices.forEach((neighborIndex) => {
-            terrainNeighbors[index].push(neighborIndex);
-          });
-        }
-      }
-    });
-    terrainHeights = new Float32Array(terrainData.length).fill(terrainBaseHeight);
-    terrainEnergy = new Float32Array(terrainData.length);
-    mesh.add(terrainGroup);
-  }
-  // Easter egg: track info on the back face
-  const trackId = trackByState.get(String(stateId));
-  const track = trackId ? trackById.get(trackId) : null;
-  let versoBackPlane = null;
-  let versoLinks = [];
-  if (track && scaledBounds) {
-    const parts = track.title.split(" - ");
-    const artist = parts[0] || "";
-    const title = parts.slice(1).join(" - ") || track.title;
-    const cvs = document.createElement("canvas");
-    cvs.width = 512;
-    cvs.height = 256;
-    const ctx = cvs.getContext("2d");
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, cvs.width, cvs.height);
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#e8ffb2";
-    ctx.font = '36px "Sinistre Regular", "Trebuchet MS", "Gill Sans", sans-serif';
-    ctx.letterSpacing = "4px";
-    ctx.fillText(title, cvs.width / 2, 110, cvs.width - 40);
-    ctx.fillStyle = "rgba(189,255,0,0.55)";
-    ctx.font = '24px "Sinistre Regular", "Trebuchet MS", "Gill Sans", sans-serif';
-    ctx.letterSpacing = "6px";
-    ctx.fillText(artist.toUpperCase(), cvs.width / 2, 160, cvs.width - 40);
-    // Draw Bandcamp & Instagram icons below artist text
-    const iconSize = 32;
-    const iconY = 200;
-    const iconColor = "#e8ffb2";
-    const iconLinks = [];
-    if (track.bandcamp) {
-      const bx = cvs.width / 2 - 56;
-      ctx.save();
-      ctx.fillStyle = iconColor;
-      ctx.beginPath();
-      // Bandcamp parallelogram icon
-      ctx.moveTo(bx, iconY);
-      ctx.lineTo(bx + iconSize * 0.6, iconY);
-      ctx.lineTo(bx + iconSize, iconY + iconSize);
-      ctx.lineTo(bx + iconSize * 0.4, iconY + iconSize);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      iconLinks.push({
-        uMin: bx / cvs.width,
-        uMax: (bx + iconSize) / cvs.width,
-        vMin: 1 - (iconY + iconSize) / cvs.height,
-        vMax: 1 - iconY / cvs.height,
-        url: track.bandcamp,
-      });
-    }
-    if (track.instagram) {
-      const ix = cvs.width / 2 + 24;
-      ctx.save();
-      ctx.strokeStyle = iconColor;
-      ctx.fillStyle = iconColor;
-      const cx = ix + iconSize / 2;
-      const cy = iconY + iconSize / 2;
-      const s = iconSize;
-      // Outer rounded rectangle — generous radius like the real logo (~35% of size)
-      const outerR = s * 0.32;
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.moveTo(ix + outerR, iconY);
-      ctx.lineTo(ix + s - outerR, iconY);
-      ctx.arcTo(ix + s, iconY, ix + s, iconY + outerR, outerR);
-      ctx.lineTo(ix + s, iconY + s - outerR);
-      ctx.arcTo(ix + s, iconY + s, ix + s - outerR, iconY + s, outerR);
-      ctx.lineTo(ix + outerR, iconY + s);
-      ctx.arcTo(ix, iconY + s, ix, iconY + s - outerR, outerR);
-      ctx.lineTo(ix, iconY + outerR);
-      ctx.arcTo(ix, iconY, ix + outerR, iconY, outerR);
-      ctx.closePath();
-      ctx.stroke();
-      // Lens circle — radius ~33% of icon
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, s * 0.28, 0, Math.PI * 2);
-      ctx.stroke();
-      // Flash dot — top-right, small filled circle
-      ctx.beginPath();
-      ctx.arc(ix + s * 0.76, iconY + s * 0.24, s * 0.065, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-      iconLinks.push({
-        uMin: ix / cvs.width,
-        uMax: (ix + iconSize) / cvs.width,
-        vMin: 1 - (iconY + iconSize) / cvs.height,
-        vMax: 1 - iconY / cvs.height,
-        url: track.instagram,
-      });
-    }
-    versoLinks = iconLinks;
-    const tex = new THREE.CanvasTexture(cvs);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const sX = scaledBounds.max.x - scaledBounds.min.x;
-    const sY = scaledBounds.max.y - scaledBounds.min.y;
-    const planeW = Math.min(sX, sY) * 0.7;
-    const planeH = planeW * 0.5;
-    const backPlane = new THREE.Mesh(
-      new THREE.PlaneGeometry(planeW, planeH),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.FrontSide }),
-    );
-    backPlane.rotation.y = Math.PI;
-    backPlane.position.z = scaledBounds.min.z - 0.02;
-    mesh.add(backPlane);
-    versoBackPlane = backPlane;
-
-    // Random image on a separate plane, offset away from the state shape
-    const imgFile = VERSO_IMAGES[Math.floor(Math.random() * VERSO_IMAGES.length)];
-    const imgLoader = new THREE.TextureLoader();
-    imgLoader.load("assets/images/" + imgFile, (imgTex) => {
-      imgTex.colorSpace = THREE.SRGBColorSpace;
-      const imgW = Math.min(sX, sY) * 0.5;
-      const aspect = imgTex.image.naturalHeight / imgTex.image.naturalWidth || 1;
-      const imgH = imgW * aspect;
-      const imgPlane = new THREE.Mesh(
-        new THREE.PlaneGeometry(imgW, imgH),
-        new THREE.MeshBasicMaterial({ map: imgTex, transparent: true, side: THREE.FrontSide }),
-      );
-      imgPlane.rotation.y = Math.PI;
-      // Position well outside the state shape — offset to the side
-      const side = Math.random() < 0.5 ? -1 : 1;
-      imgPlane.position.x = side * (sX * 0.5 + imgW * 0.4 + Math.random() * sX * 0.2);
-      imgPlane.position.y = (Math.random() - 0.5) * sY * 0.8;
-      imgPlane.position.z = scaledBounds.min.z - 0.04;
-      mesh.add(imgPlane);
-    });
-  }
-
-  mesh.rotation.x = -0.85;
-  mesh.rotation.y = 0.55;
-  const halfDepthZ = scaledBounds ? (scaledBounds.max.z - scaledBounds.min.z) / 2 : 0;
-  mesh.userData = {
-    terrainGroup,
-    terrainData,
-    terrainSize,
-    terrainTopZ,
-    terrainBaseHeight,
-    terrainMaxHeight,
-    terrainRangeX,
-    terrainRangeY,
-    terrainNeighbors,
-    terrainHeights,
-    terrainEnergy,
-    faceMaterial,
-    sideMaterial,
-    baseScale: mesh.scale.clone(),
-    depthRatio,
-    halfDepthZ,
-    backPlane: versoBackPlane,
-    versoLinks,
-  };
-  return mesh;
-};
 
 const startThreeRender = () => {
   if (!threeApi) return;
@@ -1222,7 +637,12 @@ const showState3D = async (stateId) => {
   // Reset inertia when loading new state
   stateInertiaX = 0;
   stateInertiaY = 0;
-  const mesh = buildStateMesh(stateId, api.THREE);
+  const mesh = buildStateMesh(stateId, api.THREE, {
+    geojsonData,
+    trackByState,
+    trackById,
+    colorForState,
+  });
   if (!mesh) return;
 
   // Prepare flat & face-on for morph transition

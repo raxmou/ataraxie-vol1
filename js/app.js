@@ -437,9 +437,10 @@ const init = async () => {
     if (mapApi?.applyFog) {
       mapApi.applyFog(revealedStates);
     }
-    // Initial texture canvas render
-    if (textureCanvas && fullViewBox) {
-      textureCanvas.render(revealedStates, fullViewBox);
+    // Initial texture canvas render (use current viewBox which may be zoomed on mobile)
+    const initialVB = viewbox.parse() || fullViewBox;
+    if (textureCanvas && initialVB) {
+      textureCanvas.render(revealedStates, initialVB);
     }
 
     renderTrails();

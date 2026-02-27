@@ -172,6 +172,7 @@
   color: rgba(189, 255, 0, 0.6);
   cursor: pointer;
   padding: 0;
+  margin-bottom: 2rem;
   animation: continue-appear 600ms ease both;
   transition:
     color 0.25s ease,

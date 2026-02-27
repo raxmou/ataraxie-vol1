@@ -15,8 +15,8 @@
       "playLabel": "Ecouter le son du vent à travers la sculpture",
       "hourglassText": "Tes yeux se ferment malgré eux, et tu sombres. Quand tu les ouvres à nouveau, le vent est tombé. La musique s'est tue, et ton corps est à moitié enterré par les coquillages.",
       "choices": [
-        "Tu t'éloignes le plus vite possible du rivage, le coeur plein d'appréhension, à travers les dunes.",
-        "Comme dans un rêve, tu t'enfonces toujours plus loin entre les marécages salés par-delà les dunes"
+        "Tu t'éloignes le plus vite possible à travers un paysage mouvant",
+        "Comme dans un rêve, tu t'enfonces toujours plus loin"
       ]
     },
     {
@@ -32,7 +32,8 @@
       "playLabel": "Lui faire un salut de la main",
       "hourglassText": "La petite créature continue de parler, trop faiblement pour que tu puisses l'entendre, sans te quitter des yeux et sans te rendre ton salut.",
       "choices": [
-        "Une aiguille se dresse à l'horizon, comme une blessure sur le ciel rougeoyant\u00a0; ton voyage touche à son terme."
+        "Par ici, l'air a un goût de métal",
+        "Une pluie fine tombe du ciel, mais pas un nuage à l'horizon"
       ]
     },
     {
@@ -68,8 +69,8 @@
       "playLabel": "Contempler ton reflet dans la vitrine",
       "hourglassText": "Ton image se brouille et semble se dissoudre dans l'obscurité. Tu n'entends plus que le sang qui bat tes tempes. Tu reprends connaissance assis sur une colline, loin de la ville\u00a0; le jour s'est levé.",
       "choices": [
-        "Tu prends la route des falaises au loin, les côtes battues par les vagues sombres.",
-        "Tu trouves un vélo abandonné, appuyé contre un arbre. On dirait qu'il t'attendait."
+        "Tu longes un chemin qui s'élève et s'efface dans la brume",
+        "Tu trouves un vélo abandonné, appuyé contre un arbre. On dirait qu'il t'attendait"
       ]
     },
     {
@@ -86,7 +87,8 @@
       "playLabel": "Boire à la bouche de la statue",
       "hourglassText": "Tu sens le froid de la pierre et de l'eau sur tes lèvres",
       "choices": [
-        "Une aiguille se dresse à l'horizon, comme une blessure sur le ciel rougeoyant\u00a0; ton voyage touche à son terme."
+        "Trois lunes accrochées au firmament t'indiquent la direction",
+        "Le sol se dérobe, puis se reforme sous tes pas comme s'il respirait"
       ]
     },
     {
@@ -103,8 +105,8 @@
       "playLabel": "T'installer sur le banc au bord du canal pour regarder le coucher de soleil",
       "hourglassText": "Dans l'air flotte le parfum des fleurs lacustres et l'odeur de la vase. Tu soupires. Un chat t'observe de loin.",
       "choices": [
-        "La verdure laisse bientôt place aux contreforts du désert.",
-        "D'étranges traces de rouille et de suie dessinent un chemin vers l'horizon."
+        "Le paysage se dissout peu à peu, remplacé par une étendue sans ombre",
+        "Des marques de rouille et de suie tracent un chemin incertain"
       ]
     },
     {
@@ -120,8 +122,8 @@
       "playLabel": "Déchiffrer les mots peints à même l'acier froid",
       "hourglassText": "Verse I\n\nLe Nostromodamus voyage et nous voyageons avec lui\nCollecteur d'empreintes, de vérités biotopes\nVaisseau qui cherche, vaisseau qui trouve\nMais qu'est-ce qui nous trouve en retour ?\n\nVerse II\n\nLe noyau a pris goût\nLe noyau observe les observateurs\nDans les fréquences : des messages\nDans les signaux : une présence\nCe qui étudie apprend à désirer\nCe qui mesure apprend à voir\n\nVerse III\n\nDans les clubs nous errons, âmes suspendues, musique suspendue\nPlus de réconfort, plus de poésie\nSeulement le vrombissement\nLa psycho acoustique des esprits qui flottent\nFréquences qui nous traversent comme nous traversons l'espace\n\nVerse IV\n\nMécanique du vertige, mécanique de la danse\nDu sol arraché vers le vaisseau\nCar le vaisseau nous observe\nNous sommes les autres\nNous sommes les empreintes\nNous sommes ce qui change en étant vu",
       "choices": [
-        "L'aéronef pointe vers un plateau aride au loin d'où vacille la lueur d'un feu de bois. Tu glisses du vaisseau et marche vers la lumière.",
-        "Tu arraches une pale d'hélice du vaisseau et t'en sers comme d'une machette pour continuer ta progression dans la forêt."
+        "D'un côté du ciel, l'aube, de l'autre, le crépuscule",
+        "Une voix inconnue t'appelle par ton nom \u2014 tu ignores d'où elle vient."
       ]
     },
     {
@@ -139,7 +141,8 @@
       "playLabel": "T'adosser au tronc d'un arbre pour te reposer un peu",
       "hourglassText": "D'abord un murmure, puis un grondement, puis un cri\u00a0: la forêt s'effondre. En quelques instants, il ne reste plus que la poussière et le vent.",
       "choices": [
-        "Une aiguille se dresse à l'horizon, comme une blessure sur le ciel rougeoyant\u00a0; ton voyage touche à son terme."
+        "Une aiguille se dresse à l'horizon, comme une blessure sur le ciel rougeoyant",
+        "Tu ne cesses de te retourner, mais personne ne te suis"
       ]
     },
     {
@@ -156,8 +159,8 @@
       "playLabel": "Relever doucement le pied",
       "hourglassText": "Emergeant à peine du sol, une rose minérale aux pétales translucides reflète la lueur des lunes. Tu as trouvé la seule fleur de ces immensités.",
       "choices": [
-        "Au coeur du désert se trouve une ville à moitié ensevelie.",
-        "Une petite hutte surplombe la plus haute dune."
+        "Tu reprends la marche, sans savoir si le pas te rapproche ou t'éloigne",
+        "Chaque empreinte s'efface avant même que tu te retournes."
       ]
     },
     {
@@ -173,8 +176,8 @@
       "playLabel": "Suivre les créatures",
       "hourglassText": "Tu observes les volutes fluorescentes qui ondulent à tes pieds et éclairent faiblement l'obscurité, comme un reflet des étoiles masquées par la canopée.",
       "choices": [
-        "Les créatures glissent dans un puit sous-marin. Tu prends une profonde respiration et plonge avec elles.",
-        "Tu escalades un enchevêtrement de racines et sors de l'eau, jusqu'à rejoindre le sommet d'un arbre pour enfin apercevoir le ciel."
+        "Le jour s'étire, indifférent à ta fatigue",
+        "Le chemin te semble familier, bien que tu n'y aies jamais mis les pieds"
       ]
     },
     {

@@ -229,7 +229,7 @@
   font-family: "Sinistre Regular", "Trebuchet MS", "Gill Sans", "Segoe UI", sans-serif;
   font-size: 0.68rem;
   font-weight: 400;
-  color: rgba(189, 255, 0, 0.45);
+  color: var(--text-color);
   line-height: 1.45;
   letter-spacing: 0.03em;
   overflow: hidden;
@@ -240,11 +240,22 @@
 
 /* ── Tarot card interactions ── */
 
-.tarot-card:hover .tarot-card-inner {
-  transform: rotateY(0deg);
+/* Desktop: hover flips card */
+@media (hover: hover) {
+  .tarot-card:hover .tarot-card-inner {
+    transform: rotateY(0deg);
+  }
+  .tarot-card:hover .tarot-card-front {
+    border-color: rgba(189, 255, 0, 0.6);
+    box-shadow: 0 8px 24px rgba(189, 255, 0, 0.15);
+  }
 }
 
-.tarot-card:hover .tarot-card-front {
+/* Touch: JS-driven flip via class */
+.tarot-card.is-flipped .tarot-card-inner {
+  transform: rotateY(0deg);
+}
+.tarot-card.is-flipped .tarot-card-front {
   border-color: rgba(189, 255, 0, 0.6);
   box-shadow: 0 8px 24px rgba(189, 255, 0, 0.15);
 }

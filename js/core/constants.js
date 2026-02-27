@@ -25,6 +25,7 @@ export const TEXTURE_FILES = [
 
 export const getTextureIndexForState = (stateId) => Number(stateId) - 1;
 
+export const PENULTIMATE_STATE = "10";
 export const FINAL_STATE = "11";
 
 export const CHARACTER_STORAGE_KEY = "ataraxie-character";

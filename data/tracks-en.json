@@ -15,8 +15,8 @@
       "playLabel": "Listen to the sound of the wind going through the sculpture",
       "hourglassText": "Your eyelids slowly close, and you can feel yourself sinking. When your eyes open, the wind has died down. The music has stopped, and your body is half buried in seashells.",
       "choices": [
-        "You depart from the shore as quickly as possible, your heart full of sorrow, across the dunes.",
-        "As if in a dream, you fray deeper and deeper into the salt marshes beyond the dunes."
+        "You move away as quickly as you can through a shifting landscape.",
+        "Like in a dream, you sink ever deeper."
       ]
     },
     {
@@ -32,7 +32,8 @@
       "playLabel": "Wave at the little fellow",
       "hourglassText": "The little creature goes on mumbling, too softly for you to hear, without taking its eyes off you nor returning your greeting.",
       "choices": [
-        "A spire rises on the horizon, like a wound in the glowing sky; your journey is coming to an end."
+        "Here, the air tastes of metal.",
+        "A fine rain falls from the sky, yet not a cloud is in sight."
       ]
     },
     {
@@ -68,8 +69,8 @@
       "playLabel": "Gaze at your reflection in the glass",
       "hourglassText": "Your vision blurs and the world dissolves into darkness. All you hear is the blood pounding in your temples. You regain consciousness sitting on a hill, far from the city; dawn is here.",
       "choices": [
-        "The cliffs in the distance, the coastline battered by dark waves.",
-        "You find an abandoned bicycle leaning against a tree. It looks like it was waiting for you."
+        "You follow a path that rises and fades into the mist.",
+        "You find an abandoned bicycle leaning against a tree. It looks like it's been waiting for you."
       ]
     },
     {
@@ -86,7 +87,8 @@
       "playLabel": "Drink from the statue's mouth",
       "hourglassText": "Feel the cold of the water and stone on your lips",
       "choices": [
-        "A spire rises on the horizon, like a wound in the glowing sky; your journey is coming to an end."
+        "Three moons hanging in the firmament point the way.",
+        "The ground gives way, then reforms beneath your steps as if it were breathing."
       ]
     },
     {
@@ -103,8 +105,8 @@
       "playLabel": "Sit down on the bench by the canal to watch the sunset.",
       "hourglassText": "The scent of lakeside flowers and the smell of mud hang in the air. You sigh. A cat stares at you from afar.",
       "choices": [
-        "The greenery soon gives way to the foothills of the desert.",
-        "Strange traces of rust and soot form a path toward the horizon."
+        "The landscape slowly dissolves, replaced by a shadowless expanse.",
+        "Traces of rust and soot sketch an uncertain path."
       ]
     },
     {
@@ -120,8 +122,8 @@
       "playLabel": "Try and make out the words on the cold steel",
       "hourglassText": "Verse I\n\nNostromodamus travels, and we travel with him\nCollector of footprints, of biotope truths\nA ship that seeks, a ship that finds\nBut what finds us in return?\n\nVerse II\n\nThe core has acquired a taste\nThe core observes the observers\nIn the frequencies: messages\nIn the signals: a presence\nThat which studies learns to desire\nThat which measures learns to see\n\nVerse III\n\nIn clubs we wander, souls suspended, music suspended\nNo more comfort, no more poetry\nOnly the hum\nThe psychoacoustics of floating minds\nFrequencies passing through us as we pass through space\n\nVerse IV\n\nMechanics of vertigo, mechanics of dance\nFrom the torn ground to the ship\nFor the ship observes us\nWe are the others\nWe are the footprints\nWe are what changes when seen",
       "choices": [
-        "The airship points toward a barren plateau in the distance, where the glow of a wood fire flickers. You slide out of the ship and walk toward the light.",
-        "You tear off one of the ship's propeller blades and use it as a machete to continue your journey through the forest."
+        "On one side of the sky, dawn; on the other, dusk.",
+        "An unfamiliar voice calls your name \u2014 you do not know from where."
       ]
     },
     {
@@ -139,7 +141,8 @@
       "playLabel": "Lean against a tree trunk to rest for a while.",
       "hourglassText": "First a whisper, then a groan, then a scream: the ancient forest collapses. In a matter of moments, only dust and wind remain.",
       "choices": [
-        "A spire rises on the horizon, like a wound in the glowing sky; your journey is coming to an end."
+        "A spire rises on the horizon, like a wound in the glowing sky; your journey is coming to an end.",
+        "You keep looking back, yet no one follows."
       ]
     },
     {
@@ -156,8 +159,8 @@
       "playLabel": "Cautiously lift your foot",
       "hourglassText": "Barely emerging from the ground, a stony rose with translucent petals reflects the glow of the moons above. You have found the only flower in all this vastness.",
       "choices": [
-        "In the heart of the desert lies a half-buried city.",
-        "A small hut overlooks the highest dune."
+        "You start walking again, unsure whether each step brings you closer or farther away.",
+        "Each footprint vanishes before you can look back."
       ]
     },
     {
@@ -173,8 +176,8 @@
       "playLabel": "Follow the little swamp folk",
       "hourglassText": "You watch the fluorescent swirls undulating at your feet, dimly lighting the darkness, like a reflection of the stars hidden by the canopy.",
       "choices": [
-        "The creatures slide into an underwater well. You take a deep breath and dive in with them.",
-        "You climb a tangle of roots and emerge from the water, reaching the top of a tree and finally seeing the sky."
+        "The day stretches on, indifferent to your weariness.",
+        "The path feels familiar, though you have never set foot upon it."
       ]
     },
     {

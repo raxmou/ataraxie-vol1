@@ -4,7 +4,7 @@
  */
 
 import { t } from "../i18n/i18n.js";
-import { FINAL_STATE } from "../core/constants.js";
+import { PENULTIMATE_STATE, FINAL_STATE, PREFERS_REDUCED_MOTION } from "../core/constants.js";
 import {
   revealedStates,
   isStateRevealed,
@@ -26,6 +26,7 @@ export const createQuestionModal = ({
 }) => {
   const answeredQuestions = new Map();
   let pendingTrail = null;
+  const isTouchDevice = window.matchMedia("(pointer: coarse)").matches;
 
   const handleAnswer = (revealedStateId, currentStateId) => {
     // Reveal the selected state
@@ -112,6 +113,14 @@ export const createQuestionModal = ({
       btn.addEventListener("click", () => {
         const answer = btn.dataset.answer;
         if (!answer) return;
+        // Touch: first tap flips card to peek, second tap confirms
+        if (isTouchDevice && !PREFERS_REDUCED_MOTION) {
+          if (!btn.classList.contains("is-flipped")) {
+            answerButtons.forEach((b) => b.classList.remove("is-flipped"));
+            btn.classList.add("is-flipped");
+            return;
+          }
+        }
         // Disable all buttons immediately
         answerButtons.forEach((b) => {
           b.disabled = true;
@@ -144,7 +153,8 @@ export const createQuestionModal = ({
             });
             container.appendChild(continueBtn);
             setTimeout(() => {
-              continueBtn.scrollIntoView({ behavior: "smooth", block: "end" });
+              const scrollParent = document.getElementById("info-pane");
+              if (scrollParent) scrollParent.scrollTo({ top: scrollParent.scrollHeight, behavior: "smooth" });
             }, 650);
           }
         }, 1100);
@@ -177,8 +187,9 @@ export const createQuestionModal = ({
       return;
     }
 
-    // State 11 (Zero Crossing Point) is always the last to be discovered
-    const nonFinal = allUnrevealed.filter((s) => s !== FINAL_STATE);
+    // States 10 (Damna) and 11 (Zero Crossing Point) are reserved for last
+    const reserved = [PENULTIMATE_STATE, FINAL_STATE];
+    const nonReserved = allUnrevealed.filter((s) => !reserved.includes(s));
 
     // Hourglass text from source track
     const hourglassQuestion = sourceTrack?.hourglassText
@@ -187,12 +198,11 @@ export const createQuestionModal = ({
 
     if (!infoContent) return;
 
-    // If only state 11 remains, offer it as the sole destination
-    if (nonFinal.length === 0) {
-      const option1 = FINAL_STATE;
-      const option2 = FINAL_STATE;
+    // If only reserved states remain, offer the next one as sole destination
+    if (nonReserved.length === 0) {
+      const nextState = !isStateRevealed(PENULTIMATE_STATE) ? PENULTIMATE_STATE : FINAL_STATE;
+      const option1 = nextState;
       const label1 = choices[0];
-      const label2 = choices[1] || choices[0];
       const questionMarkup = `
         <div class="question-container">
           <div class="question-prompt tarot-reading">
@@ -200,7 +210,6 @@ export const createQuestionModal = ({
           </div>
           <div class="tarot-spread">
             ${cardMarkup(option1, label1)}
-            ${label2 !== label1 ? cardMarkup(option2, label2) : ""}
           </div>
         </div>
       `;
@@ -208,18 +217,22 @@ export const createQuestionModal = ({
       const answerButtons = infoContent.querySelectorAll(".answer-btn");
       answerButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
+          // Touch: first tap flips card to peek, second tap confirms
+          if (isTouchDevice && !PREFERS_REDUCED_MOTION) {
+            if (!btn.classList.contains("is-flipped")) {
+              btn.classList.add("is-flipped");
+              return;
+            }
+          }
           answerButtons.forEach((b) => {
             b.disabled = true;
           });
           btn.classList.add("answer-btn--selected");
-          answerButtons.forEach((b) => {
-            if (b !== btn) b.classList.add("answer-btn--dismissed");
-          });
           setTimeout(() => {
-            handleAnswer(FINAL_STATE, stateId);
+            handleAnswer(nextState, stateId);
             const chosenLabel = btn.querySelector(".tarot-card-label")?.textContent || "";
-            answeredQuestions.set(stateId, { option1, option2, chosen: FINAL_STATE, chosenLabel });
-            pendingTrail = { from: stateId, to: FINAL_STATE };
+            answeredQuestions.set(stateId, { option1: nextState, option2: nextState, chosen: nextState, chosenLabel });
+            pendingTrail = { from: stateId, to: nextState };
             const container = infoContent?.querySelector(".question-container");
             if (container) {
               const continueBtn = document.createElement("button");
@@ -231,7 +244,8 @@ export const createQuestionModal = ({
               });
               container.appendChild(continueBtn);
               setTimeout(() => {
-                continueBtn.scrollIntoView({ behavior: "smooth", block: "end" });
+                const scrollParent = document.getElementById("info-pane");
+                if (scrollParent) scrollParent.scrollTo({ top: scrollParent.scrollHeight, behavior: "smooth" });
               }, 650);
             }
           }, 1100);
@@ -240,13 +254,13 @@ export const createQuestionModal = ({
       return;
     }
 
-    // Prefer direct neighbors, but exclude state 11 — it's reserved for last
+    // Prefer direct neighbors, but exclude reserved states
     const neighbors = getNeighbors(stateId);
-    let candidates = neighbors.filter((n) => n !== FINAL_STATE && !isStateRevealed(n));
+    let candidates = neighbors.filter((n) => !reserved.includes(n) && !isStateRevealed(n));
 
-    // If no unrevealed non-final neighbors, use any non-final unrevealed state
+    // If no unrevealed non-reserved neighbors, use any non-reserved unrevealed state
     if (candidates.length === 0) {
-      candidates = nonFinal;
+      candidates = nonReserved;
     }
 
     // Always pick exactly 2 distinct unrevealed states
@@ -254,7 +268,6 @@ export const createQuestionModal = ({
     const option1 = shuffled[0];
     const option2 = shuffled[1] || option1;
 
-    // Always 2 cards with distinct labels from track choices
     const label1 = choices[0];
     const label2 = choices[1];
 
@@ -266,7 +279,7 @@ export const createQuestionModal = ({
         </div>
         <div class="tarot-spread">
           ${cardMarkup(option1, label1)}
-          ${cardMarkup(option2, label2)}
+          ${label2 ? cardMarkup(option2, label2) : ""}
         </div>
       </div>
     `;

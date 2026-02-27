@@ -1,5 +1,5 @@
 run:
-	python3 -m http.server 8000
+	python3 -m http.server 8003
 
 lint:
 	npx eslint js/ --ext .js

@@ -14,7 +14,6 @@ import { loadGeoJSON, loadSigils, loadTracks } from "./data/data.js";
 import { createMap, createStateColor } from "./map/map.js";
 import { createViewBoxAnimator, createTransformAnimator } from "./map/viewbox.js";
 import { createTextureCanvas } from "./map/texture-canvas.js";
-import { createInfoPaneGesture } from "./ui/info-pane-gesture.js";
 import { createMapGestures } from "./map/map-gestures.js";
 import { createThreeMorph } from "./three/three-morph.js";
 import { CHARACTER_MOVE_MAP } from "./ui/character-data.js";
@@ -27,6 +26,8 @@ import { createMapCharacterManager } from "./ui/character-map.js";
 import { createStateCharacterManager } from "./ui/character-state.js";
 import { createInfoPanel } from "./ui/info-panel.js";
 import { createQuestionModal } from "./ui/question-modal.js";
+import { createNavigation } from "./map/navigation.js";
+import { createLayoutManager } from "./ui/layout.js";
 import {
   revealedStates,
   isStateRevealed,
@@ -78,7 +79,6 @@ let activeStateId = null;
 let fullViewBox = null;
 let mapApi = null;
 let stateCounts = new Map();
-let animationToken = 0;
 let transformAnimator = null;
 let trackByState = new Map();
 let trackById = new Map();
@@ -152,8 +152,6 @@ const stateCharMgr = createStateCharacterManager({
 const showStateCharacter = () => stateCharMgr.show(selectedCharacter);
 const hideStateCharacter = () => stateCharMgr.hide();
 
-// infoPanel and questionMgr use forward-referenced callbacks (clearSelection, etc.)
-// — safe because callbacks are only invoked at runtime, after all declarations
 const infoPanel = createInfoPanel({
   infoContent,
   app,
@@ -182,7 +180,22 @@ const hideQuestionModal = () => questionMgr.hideQuestionModal();
 
 const viewbox = createViewBoxAnimator(svg, { prefersReducedMotion });
 
-// threeMorph uses forward-referenced setSplitLayout/setAnimating (defined below)
+const layout = createLayoutManager({
+  app,
+  svg,
+  infoPane,
+  backButton,
+  loadingScreen,
+  loadingProgress,
+  aboutModal,
+  mobileMediaQuery,
+  hideHoverSigil,
+  getInfoPaneGesture: () => infoPaneGesture,
+  setInfoPaneGesture: (v) => { infoPaneGesture = v; },
+});
+const { setSplitLayout, setCollapsed, setAnimating, setLoading, updateLoadingProgress, hideAboutModal } = layout;
+
+// threeMorph uses forward-referenced setSplitLayout/setAnimating (defined above)
 // — safe because callbacks are only invoked at runtime, after all declarations
 const threeMorph = createThreeMorph({
   stateCanvas,
@@ -202,166 +215,16 @@ const threeMorph = createThreeMorph({
 const { showState3D, morphTo3D, hideState3D } = threeMorph;
 const resizeThree = () => threeMorph.resizeThree();
 
-const setSplitLayout = (isSplit) => {
-  if (!app || !infoPane) return;
-  if (isSplit) {
-    app.classList.add("is-split");
-    infoPane.removeAttribute("aria-hidden");
-    backButton?.removeAttribute("hidden");
-    hideHoverSigil();
-    // Init swipe gesture on mobile
-    if (mobileMediaQuery.matches && !infoPaneGesture) {
-      infoPaneGesture = createInfoPaneGesture(infoPane, {
-        onMinimize: () => app.classList.add("is-pane-minimized"),
-        onMaximize: () => app.classList.remove("is-pane-minimized"),
-      });
-      infoPaneGesture.init();
-    }
-  } else {
-    app.classList.remove("is-split", "is-pane-minimized");
-    infoPane.setAttribute("aria-hidden", "true");
-    backButton?.setAttribute("hidden", "");
-    if (infoPaneGesture) {
-      infoPaneGesture.dispose();
-      infoPaneGesture = null;
-    }
-  }
-};
-
-const setCollapsed = (isCollapsed) => {
-  if (!svg) return;
-  svg.classList.toggle("is-collapsed", isCollapsed);
-};
-
-const setAnimating = (isAnimating) => {
-  if (!svg) return;
-  svg.classList.toggle("is-animating", isAnimating);
-};
-
-const setLoading = (isLoading, message) => {
-  if (!loadingScreen) return;
-  if (message && loadingProgress) {
-    loadingProgress.textContent = message;
-  }
-  if (isLoading) {
-    loadingScreen.classList.remove("is-hidden");
-    loadingScreen.setAttribute("aria-hidden", "false");
-    app?.setAttribute("aria-busy", "true");
-  } else {
-    loadingScreen.classList.add("is-hidden");
-    loadingScreen.setAttribute("aria-hidden", "true");
-    app?.removeAttribute("aria-busy");
-  }
-};
-
-const updateLoadingProgress = (current, total) => {
-  if (!loadingProgress) return;
-  loadingProgress.textContent = t("loading.stateViews", { current, total });
-};
-
-const getViewportScale = (box, viewport) =>
-  Math.min(viewport.width / box.width, viewport.height / box.height);
-
-const getViewportOffset = (box, viewport, scale) => ({
-  x: (viewport.width - box.width * scale) / 2,
-  y: (viewport.height - box.height * scale) / 2,
+const nav = createNavigation({
+  mapPane,
+  viewbox,
+  prefersReducedMotion,
+  getMapApi: () => mapApi,
+  getTransformAnimator: () => transformAnimator,
+  getFullViewBox: () => fullViewBox,
+  setAnimating,
 });
-
-const getTransformForViewBox = (fromBox, toBox, viewport) => {
-  const fromScale = getViewportScale(fromBox, viewport);
-  const toScale = getViewportScale(toBox, viewport);
-  const scale = toScale / fromScale;
-  const fromOffset = getViewportOffset(fromBox, viewport, fromScale);
-  const toOffset = getViewportOffset(toBox, viewport, toScale);
-  return {
-    x: fromBox.x + (-toBox.x * toScale + toOffset.x - fromOffset.x) / fromScale,
-    y: fromBox.y + (-toBox.y * toScale + toOffset.y - fromOffset.y) / fromScale,
-    scale,
-  };
-};
-
-const animateToViewBox = (targetBox, duration, options = {}) => {
-  const finalize = () => {
-    if (targetBox) viewbox.set(targetBox);
-    transformAnimator?.set({ x: 0, y: 0, scale: 1 });
-    if (options.useSnapshot) mapApi?.clearSnapshot();
-    if (!options.onComplete) setAnimating(false);
-    if (options.onComplete) options.onComplete();
-  };
-
-  if (!targetBox || !mapApi || !transformAnimator) {
-    finalize();
-    return;
-  }
-  const baseBox = viewbox.parse() || fullViewBox;
-  if (!baseBox) {
-    finalize();
-    return;
-  }
-  const useSnapshot = options.useSnapshot && mapApi.createSnapshot(options.stateId);
-  const layer = useSnapshot ? mapApi.getSnapshotLayer() : mapApi.getFocusLayer();
-  transformAnimator.setElement(layer);
-  transformAnimator.set({ x: 0, y: 0, scale: 1 });
-  const viewport = getMapPaneSize();
-  const transform = getTransformForViewBox(baseBox, targetBox, viewport);
-  animationToken += 1;
-  const token = animationToken;
-  setAnimating(true);
-  const finish = () => {
-    if (token !== animationToken) return;
-    finalize();
-  };
-  transformAnimator.animate(
-    { x: 0, y: 0, scale: 1 },
-    transform,
-    prefersReducedMotion ? 0 : duration,
-    finish,
-  );
-};
-
-
-const getMapPaneSize = () => {
-  const rect = mapPane?.getBoundingClientRect();
-  const width = rect?.width ?? window.innerWidth;
-  const height = rect?.height ?? window.innerHeight;
-  return { width, height };
-};
-
-const getTargetViewBoxForState = (stateId) => {
-  const bounds = mapApi?.getStateBounds(stateId);
-  if (!bounds || !fullViewBox) return fullViewBox;
-  const width = Math.max(1, bounds.maxX - bounds.minX);
-  const height = Math.max(1, bounds.maxY - bounds.minY);
-  const padding = 0.08;
-  let targetWidth = width * (1 + padding * 2);
-  let targetHeight = height * (1 + padding * 2);
-  const centerX = bounds.minX + width / 2;
-  const centerY = bounds.minY + height / 2;
-  const pane = getMapPaneSize();
-  const targetAspect = pane.width / pane.height;
-  const boxAspect = targetWidth / targetHeight;
-  if (boxAspect > targetAspect) {
-    targetHeight = targetWidth / targetAspect;
-  } else {
-    targetWidth = targetHeight * targetAspect;
-  }
-  return {
-    x: centerX - targetWidth / 2,
-    y: centerY - targetHeight / 2,
-    width: targetWidth,
-    height: targetHeight,
-  };
-};
-
-const updateUrlState = (stateId) => {
-  const url = new URL(window.location.href);
-  if (stateId) {
-    url.searchParams.set("state", stateId);
-  } else {
-    url.searchParams.delete("state");
-  }
-  history.pushState({ stateId }, "", url);
-};
+const { animateToViewBox, getTargetViewBoxForState, updateUrlState } = nav;
 
 const selectState = (stateId, options = {}) => {
   if (!stateId) return;
@@ -389,7 +252,6 @@ const selectState = (stateId, options = {}) => {
 
   renderInfo(normalized, { pendingQuestion, pendingResult });
 
-  // Start 3D mesh prep in background (builds mesh flat, loads texture)
   // Start 3D mesh prep concurrently with zoom
   let meshIsReady = false;
   let zoomDone = false;
@@ -418,15 +280,6 @@ const selectState = (stateId, options = {}) => {
     });
   });
 };
-
-
-const hideAboutModal = () => {
-  if (aboutModal) {
-    aboutModal.setAttribute("aria-hidden", "true");
-  }
-};
-
-
 
 const clearSelection = (options = {}) => {
   // Draw pending trail if exists (from answered question)
@@ -637,7 +490,6 @@ svg?.addEventListener("click", (event) => {
     if (node.classList && node.classList.contains("cell")) {
       const stateId = node.dataset.state;
       if (stateId && stateId !== "0") {
-        // Check if state is revealed before allowing selection
         if (isStateRevealed(stateId)) {
           const skipQuestion = hasBeenQuestioned(stateId);
           selectState(stateId, { skipQuestion });
@@ -691,7 +543,6 @@ backButton?.addEventListener("click", (event) => {
 
 window.addEventListener("resize", () => {
   resizeThree();
-  // Reset info pane gesture on orientation change
   if (infoPaneGesture?.isMinimized) infoPaneGesture.maximize();
   if (!activeStateId) return;
   const target = getTargetViewBoxForState(activeStateId);
@@ -707,13 +558,11 @@ window.addEventListener("popstate", () => {
   }
 });
 
-// About modal event listeners
 aboutClose?.addEventListener("click", () => {
   hideAboutModal();
 });
 
 aboutModal?.addEventListener("click", (event) => {
-  // Close on backdrop click
   if (event.target === aboutModal) {
     hideAboutModal();
   }

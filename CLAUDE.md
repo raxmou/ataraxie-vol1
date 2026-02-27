@@ -30,7 +30,7 @@ vercel
 ```
 js/
   main.js                         -- Entry point
-  app.js                          -- Orchestrator (~740 lines)
+  app.js                          -- Orchestrator (~595 lines)
 
   core/
     store.js                      -- Reactive state store + event bus
@@ -50,7 +50,7 @@ js/
     viewbox.js                    -- ViewBox animation
     texture-canvas.js             -- Canvas texture renderer
     sigils.js                     -- Sigil hover/focus rendering
-    navigation.js                 -- (planned) selectState, clearSelection
+    navigation.js                 -- ViewBox animation, viewport math, URL state
 
   three/
     three-loader.js               -- Lazy CDN import + cache
@@ -76,6 +76,7 @@ js/
     character-map.js              -- Map character, trails, bark
     character-state.js            -- State character, drag, float, menu
     character-data.js             -- CHARACTER_MOVE_MAP, getCharacterFrame
+    layout.js                     -- Split view, loading screen, about modal
     modals.js                     -- Layout toggles, loading, about modal
     info-pane-gesture.js          -- Swipe gesture
 

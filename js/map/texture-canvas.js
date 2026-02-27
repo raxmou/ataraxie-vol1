@@ -117,10 +117,14 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-    // Set transform to match SVG viewBox
+    // Match SVG viewBox with preserveAspectRatio="xMidYMid meet":
+    // uniform scale (fit inside) + center in both axes
     const scaleX = canvasWidth / width;
     const scaleY = canvasHeight / height;
-    ctx.setTransform(scaleX, 0, 0, scaleY, -x * scaleX, -y * scaleY);
+    const scale = Math.min(scaleX, scaleY);
+    const translateX = (canvasWidth - width * scale) / 2 - x * scale;
+    const translateY = (canvasHeight - height * scale) / 2 - y * scale;
+    ctx.setTransform(scale, 0, 0, scale, translateX, translateY);
 
     // Draw faint textures for fogged (unrevealed) states
     ctx.globalAlpha = 0.15;
@@ -140,7 +144,6 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
       ctx.clip(path);
 
       // Same adaptive tile sizing as revealed states
-      const scale = Math.max(scaleX, scaleY);
       const texNaturalSize = Math.max(textureImg.naturalWidth, textureImg.naturalHeight);
       let texSize = texNaturalSize / scale;
       texSize = Math.max(64, Math.min(512, texSize));
@@ -159,7 +162,7 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
     ctx.globalAlpha = 1;
 
     // Drop shadow behind revealed states to lift them off the background
-    const shadowBlur = 24 / Math.max(scaleX, scaleY);
+    const shadowBlur = 24 / scale;
     ctx.save();
     ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
     ctx.shadowBlur = shadowBlur;
@@ -193,7 +196,6 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
 
       // Calculate adaptive tile size based on zoom level
       // Goal: texture pixels should roughly match canvas pixels for crisp rendering
-      const scale = Math.max(scaleX, scaleY);
       const texNaturalSize = Math.max(textureImg.naturalWidth, textureImg.naturalHeight);
 
       // Target: each texture pixel covers ~1 canvas pixel
@@ -224,8 +226,8 @@ export const createTextureCanvas = ({ container, svg, stateOutlines }) => {
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
 
-    const baseLineWidth = 4 / Math.max(scaleX, scaleY);
-    const hoverLineWidth = 8 / Math.max(scaleX, scaleY);
+    const baseLineWidth = 4 / scale;
+    const hoverLineWidth = 8 / scale;
 
     for (const stateId of revealedStates) {
       if (stateId === "0") continue;

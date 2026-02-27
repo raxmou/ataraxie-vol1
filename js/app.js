@@ -63,6 +63,8 @@ import {
   characterConfirm,
   characterCards,
   aboutChangeCharacter,
+  finaleModal,
+  finaleClose,
   stateCanvas,
   threeStack,
   dataUrl,
@@ -175,6 +177,9 @@ const questionMgr = createQuestionModal({
   getMapApi: () => mapApi,
   getTextureCanvas: () => textureCanvas,
   onClearSelection: () => clearSelection(),
+  onMapComplete: () => {
+    if (finaleModal) finaleModal.setAttribute("aria-hidden", "false");
+  },
 });
 const hideQuestionModal = () => questionMgr.hideQuestionModal();
 
@@ -569,7 +574,21 @@ aboutModal?.addEventListener("click", (event) => {
   }
 });
 
+const hideFinaleModal = () => {
+  if (finaleModal) finaleModal.setAttribute("aria-hidden", "true");
+};
+
+finaleClose?.addEventListener("click", hideFinaleModal);
+
+finaleModal?.addEventListener("click", (event) => {
+  if (event.target === finaleModal) hideFinaleModal();
+});
+
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && finaleModal?.getAttribute("aria-hidden") === "false") {
+    hideFinaleModal();
+    return;
+  }
   if (event.key === "Escape" && aboutModal?.getAttribute("aria-hidden") === "false") {
     hideAboutModal();
   }

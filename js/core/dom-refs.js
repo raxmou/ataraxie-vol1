@@ -18,6 +18,8 @@ export const characterSelect = document.getElementById("character-select");
 export const characterConfirm = document.getElementById("character-confirm");
 export const characterCards = document.querySelectorAll(".character-card[data-character]");
 export const aboutChangeCharacter = document.getElementById("about-change-character");
+export const finaleModal = document.getElementById("finale-modal");
+export const finaleClose = document.getElementById("finale-close");
 export const stateCanvas = document.getElementById("state-3d-canvas");
 export const threeStack = document.getElementById("state-3d-stack");
 

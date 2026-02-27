@@ -392,64 +392,72 @@ export const buildStateMesh = (stateId, THREE, { geojsonData, trackByState, trac
     const iconY = 200;
     const iconColor = "#e8ffb2";
     const iconLinks = [];
-    if (track.bandcamp) {
-      const bx = cvs.width / 2 - 56;
+    const platforms = [];
+    if (track.bandcamp) platforms.push("bandcamp");
+    if (track.soundcloud) platforms.push("soundcloud");
+    if (track.instagram) platforms.push("instagram");
+    const iconGap = 48;
+    const totalW = platforms.length * iconSize + (platforms.length - 1) * (iconGap - iconSize);
+    const startX = cvs.width / 2 - totalW / 2;
+    platforms.forEach((platform, i) => {
+      const px = startX + i * iconGap;
       ctx.save();
       ctx.fillStyle = iconColor;
-      ctx.beginPath();
-      ctx.moveTo(bx, iconY);
-      ctx.lineTo(bx + iconSize * 0.6, iconY);
-      ctx.lineTo(bx + iconSize, iconY + iconSize);
-      ctx.lineTo(bx + iconSize * 0.4, iconY + iconSize);
-      ctx.closePath();
-      ctx.fill();
-      ctx.restore();
-      iconLinks.push({
-        uMin: bx / cvs.width,
-        uMax: (bx + iconSize) / cvs.width,
-        vMin: 1 - (iconY + iconSize) / cvs.height,
-        vMax: 1 - iconY / cvs.height,
-        url: track.bandcamp,
-      });
-    }
-    if (track.instagram) {
-      const ix = cvs.width / 2 + 24;
-      ctx.save();
       ctx.strokeStyle = iconColor;
-      ctx.fillStyle = iconColor;
-      const cx = ix + iconSize / 2;
-      const cy = iconY + iconSize / 2;
-      const s = iconSize;
-      const outerR = s * 0.32;
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.moveTo(ix + outerR, iconY);
-      ctx.lineTo(ix + s - outerR, iconY);
-      ctx.arcTo(ix + s, iconY, ix + s, iconY + outerR, outerR);
-      ctx.lineTo(ix + s, iconY + s - outerR);
-      ctx.arcTo(ix + s, iconY + s, ix + s - outerR, iconY + s, outerR);
-      ctx.lineTo(ix + outerR, iconY + s);
-      ctx.arcTo(ix, iconY + s, ix, iconY + s - outerR, outerR);
-      ctx.lineTo(ix, iconY + outerR);
-      ctx.arcTo(ix, iconY, ix + outerR, iconY, outerR);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(cx, cy, s * 0.28, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(ix + s * 0.76, iconY + s * 0.24, s * 0.065, 0, Math.PI * 2);
-      ctx.fill();
+      if (platform === "bandcamp") {
+        ctx.beginPath();
+        ctx.moveTo(px, iconY);
+        ctx.lineTo(px + iconSize * 0.6, iconY);
+        ctx.lineTo(px + iconSize, iconY + iconSize);
+        ctx.lineTo(px + iconSize * 0.4, iconY + iconSize);
+        ctx.closePath();
+        ctx.fill();
+      } else if (platform === "soundcloud") {
+        const cy = iconY + iconSize * 0.65;
+        const barW = 3;
+        const gap = 5;
+        const heights = [0.25, 0.45, 0.7, 0.9, 0.7, 0.45];
+        const barsW = heights.length * barW + (heights.length - 1) * (gap - barW);
+        const bx = px + (iconSize - barsW) / 2;
+        heights.forEach((h, j) => {
+          const barH = iconSize * h;
+          ctx.fillRect(bx + j * gap, cy - barH, barW, barH);
+        });
+      } else if (platform === "instagram") {
+        const cx = px + iconSize / 2;
+        const cy = iconY + iconSize / 2;
+        const s = iconSize;
+        const outerR = s * 0.32;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(px + outerR, iconY);
+        ctx.lineTo(px + s - outerR, iconY);
+        ctx.arcTo(px + s, iconY, px + s, iconY + outerR, outerR);
+        ctx.lineTo(px + s, iconY + s - outerR);
+        ctx.arcTo(px + s, iconY + s, px + s - outerR, iconY + s, outerR);
+        ctx.lineTo(px + outerR, iconY + s);
+        ctx.arcTo(px, iconY + s, px, iconY + s - outerR, outerR);
+        ctx.lineTo(px, iconY + outerR);
+        ctx.arcTo(px, iconY, px + outerR, iconY, outerR);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(cx, cy, s * 0.28, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(px + s * 0.76, iconY + s * 0.24, s * 0.065, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
       iconLinks.push({
-        uMin: ix / cvs.width,
-        uMax: (ix + iconSize) / cvs.width,
+        uMin: px / cvs.width,
+        uMax: (px + iconSize) / cvs.width,
         vMin: 1 - (iconY + iconSize) / cvs.height,
         vMax: 1 - iconY / cvs.height,
-        url: track.instagram,
+        url: track[platform],
       });
-    }
+    });
     versoLinks = iconLinks;
     const tex = new THREE.CanvasTexture(cvs);
     tex.colorSpace = THREE.SRGBColorSpace;

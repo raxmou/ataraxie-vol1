@@ -74,6 +74,11 @@ const STRINGS = {
     fr: "On dirait que j\u2019ai dessin\u00e9 les contours de mon territoire, bravo et merci \u00e0 toi",
     en: "It seems I\u2019ve drawn the borders of my territory, bravo and thank you",
   },
+  "finale.text": {
+    fr: "Il n\u2019y a plus rien ici. Le haut est en bas. Quelques couleurs tra\u00eenent, dessinent des formes que tu as du mal \u00e0 distinguer. Le voyage se termine. Il t\u2019a laiss\u00e9 un battement dans les tempes et un l\u00e9ger frisson. Dans cet \u00e9ther final o\u00f9 seules tes pens\u00e9es t\u2019amarrent encore, tu te laisses glisser, rattrap\u00e9 par les souvenirs de la route arriv\u00e9e \u00e0 son terme. L\u00e0 o\u00f9 il n\u2019y a rien, il ne reste que l\u2019introspection. Tu laisses infuser. Le voyage est termin\u00e9.",
+    en: "There is nothing left here. What was above is now below. A few colors linger, forming shapes that you struggle to make out. The journey is ending. It has left you with a throbbing in your temples and a slight shiver. In this final ether, where only your thoughts still anchor you, you let yourself drift, caught up in memories of the road that has come to an end. Where there is nothing, all that remains is introspection. You let it sink in. The journey is over.",
+  },
+  "finale.close": { fr: "Fermer", en: "Close" },
   "error.title": { fr: "Erreur", en: "Error" },
   "error.body": {
     fr: "Impossible de charger les donn\u00e9es.",

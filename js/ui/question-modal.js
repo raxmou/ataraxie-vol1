@@ -23,6 +23,7 @@ export const createQuestionModal = ({
   getMapApi,
   getTextureCanvas,
   onClearSelection,
+  onMapComplete,
 }) => {
   const answeredQuestions = new Map();
   let pendingTrail = null;
@@ -91,6 +92,11 @@ export const createQuestionModal = ({
           colors,
         });
       }, 250);
+    }
+
+    // Show finale modal after confetti settles
+    if (onMapComplete) {
+      setTimeout(() => onMapComplete(), 2000);
     }
   };
 

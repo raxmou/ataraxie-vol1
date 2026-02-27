@@ -32,7 +32,10 @@ import {
   VERSO_IMAGES,
   PREFERS_REDUCED_MOTION,
 } from "./core/constants.js";
-import { clamp, easeInOutCubic, hash2, valueNoise2D, fbmNoise2D } from "./core/utils.js";
+import { clamp, easeInOutCubic } from "./core/utils.js";
+import { createAudioReactive } from "./audio/audio-reactive.js";
+import { resolveSigilMap, createSigilManager } from "./map/sigils.js";
+import { createThreeInteraction } from "./three/three-interaction.js";
 import {
   revealedStates,
   questionedStates,
@@ -82,8 +85,6 @@ import {
   mobileMediaQuery,
 } from "./core/dom-refs.js";
 
-const sigilLayerId = "map-sigils";
-
 const prefersReducedMotion = PREFERS_REDUCED_MOTION;
 
 let geojsonData = null;
@@ -102,29 +103,9 @@ let threeInitPromise = null;
 let colorForState = null;
 let textureCanvas = null;
 let sigilsByState = new Map();
-let sigilLayer = null;
-let focusSigilLayer = null;
-let hoverSigilImage = null;
-let hoverSigilStateId = null;
-let hoverSigilToken = 0;
-let audioContext = null;
-let audioAnalyser = null;
-let audioData = null;
-let audioAnimationFrame = null;
-let audioSource = null;
-let audioElement = null;
-let audioTime = 0;
-let ambientAnimationFrame = null;
-let ambientTime = 0;
 let hourglassPlayer = null;
 let pendingTrail = null; // Stores {from, to} for deferred trail drawing
 let answeredQuestions = new Map(); // Stores stateId -> {option1, option2, chosen}
-let isThreeDragging = false;
-let activePointerId = null;
-let lastPointerX = 0;
-let lastPointerY = 0;
-let stateInertiaX = 0;
-let stateInertiaY = 0;
 let isMorphing = false;
 let questionTimeout = null;
 let selectedCharacter = null;
@@ -145,393 +126,29 @@ let stateCharDragging = false;
 let infoPaneGesture = null;
 let mapGestures = null;
 
-const getSigilBaseSize = () => {
-  const baseBox = mapApi?.fullViewBox;
-  return baseBox ? clamp(Math.min(baseBox.width, baseBox.height) * 0.032, 10, 24) : 16;
-};
+const audioReactive = createAudioReactive({
+  getSvg: () => svg,
+  getMapPane: () => mapPane,
+  getThreeApi: () => threeApi,
+});
+const startAudioReactive = (audio) => audioReactive.startReactive(audio);
+const stopAudioReactive = () => audioReactive.stopReactive();
+const startAmbientBreathing = () => audioReactive.startBreathing();
+const stopAmbientBreathing = () => audioReactive.stopBreathing();
 
-const resolveSigilMap = (payload) => {
-  if (!payload || typeof payload !== "object") return new Map();
-  const entries = payload.states && typeof payload.states === "object" ? payload.states : payload;
-  return new Map(Object.entries(entries || {}).map(([stateId, href]) => [String(stateId), href]));
-};
+const sigils = createSigilManager({
+  svg,
+  getMapApi: () => mapApi,
+  getSigilsByState: () => sigilsByState,
+});
+const { showHoverSigil, hideHoverSigil, renderFocusSigil, renderSigilLayer, clearFocusSigilLayer } =
+  sigils;
 
-const clearSigilLayer = () => {
-  if (!sigilLayer) return;
-  sigilLayer.remove();
-  sigilLayer = null;
-  hoverSigilImage = null;
-  hoverSigilStateId = null;
-};
-
-const clearFocusSigilLayer = () => {
-  if (!focusSigilLayer) return;
-  focusSigilLayer.remove();
-  focusSigilLayer = null;
-};
-
-const hideHoverSigil = () => {
-  if (!sigilLayer) return;
-  sigilLayer.classList.remove("is-visible");
-  sigilLayer.classList.remove("is-animating");
-  hoverSigilStateId = null;
-  hoverSigilToken += 1;
-  delete sigilLayer.dataset.hoverToken;
-};
-
-const showHoverSigil = (stateId) => {
-  if (!sigilLayer || !hoverSigilImage || !mapApi) return;
-  if (!stateId || stateId === "0") {
-    hideHoverSigil();
-    return;
-  }
-  const href = sigilsByState.get(String(stateId));
-  if (!href) {
-    hideHoverSigil();
-    return;
-  }
-  const bounds = mapApi.getStateBounds(stateId);
-  if (!bounds) {
-    hideHoverSigil();
-    return;
-  }
-  const width = bounds.maxX - bounds.minX;
-  const height = bounds.maxY - bounds.minY;
-  if (!Number.isFinite(width) || !Number.isFinite(height)) {
-    hideHoverSigil();
-    return;
-  }
-  const size = getSigilBaseSize() * 1.1;
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerY = (bounds.minY + bounds.maxY) / 2;
-  const resolvedHref = encodeURI(href);
-  hoverSigilImage.setAttribute("href", resolvedHref);
-  hoverSigilImage.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", resolvedHref);
-  hoverSigilImage.setAttribute("x", (centerX - size / 2).toFixed(3));
-  hoverSigilImage.setAttribute("y", (centerY - size / 2).toFixed(3));
-  hoverSigilImage.setAttribute("width", size.toFixed(3));
-  hoverSigilImage.setAttribute("height", size.toFixed(3));
-  hoverSigilImage.dataset.state = String(stateId);
-  const nextState = String(stateId);
-  if (hoverSigilStateId !== nextState) {
-    hoverSigilToken += 1;
-    const token = hoverSigilToken;
-    sigilLayer.dataset.hoverToken = String(token);
-    sigilLayer.classList.remove("is-visible", "is-animating");
-    sigilLayer.getBoundingClientRect();
-    requestAnimationFrame(() => {
-      if (!sigilLayer || hoverSigilToken !== token) return;
-      sigilLayer.classList.add("is-visible", "is-animating");
-    });
-  } else {
-    sigilLayer.classList.add("is-visible");
-  }
-  hoverSigilStateId = nextState;
-};
-
-const renderSigilLayer = () => {
-  clearSigilLayer();
-  if (!svg || !mapApi || !sigilsByState.size) return;
-  const layer = document.createElementNS(SVG_NS, "g");
-  layer.setAttribute("id", sigilLayerId);
-  layer.classList.add("sigil-layer", "sigil-layer--hover");
-  layer.setAttribute("aria-hidden", "true");
-  const image = document.createElementNS(SVG_NS, "image");
-  image.classList.add("sigil");
-  image.setAttribute("preserveAspectRatio", "xMidYMid meet");
-  layer.appendChild(image);
-  const focusLayer = mapApi.getFocusLayer?.();
-  if (focusLayer?.parentNode === svg) {
-    svg.insertBefore(layer, focusLayer);
-  } else {
-    svg.appendChild(layer);
-  }
-  sigilLayer = layer;
-  hoverSigilImage = image;
-  sigilLayer.addEventListener("animationend", (event) => {
-    if (event.animationName === "sigil-pop") {
-      const token = Number(sigilLayer?.dataset?.hoverToken || 0);
-      if (token !== hoverSigilToken) return;
-      sigilLayer.classList.remove("is-animating");
-    }
-  });
-};
-
-const renderFocusSigil = (stateId) => {
-  clearFocusSigilLayer();
-  if (!svg || !mapApi || !sigilsByState.size || !stateId) return;
-  const href = sigilsByState.get(String(stateId));
-  if (!href) return;
-  const bounds = mapApi.getStateBounds(stateId);
-  if (!bounds) return;
-  const width = bounds.maxX - bounds.minX;
-  const height = bounds.maxY - bounds.minY;
-  if (!Number.isFinite(width) || !Number.isFinite(height)) return;
-  const size = getSigilBaseSize();
-  const centerX = (bounds.minX + bounds.maxX) / 2;
-  const centerY = (bounds.minY + bounds.maxY) / 2;
-  const layer = document.createElementNS(SVG_NS, "g");
-  layer.classList.add("sigil-layer", "sigil-layer--focus");
-  layer.setAttribute("aria-hidden", "true");
-  const image = document.createElementNS(SVG_NS, "image");
-  const resolvedHref = encodeURI(href);
-  image.setAttribute("href", resolvedHref);
-  image.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", resolvedHref);
-  image.setAttribute("x", (centerX - size / 2).toFixed(3));
-  image.setAttribute("y", (centerY - size / 2).toFixed(3));
-  image.setAttribute("width", size.toFixed(3));
-  image.setAttribute("height", size.toFixed(3));
-  image.setAttribute("preserveAspectRatio", "xMidYMid meet");
-  image.classList.add("sigil");
-  image.dataset.state = String(stateId);
-  layer.appendChild(image);
-  const focusLayer = mapApi.getFocusLayer?.();
-  if (focusLayer) {
-    focusLayer.appendChild(layer);
-  } else {
-    svg.appendChild(layer);
-  }
-  focusSigilLayer = layer;
-};
-
-const resetAudioVisuals = () => {
-  if (!svg) return;
-  svg.style.setProperty("--audio-stroke", "0.6px");
-  svg.style.setProperty("--audio-opacity", "0.85");
-  svg.style.setProperty("--audio-glow", "0px");
-};
-
-const resetMeshPulse = () => {
-  if (!threeApi?.mesh) return;
-  const {
-    edgeMaterial,
-    edgeBaseColor,
-    edgeBasePositions,
-    edgePositionAttr,
-    terrainData,
-    terrainTopZ,
-    terrainBaseHeight,
-    terrainHeights,
-    terrainEnergy,
-  } = threeApi.mesh.userData || {};
-  if (edgeMaterial && edgeBaseColor) {
-    edgeMaterial.color.copy(edgeBaseColor);
-    edgeMaterial.opacity = 0.55;
-  }
-  if (edgeBasePositions && edgePositionAttr) {
-    edgePositionAttr.array.set(edgeBasePositions);
-    edgePositionAttr.needsUpdate = true;
-  }
-  if (Array.isArray(terrainData) && terrainBaseHeight != null && terrainTopZ != null) {
-    terrainData.forEach((cell) => {
-      (cell.meshes || []).forEach((mesh) => {
-        mesh.position.z = terrainTopZ;
-        mesh.scale.z = terrainBaseHeight;
-      });
-    });
-    if (terrainHeights) terrainHeights.fill(terrainBaseHeight);
-    if (terrainEnergy) terrainEnergy.fill(0);
-  }
-};
-
-const stopAudioReactive = () => {
-  if (audioAnimationFrame) cancelAnimationFrame(audioAnimationFrame);
-  audioAnimationFrame = null;
-  resetAudioVisuals();
-  startAmbientBreathing();
-};
-
-const startAmbientBreathing = () => {
-  if (ambientAnimationFrame) return;
-  const tick = () => {
-    ambientTime += 0.016;
-    const is3d = mapPane?.classList.contains("is-3d");
-    if (is3d && threeApi?.mesh) {
-      const {
-        terrainData,
-        terrainTopZ,
-        terrainBaseHeight,
-        terrainMaxHeight,
-        terrainHeights,
-        terrainNeighbors,
-      } = threeApi.mesh.userData || {};
-      if (Array.isArray(terrainData) && terrainBaseHeight != null) {
-        const rawHeights = new Float32Array(terrainData.length);
-        terrainData.forEach((cell, index) => {
-          rawHeights[index] = computeBreathingHeight(
-            cell,
-            ambientTime,
-            terrainBaseHeight,
-            terrainMaxHeight,
-          );
-        });
-        terrainData.forEach((cell, index) => {
-          const neighbors = terrainNeighbors ? terrainNeighbors[index] : null;
-          let nSum = 0,
-            nCount = 0;
-          if (neighbors && neighbors.length) {
-            neighbors.forEach((ni) => {
-              nSum += rawHeights[ni];
-              nCount++;
-            });
-          }
-          const nAvg = nCount ? nSum / nCount : rawHeights[index];
-          const smoothed = rawHeights[index] * 0.7 + nAvg * 0.3;
-          const current = terrainHeights ? terrainHeights[index] : smoothed;
-          const blended = current + (smoothed - current) * 0.08;
-          if (terrainHeights) terrainHeights[index] = blended;
-          (cell.meshes || []).forEach((m) => {
-            m.position.z = terrainTopZ;
-            m.scale.z = blended;
-          });
-        });
-      }
-    }
-    ambientAnimationFrame = requestAnimationFrame(tick);
-  };
-  ambientAnimationFrame = requestAnimationFrame(tick);
-};
-
-const stopAmbientBreathing = () => {
-  if (ambientAnimationFrame) cancelAnimationFrame(ambientAnimationFrame);
-  ambientAnimationFrame = null;
-};
-
-const connectAudioAnalyser = (audio) => {
-  if (!audio) return;
-  if (!audioContext) {
-    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextCtor) return;
-    audioContext = new AudioContextCtor();
-  }
-  if (!audioAnalyser) {
-    audioAnalyser = audioContext.createAnalyser();
-    audioAnalyser.fftSize = 256;
-    audioData = new Uint8Array(audioAnalyser.frequencyBinCount);
-  }
-  if (audioElement !== audio) {
-    if (audioSource) audioSource.disconnect();
-    if (audio._audioSource) {
-      audioSource = audio._audioSource;
-    } else {
-      audioSource = audioContext.createMediaElementSource(audio);
-      audio._audioSource = audioSource;
-    }
-    audioSource.connect(audioAnalyser);
-    audioAnalyser.connect(audioContext.destination);
-    audioElement = audio;
-  }
-  if (audioContext.state === "suspended") {
-    audioContext.resume().catch(() => {});
-  }
-};
-
-const startAudioReactive = (audio) => {
-  if (!audio || !svg) return;
-  connectAudioAnalyser(audio);
-  if (!audioAnalyser || !audioData) return;
-  audioTime = 0;
-  stopAmbientBreathing();
-
-  // Initialize kick detector
-  // TODO: Get threshold/cooldown from track metadata if available
-  const tick = () => {
-    if (!audioAnalyser || !audioData) return;
-    audioAnalyser.getByteFrequencyData(audioData);
-    audioTime += 0.016;
-
-    const totalBins = audioData.length;
-    const lowEnd = Math.max(1, Math.floor(totalBins * 0.2));
-    const highStart = Math.floor(totalBins * 0.7);
-    let lowSum = 0,
-      highSum = 0;
-    for (let i = 0; i < lowEnd; i++) lowSum += audioData[i];
-    for (let i = highStart; i < totalBins; i++) highSum += audioData[i];
-    const low = lowSum / (lowEnd * 255);
-    const high = highSum / ((totalBins - highStart) * 255);
-    const intensity = Math.min(1, (low + high) / 2);
-    const stroke = 0.6 + intensity * 1.8;
-    const glow = intensity * 10;
-    const opacity = 0.45 + intensity * 0.5;
-
-    const is3d = mapPane?.classList.contains("is-3d");
-    if (is3d && threeApi?.mesh) {
-      const {
-        terrainData,
-        terrainTopZ,
-        terrainBaseHeight,
-        terrainMaxHeight,
-        terrainNeighbors,
-        terrainHeights,
-        terrainEnergy,
-      } = threeApi.mesh.userData || {};
-
-      if (Array.isArray(terrainData) && terrainBaseHeight != null && terrainMaxHeight != null) {
-        const maxBin = audioData.length - 1;
-        const rawHeights = new Float32Array(terrainData.length);
-
-        // Pass 1: ambient breathing + Gaussian audio response per cell
-        terrainData.forEach((cell, index) => {
-          const breathe = computeBreathingHeight(
-            cell,
-            audioTime,
-            terrainBaseHeight,
-            terrainMaxHeight,
-          );
-          const audioAmp = computeAudioResponse(cell, audioData, maxBin);
-          rawHeights[index] = breathe + audioAmp * terrainMaxHeight * cell.weight * 0.7;
-        });
-
-        // Pass 2: wave propagation
-        if (terrainEnergy) {
-          terrainData.forEach((cell, index) => {
-            const e = rawHeights[index] - terrainBaseHeight;
-            terrainEnergy[index] = Math.max(terrainEnergy[index] * 0.85, e);
-          });
-          terrainData.forEach((cell, index) => {
-            const neighbors = terrainNeighbors ? terrainNeighbors[index] : null;
-            if (!neighbors || !neighbors.length) return;
-            let ne = 0;
-            neighbors.forEach((ni) => {
-              ne += terrainEnergy[ni];
-            });
-            rawHeights[index] += (ne / neighbors.length) * 0.12;
-          });
-        }
-
-        // Pass 3: spatial smooth + per-cell attack/decay envelope
-        terrainData.forEach((cell, index) => {
-          const neighbors = terrainNeighbors ? terrainNeighbors[index] : null;
-          let nSum = 0,
-            nCount = 0;
-          if (neighbors && neighbors.length) {
-            neighbors.forEach((ni) => {
-              nSum += rawHeights[ni];
-              nCount++;
-            });
-          }
-          const nAvg = nCount ? nSum / nCount : rawHeights[index];
-          const smoothed = rawHeights[index] * 0.6 + nAvg * 0.4;
-          const current = terrainHeights ? terrainHeights[index] : smoothed;
-          const blend = smoothed > current ? cell.attackSpeed : cell.decaySpeed;
-          const blended = current + (smoothed - current) * blend;
-          if (terrainHeights) terrainHeights[index] = blended;
-          (cell.meshes || []).forEach((m) => {
-            m.position.z = terrainTopZ;
-            m.scale.z = blended;
-          });
-        });
-      }
-    } else if (svg) {
-      svg.style.setProperty("--audio-stroke", `${stroke.toFixed(3)}px`);
-      svg.style.setProperty("--audio-opacity", opacity.toFixed(3));
-      svg.style.setProperty("--audio-glow", `${glow.toFixed(2)}px`);
-    }
-    audioAnimationFrame = requestAnimationFrame(tick);
-  };
-  if (audioAnimationFrame) cancelAnimationFrame(audioAnimationFrame);
-  audioAnimationFrame = requestAnimationFrame(tick);
-};
+const threeInteraction = createThreeInteraction({
+  stateCanvas,
+  getThreeApi: () => threeApi,
+});
+threeInteraction.init();
 
 const setupTrackPlayer = (container, audio) => {
   if (!container || !(audio instanceof HTMLAudioElement)) return;
@@ -569,48 +186,20 @@ const initThree = async () => {
 
 
 
-const computeBreathingHeight = (cell, time, baseHeight, maxHeight) => {
-  const breath = fbmNoise2D(cell.x * 0.8 + time * 0.12, cell.y * 0.8 + time * 0.09, 2);
-  const ripple = fbmNoise2D(cell.x * 2.5 + time * 0.35, cell.y * 2.5 - time * 0.28, 2);
-  const shimmer = valueNoise2D(cell.x * 6.0 + time * 0.8, cell.y * 6.0 + time * 0.6);
-  const envelope = 0.5 + 0.5 * Math.sin(time * 0.4 + cell.breathePhase);
-  const combined = breath * 0.6 + ripple * 0.25 + shimmer * 0.15;
-  const breatheAmp = maxHeight * 0.3 * cell.weight;
-  return baseHeight + combined * breatheAmp * (0.7 + envelope * 0.3);
-};
-
-const computeAudioResponse = (cell, audioData, maxBin) => {
-  const centerBin = cell.freqCenter * maxBin;
-  const sigma = cell.freqWidth * maxBin;
-  const sigmaSq2 = 2 * sigma * sigma;
-  const lo = Math.max(0, Math.floor(centerBin - sigma * 2));
-  const hi = Math.min(maxBin, Math.ceil(centerBin + sigma * 2));
-  let wSum = 0,
-    wTotal = 0;
-  for (let b = lo; b <= hi; b++) {
-    const d = b - centerBin;
-    const g = Math.exp(-(d * d) / sigmaSq2);
-    wSum += (audioData[b] / 255) * g;
-    wTotal += g;
-  }
-  const amp = wTotal > 0 ? wSum / wTotal : 0;
-  return Math.pow(amp, 1.8) * cell.sensitivity;
-};
-
-
 const startThreeRender = () => {
   if (!threeApi) return;
   const renderLoop = () => {
     if (!threeApi) return;
-    if (threeApi.mesh && !isThreeDragging && !isMorphing) {
+    if (threeApi.mesh && !threeInteraction.isDragging && !isMorphing) {
       const speed = hourglassPlayer ? hourglassPlayer.speed : 1;
       threeApi.mesh.rotation.z += 0.002 * speed;
-      const inertia = applyInertiaRotation(threeApi.mesh, stateInertiaX, stateInertiaY, {
-        min: -1.6,
-        max: -0.2,
-      });
-      stateInertiaX = inertia.x;
-      stateInertiaY = inertia.y;
+      const inertia = applyInertiaRotation(
+        threeApi.mesh,
+        threeInteraction.inertiaX,
+        threeInteraction.inertiaY,
+        { min: -1.6, max: -0.2 },
+      );
+      threeInteraction.setInertia(inertia.x, inertia.y);
     }
     threeApi.renderer.render(threeApi.scene, threeApi.camera);
     threeApi.frameId = requestAnimationFrame(renderLoop);
@@ -635,8 +224,7 @@ const showState3D = async (stateId) => {
     api.mesh = null;
   }
   // Reset inertia when loading new state
-  stateInertiaX = 0;
-  stateInertiaY = 0;
+  threeInteraction.resetInertia();
   const mesh = buildStateMesh(stateId, api.THREE, {
     geojsonData,
     trackByState,
@@ -801,9 +389,7 @@ const hideState3D = () => {
   mapPane.classList.remove("is-3d-state");
   threeStack?.setAttribute("aria-hidden", "true");
   stateCanvas?.setAttribute("aria-hidden", "true");
-  isThreeDragging = false;
-  stateInertiaX = 0;
-  stateInertiaY = 0;
+  threeInteraction.resetInertia();
   if (!threeApi) return;
   if (threeApi.mesh) {
     threeApi.scene.remove(threeApi.mesh);
@@ -812,92 +398,6 @@ const hideState3D = () => {
   }
   stopThreeRender();
 };
-
-let pointerStartX = 0;
-let pointerStartY = 0;
-let pointerTotalDisplacement = 0;
-
-const raycastVersoLinks = (event) => {
-  if (!threeApi?.mesh?.userData?.backPlane || !threeApi.mesh.userData.versoLinks?.length)
-    return null;
-  const rect = stateCanvas.getBoundingClientRect();
-  const mouse = new threeApi.THREE.Vector2(
-    ((event.clientX - rect.left) / rect.width) * 2 - 1,
-    -((event.clientY - rect.top) / rect.height) * 2 + 1,
-  );
-  const raycaster = new threeApi.THREE.Raycaster();
-  raycaster.setFromCamera(mouse, threeApi.camera);
-  const hits = raycaster.intersectObject(threeApi.mesh.userData.backPlane, false);
-  if (!hits.length || !hits[0].uv) return null;
-  const u = hits[0].uv.x;
-  const v = hits[0].uv.y;
-  for (const link of threeApi.mesh.userData.versoLinks) {
-    if (u >= link.uMin && u <= link.uMax && v >= link.vMin && v <= link.vMax) {
-      return link;
-    }
-  }
-  return null;
-};
-
-const handleThreePointerDown = (event) => {
-  if (!stateCanvas || !mapPane?.classList.contains("is-3d")) return;
-  if (activePointerId !== null) return;
-  activePointerId = event.pointerId;
-  lastPointerX = event.clientX;
-  lastPointerY = event.clientY;
-  pointerStartX = event.clientX;
-  pointerStartY = event.clientY;
-  pointerTotalDisplacement = 0;
-  isThreeDragging = true;
-  stateInertiaX = 0;
-  stateInertiaY = 0;
-  stateCanvas.setPointerCapture?.(event.pointerId);
-};
-
-const handleThreePointerMove = (event) => {
-  if (!threeApi?.mesh) return;
-  // Cursor feedback when not dragging
-  if (activePointerId === null && stateCanvas) {
-    const link = raycastVersoLinks(event);
-    stateCanvas.style.cursor = link ? "pointer" : "grab";
-    return;
-  }
-  if (activePointerId !== event.pointerId) return;
-  const deltaX = event.clientX - lastPointerX;
-  const deltaY = event.clientY - lastPointerY;
-  pointerTotalDisplacement += Math.abs(deltaX) + Math.abs(deltaY);
-  lastPointerX = event.clientX;
-  lastPointerY = event.clientY;
-  const speed = 0.004;
-  const nextX = threeApi.mesh.rotation.x + deltaY * speed;
-  const nextY = threeApi.mesh.rotation.y + deltaX * speed;
-  threeApi.mesh.rotation.x = Math.max(-1.6, Math.min(-0.2, nextX));
-  threeApi.mesh.rotation.y = nextY;
-  stateInertiaX = deltaY * speed;
-  stateInertiaY = deltaX * speed;
-};
-
-const handleThreePointerUp = (event) => {
-  if (activePointerId !== event.pointerId) return;
-  const wasClick = pointerTotalDisplacement < 5;
-  activePointerId = null;
-  isThreeDragging = false;
-  stateCanvas?.releasePointerCapture?.(event.pointerId);
-  if (wasClick && threeApi?.mesh) {
-    const link = raycastVersoLinks(event);
-    if (link) {
-      window.open(link.url, "_blank", "noopener,noreferrer");
-    }
-  }
-};
-
-if (stateCanvas) {
-  stateCanvas.addEventListener("pointerdown", handleThreePointerDown);
-  stateCanvas.addEventListener("pointermove", handleThreePointerMove);
-  stateCanvas.addEventListener("pointerup", handleThreePointerUp);
-  stateCanvas.addEventListener("pointercancel", handleThreePointerUp);
-  stateCanvas.addEventListener("pointerleave", handleThreePointerUp);
-}
 
 const setSplitLayout = (isSplit) => {
   if (!app || !infoPane) return;

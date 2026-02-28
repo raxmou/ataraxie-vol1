@@ -4,7 +4,7 @@
  */
 
 import { t } from "../i18n/i18n.js";
-import { PENULTIMATE_STATE, FINAL_STATE, PREFERS_REDUCED_MOTION } from "../core/constants.js";
+import { PENULTIMATE_STATE, FINAL_STATE, PREFERS_REDUCED_MOTION, DEV_MODE } from "../core/constants.js";
 import {
   revealedStates,
   isStateRevealed,
@@ -163,7 +163,7 @@ export const createQuestionModal = ({
               if (scrollParent) scrollParent.scrollTo({ top: scrollParent.scrollHeight, behavior: "smooth" });
             }, 650);
           }
-        }, 1100);
+        }, DEV_MODE ? 0 : 1100);
       });
     });
   };
@@ -204,59 +204,23 @@ export const createQuestionModal = ({
 
     if (!infoContent) return;
 
-    // If only reserved states remain, offer the next one as sole destination
+    // If only reserved states remain, offer 2 cards both leading to the next reserved state
     if (nonReserved.length === 0) {
       const nextState = !isStateRevealed(PENULTIMATE_STATE) ? PENULTIMATE_STATE : FINAL_STATE;
-      const option1 = nextState;
-      const label1 = choices[0];
       const questionMarkup = `
         <div class="question-container">
           <div class="question-prompt tarot-reading">
             <p class="question-text">${hourglassQuestion}</p>
           </div>
           <div class="tarot-spread">
-            ${cardMarkup(option1, label1)}
+            ${cardMarkup(nextState, choices[0])}
+            ${choices[1] ? cardMarkup(nextState, choices[1]) : ""}
           </div>
         </div>
       `;
       infoContent.insertAdjacentHTML("beforeend", questionMarkup);
       const answerButtons = infoContent.querySelectorAll(".answer-btn");
-      answerButtons.forEach((btn) => {
-        btn.addEventListener("click", () => {
-          // Touch: first tap flips card to peek, second tap confirms
-          if (isTouchDevice && !PREFERS_REDUCED_MOTION) {
-            if (!btn.classList.contains("is-flipped")) {
-              btn.classList.add("is-flipped");
-              return;
-            }
-          }
-          answerButtons.forEach((b) => {
-            b.disabled = true;
-          });
-          btn.classList.add("answer-btn--selected");
-          setTimeout(() => {
-            handleAnswer(nextState, stateId);
-            const chosenLabel = btn.querySelector(".tarot-card-label")?.textContent || "";
-            answeredQuestions.set(stateId, { option1: nextState, option2: nextState, chosen: nextState, chosenLabel });
-            pendingTrail = { from: stateId, to: nextState };
-            const container = infoContent?.querySelector(".question-container");
-            if (container) {
-              const continueBtn = document.createElement("button");
-              continueBtn.className = "answer-btn answer-btn--continue";
-              continueBtn.type = "button";
-              continueBtn.textContent = t("continue.exploring");
-              continueBtn.addEventListener("click", () => {
-                onClearSelection();
-              });
-              container.appendChild(continueBtn);
-              setTimeout(() => {
-                const scrollParent = document.getElementById("info-pane");
-                if (scrollParent) scrollParent.scrollTo({ top: scrollParent.scrollHeight, behavior: "smooth" });
-              }, 650);
-            }
-          }, 1100);
-        });
-      });
+      attachAnswerHandlers(answerButtons, stateId, nextState, nextState);
       return;
     }
 

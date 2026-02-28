@@ -52,3 +52,7 @@ export const VERSO_IMAGES = [
 export const PREFERS_REDUCED_MOTION = window.matchMedia(
   "(prefers-reduced-motion: reduce)",
 ).matches;
+
+/** Dev mode: skip animation delays for faster exploration. Activate with ?dev in URL. */
+export const DEV_MODE = new URLSearchParams(window.location.search).has("dev");
+if (DEV_MODE) document.title = `[DEV] ${document.title}`;

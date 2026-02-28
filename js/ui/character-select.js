@@ -4,7 +4,7 @@
  */
 
 import { CHARACTER_MOVE_MAP, getCharacterFrame } from "./character-data.js";
-import { CHARACTER_STORAGE_KEY, PREFERS_REDUCED_MOTION } from "../core/constants.js";
+import { CHARACTER_STORAGE_KEY, PREFERS_REDUCED_MOTION, DEV_MODE } from "../core/constants.js";
 import { easeInOutCubic } from "../core/utils.js";
 
 const prefersReducedMotion = PREFERS_REDUCED_MOTION;
@@ -25,7 +25,7 @@ export const createCharacterSelect = ({
       if (card) card.classList.remove("is-card-visible");
       characterSelect.classList.add("is-logo-intro");
       characterSelect.setAttribute("aria-hidden", "false");
-      const delay = prefersReducedMotion ? 0 : 4800;
+      const delay = prefersReducedMotion || DEV_MODE ? 0 : 4800;
       setTimeout(() => {
         characterSelect.classList.remove("is-logo-intro");
         if (card) card.classList.add("is-card-visible");
@@ -46,6 +46,10 @@ export const createCharacterSelect = ({
 
   const flyToMap = (character) =>
     new Promise((resolve) => {
+      if (DEV_MODE) {
+        hide();
+        return resolve();
+      }
       const selectedCard = document.querySelector(".character-card.is-selected");
       const cardImg = selectedCard?.querySelector(".character-card-img");
       if (!cardImg || !characterSelect || !svg) {

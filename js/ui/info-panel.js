@@ -5,7 +5,7 @@
 
 import { t } from "../i18n/i18n.js";
 import { createHourglassPlayer } from "../audio/hourglass/hourglass-player.js";
-import { PREFERS_REDUCED_MOTION } from "../core/constants.js";
+import { PREFERS_REDUCED_MOTION, DEV_MODE } from "../core/constants.js";
 
 const prefersReducedMotion = PREFERS_REDUCED_MOTION;
 
@@ -279,11 +279,11 @@ export const createInfoPanel = ({
     // Phase A — Narrative text
     const linesMarkup = narrativeLines
       .map((line, i) => {
-        const delay = (i + 1) * 1.2;
+        const delay = DEV_MODE ? 0 : (i + 1) * 1.2;
         return `<p class="narrative-line" style="animation-delay: ${delay}s">${line}</p>`;
       })
       .join("");
-    const playDelay = (narrativeLines.length + 1) * 1.2;
+    const playDelay = DEV_MODE ? 0 : (narrativeLines.length + 1) * 1.2;
     const narrativeMarkup = `
       <div class="narrative-container">
         ${linesMarkup}

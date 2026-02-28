@@ -37,14 +37,21 @@ import {
   explorationOrder,
 } from "./data/fog.js";
 
-/* ── request fullscreen on first user gesture (mobile) ── */
-if (/Mobi|Android/i.test(navigator.userAgent)) {
-  const goFS = () => {
-    const el = document.documentElement;
-    const rfs = el.requestFullscreen || el.webkitRequestFullscreen;
-    if (rfs) rfs.call(el).catch(() => {});
-  };
-  document.addEventListener("pointerdown", goFS, { once: true });
+/* ── fullscreen toggle button ── */
+{
+  const btn = document.getElementById("fullscreen-toggle");
+  const el = document.documentElement;
+  const rfs = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (btn && rfs) {
+    btn.hidden = false;
+    btn.addEventListener("click", () => {
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      } else {
+        rfs.call(el).catch(() => {});
+      }
+    });
+  }
 }
 
 import {

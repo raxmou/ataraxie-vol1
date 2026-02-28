@@ -176,11 +176,17 @@
   pointer-events: auto;
 }
 
-.lang-toggle {
+.top-bar {
   position: fixed;
   top: 18px;
   left: 18px;
   z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lang-toggle {
   display: flex;
   align-items: center;
   border: 1px solid rgba(189, 255, 0, 0.45);
@@ -248,6 +254,52 @@
 .toggle-button:disabled {
   opacity: 0.3;
   cursor: default;
+}
+
+/* ── Fullscreen toggle ── */
+.fullscreen-toggle {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(189, 255, 0, 0.45);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(20, 26, 14, 0.92), rgba(10, 14, 7, 0.96));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  color: rgba(189, 255, 0, 0.7);
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease;
+  padding: 0;
+}
+
+.fullscreen-toggle:hover {
+  color: #bdff00;
+  background: rgba(189, 255, 0, 0.06);
+}
+
+.fullscreen-toggle:focus-visible {
+  outline: 2px solid rgba(189, 255, 0, 0.9);
+  outline-offset: 2px;
+}
+
+.fullscreen-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.fullscreen-icon--exit {
+  display: none;
+}
+
+:fullscreen .fullscreen-icon--enter,
+:-webkit-full-screen .fullscreen-icon--enter {
+  display: none;
+}
+
+:fullscreen .fullscreen-icon--exit,
+:-webkit-full-screen .fullscreen-icon--exit {
+  display: block;
 }
 
 .map-pane.is-3d #map-svg,
